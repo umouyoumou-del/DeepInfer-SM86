@@ -517,9 +517,22 @@ class Qwen2W4A16ForCausalLM(Qwen2ForCausalLM):
     native_attention_kernel = True
     native_runner_ready = False
 
-    def __init__(self, cfg: Any, *, linear_factory: Any, group_size: int = 128) -> None:
+    def __init__(
+        self,
+        cfg: Any,
+        *,
+        linear_factory: Any,
+        fused_qkv_factory: Any | None = None,
+        fused_gate_up_factory: Any | None = None,
+        group_size: int = 128,
+    ) -> None:
         self.group_size = group_size
-        super().__init__(cfg, linear_factory=linear_factory)
+        super().__init__(
+            cfg,
+            linear_factory=linear_factory,
+            fused_qkv_factory=fused_qkv_factory,
+            fused_gate_up_factory=fused_gate_up_factory,
+        )
 
     @classmethod
     def from_checkpoint(
@@ -532,11 +545,11 @@ class Qwen2W4A16ForCausalLM(Qwen2ForCausalLM):
         """Load a layered W4A16 checkpoint without materializing dense weights."""
         from safetensors import safe_open
 
-        from deepinfer.hugging_face.qwen2_config import build_qwen2_model_config
+        from deepinfer.model_spec import build_model_config
 
         root = Path(checkpoint_dir)
         hf = json.loads((root / "config.json").read_text(encoding="utf-8"))
-        cfg = build_qwen2_model_config(hf, root / "config.json")
+        cfg = build_model_config(hf, root / "config.json")
         cfg = cfg.gpt if hasattr(cfg, "gpt") else cfg
         manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
         previous_dtype = torch.get_default_dtype()
@@ -552,6 +565,24 @@ class Qwen2W4A16ForCausalLM(Qwen2ForCausalLM):
                         bias,
                         group_size=group_size,
                         dtype=torch.float16,
+                    ),
+                    fused_qkv_factory=lambda in_features, out_features, bias: (
+                        W4A16Linear(
+                            in_features,
+                            out_features,
+                            bias,
+                            group_size=group_size,
+                            dtype=torch.float16,
+                        )
+                    ),
+                    fused_gate_up_factory=lambda in_features, out_features, bias: (
+                        W4A16Linear(
+                            in_features,
+                            out_features,
+                            bias,
+                            group_size=group_size,
+                            dtype=torch.float16,
+                        )
                     ),
                 )
         finally:
@@ -577,22 +608,55 @@ class Qwen2W4A16ForCausalLM(Qwen2ForCausalLM):
                 safe_open(root / layer_file, framework="pt", device="cpu") as tensors,
                 torch.no_grad(),
             ):
-                available = set(tensors.keys())
-                for module_name in ("q_proj", "k_proj", "v_proj", "o_proj"):
-                    module = getattr(layer.self_attn, module_name)
-                    module.load_from_packed(
-                        tensors.get_tensor(f"self_attn.{module_name}.packed"),
-                        tensors.get_tensor(f"self_attn.{module_name}.scales"),
-                        tensors.get_tensor(f"self_attn.{module_name}.bias")
-                        if f"self_attn.{module_name}.bias" in available
-                        else None,
+                attention = layer.self_attn
+                qkv = attention.fused_qkv
+                q_rows = attention.num_heads * attention.head_dim
+                kv_rows = attention.num_kv_heads * attention.head_dim
+                qkv.packed[:q_rows].copy_(tensors.get_tensor("self_attn.q_proj.packed"))
+                qkv.packed[q_rows : q_rows + kv_rows].copy_(
+                    tensors.get_tensor("self_attn.k_proj.packed")
+                )
+                qkv.packed[q_rows + kv_rows :].copy_(
+                    tensors.get_tensor("self_attn.v_proj.packed")
+                )
+                qkv.scales[:q_rows].copy_(tensors.get_tensor("self_attn.q_proj.scales"))
+                qkv.scales[q_rows : q_rows + kv_rows].copy_(
+                    tensors.get_tensor("self_attn.k_proj.scales")
+                )
+                qkv.scales[q_rows + kv_rows :].copy_(
+                    tensors.get_tensor("self_attn.v_proj.scales")
+                )
+                if qkv.bias is not None:
+                    qkv.bias[:q_rows].copy_(tensors.get_tensor("self_attn.q_proj.bias"))
+                    qkv.bias[q_rows : q_rows + kv_rows].copy_(
+                        tensors.get_tensor("self_attn.k_proj.bias")
                     )
-                for module_name in ("gate_proj", "up_proj", "down_proj"):
-                    module = getattr(layer.mlp, module_name)
-                    module.load_from_packed(
-                        tensors.get_tensor(f"mlp.{module_name}.packed"),
-                        tensors.get_tensor(f"mlp.{module_name}.scales"),
+                    qkv.bias[q_rows + kv_rows :].copy_(
+                        tensors.get_tensor("self_attn.v_proj.bias")
                     )
+                attention.o_proj.load_from_packed(
+                    tensors.get_tensor("self_attn.o_proj.packed"),
+                    tensors.get_tensor("self_attn.o_proj.scales"),
+                )
+                mlp = layer.mlp
+                gate_up = mlp.fused_gate_up
+                gate_rows = int(cfg.intermediate_size)
+                gate_up.packed[:gate_rows].copy_(
+                    tensors.get_tensor("mlp.gate_proj.packed")
+                )
+                gate_up.packed[gate_rows:].copy_(
+                    tensors.get_tensor("mlp.up_proj.packed")
+                )
+                gate_up.scales[:gate_rows].copy_(
+                    tensors.get_tensor("mlp.gate_proj.scales")
+                )
+                gate_up.scales[gate_rows:].copy_(
+                    tensors.get_tensor("mlp.up_proj.scales")
+                )
+                mlp.down_proj.load_from_packed(
+                    tensors.get_tensor("mlp.down_proj.packed"),
+                    tensors.get_tensor("mlp.down_proj.scales"),
+                )
                 layer.input_layernorm.weight.copy_(
                     tensors.get_tensor("input_layernorm.weight")
                 )
@@ -606,6 +670,8 @@ class Qwen2W4A16ForCausalLM(Qwen2ForCausalLM):
             )
         for layer in model.model.layers:
             layer.self_attn.native_gqa_decode = _native_gqa_decode
+            layer.self_attn.fused_qkv._bind_cupy()
+            layer.mlp.fused_gate_up._bind_cupy()
         model.eval().requires_grad_(False)
         torch.cuda.empty_cache()
         gc.collect()
@@ -637,6 +703,7 @@ class Qwen2W4A16ForCausalLM(Qwen2ForCausalLM):
                 )
         finally:
             torch.set_default_dtype(previous_dtype)
+        model.requires_grad_(False)
 
         source_modules = dict(dense_model.named_modules())
         target_modules = dict(model.named_modules())

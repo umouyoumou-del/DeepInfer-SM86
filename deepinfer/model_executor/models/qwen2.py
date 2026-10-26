@@ -356,6 +356,16 @@ class Qwen2Attention(nn.Module):
         return self.o_proj(attention)
 
 
+def _activation_fn(name: str):
+    if name in ("silu", "swish"):
+        return F.silu
+    if name == "gelu":
+        return F.gelu
+    if name == "gelu_new":
+        return lambda value: F.gelu(value, approximate="tanh")
+    raise ValueError(f"unsupported activation: {name!r}")
+
+
 class Qwen2MLP(nn.Module):
     def __init__(
         self,
@@ -378,6 +388,7 @@ class Qwen2MLP(nn.Module):
             self.up_proj = linear_factory(hidden_size, intermediate_size, False)
             self.fused_gate_up = None
         self.down_proj = linear_factory(intermediate_size, hidden_size, False)
+        self.activation = _activation_fn(str(cfg.get("hidden_act", "silu")))
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         if self.fused_gate_up is not None:
@@ -385,7 +396,7 @@ class Qwen2MLP(nn.Module):
         else:
             gate = self.gate_proj(hidden_states)
             up = self.up_proj(hidden_states)
-        return self.down_proj(F.silu(gate) * up)
+        return self.down_proj(self.activation(gate) * up)
 
 
 class Qwen2DecoderLayer(nn.Module):

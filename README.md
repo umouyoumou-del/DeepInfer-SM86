@@ -71,7 +71,9 @@ lm_head           : 3-bit, group 128
 
 ## 功能
 
-- Qwen2/Qwen2.5 HF config、safetensors 分片、tied embedding；
+- 统一 `ModelSpec` 抽象层，执行器不直接依赖 Qwen 字段；
+- 已支持 Qwen2ForCausalLM + LlamaForCausalLM（标准 GQA/SwiGLU/RoPE）；
+- Qwen2/Qwen2.5/Llama HF config、safetensors 分片、tied embedding；
 - PEFT LoRA 合并；
 - W4A16 GEMV（symmetric int4，group 128）；
 - W3A16 GEMV（8 个 signed 3-bit 压进 3 bytes）；
@@ -111,6 +113,7 @@ desktop/
   quick_ask.ps1                         剪贴板总结/改写/翻译/待办
 scripts/
   run_qwen2_w4a16_gpu_harness.py        3B 原生测速入口
+  export_w4_checkpoint.py               通用模型 W4A16 checkpoint
   export_qwen3b_w4_checkpoint.py        导出 3B 分层 W4A16 checkpoint
   bench_productivity_backends.py        3B/7B/Ollama 顺序基准
   run_qwen7b_mixed_gpu_harness.py       3B/7B/Q4 通用测速入口
@@ -133,6 +136,7 @@ docs/
   QWEN_7B_Q4_SM86.md
   QWEN_7B_4GB_FEASIBILITY.md
   QWEN_NATIVE_MODEL_EXECUTOR.md
+  GENERIC_MODEL_ADAPTER.md                     通用模型抽象层
   PERSONAL_PRODUCTIVITY.md                     从网关到桌面快捷操作
   PRODUCTIVITY_BENCHMARK_3B_7B_OLLAMA.md       3B/7B/Ollama 完整基准
   results/                                     选定的可复现结果
@@ -423,6 +427,7 @@ python scripts\export_sm86_kernels.py
 - 7B 可行性：`docs/QWEN_7B_4GB_FEASIBILITY.md`
 - 个人生产力落地：`docs/PERSONAL_PRODUCTIVITY.md`
 - 3B/7B/Ollama 基准：`docs/PRODUCTIVITY_BENCHMARK_3B_7B_OLLAMA.md`
+- 通用模型抽象层：`docs/GENERIC_MODEL_ADAPTER.md`
 - 结构化结果：`docs/results/`
 
 ---

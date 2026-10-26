@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 import threading
 import time
@@ -32,7 +33,7 @@ class GenerationStats:
     completion_tokens: int
 
 
-def _load_backend_modules() -> tuple[Any, Any, Any]:
+def _load_backend_modules() -> tuple[Any, Any, Any, Any]:
     _install_deepinfer_import_stubs()
     _load_module("deepinfer.hugging_face.qwen2_config", "hugging_face/qwen2_config.py")
     qwen2_module = _load_module(
@@ -42,11 +43,15 @@ def _load_backend_modules() -> tuple[Any, Any, Any]:
         "deepinfer.model_executor.models.qwen2_w4a16",
         "model_executor/models/qwen2_w4a16.py",
     )
+    llama_w4a16_module = _load_module(
+        "deepinfer.model_executor.models.llama_w4a16",
+        "model_executor/models/llama_w4a16.py",
+    )
     mixed_module = _load_module(
         "deepinfer.model_executor.models.qwen2_mixed_sm86",
         "model_executor/models/qwen2_mixed_sm86.py",
     )
-    return qwen2_module, w4a16_module, mixed_module
+    return qwen2_module, w4a16_module, llama_w4a16_module, mixed_module
 
 
 class QwenSm86Runtime:
@@ -86,10 +91,20 @@ class QwenSm86Runtime:
             local_files_only=True,
             trust_remote_code=True,
         )
-        qwen2_module, w4a16_module, mixed_module = _load_backend_modules()
+        qwen2_module, w4a16_module, llama_w4a16_module, mixed_module = (
+            _load_backend_modules()
+        )
         self.qwen2_module = qwen2_module
         if backend == "w4a16":
-            self.model = w4a16_module.Qwen2W4A16ForCausalLM.from_checkpoint(
+            hf = json.loads(
+                (self.checkpoint / "config.json").read_text(encoding="utf-8")
+            )
+            architecture = (hf.get("architectures") or [""])[0]
+            if architecture == "LlamaForCausalLM":
+                model_class = llama_w4a16_module.LlamaW4A16ForCausalLM
+            else:
+                model_class = w4a16_module.Qwen2W4A16ForCausalLM
+            self.model = model_class.from_checkpoint(
                 self.checkpoint,
                 device=device,
                 group_size=128,

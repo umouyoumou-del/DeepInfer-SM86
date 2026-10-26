@@ -34,10 +34,12 @@ if TYPE_CHECKING:
         load_covered_params as load_covered_params,
     )
     from deepinfer.hugging_face.weights import log_load_phase as log_load_phase
+    from deepinfer.model_spec import build_model_config as build_model_config
 
 _EXPORTS = {
     "HFCoverage": "weights",
     "build_mm_processor": "processor",
+    "build_model_config": "model_spec",
     "build_qwen2_model_config": "qwen2_config",
     "cover_tied_parameters": "loading",
     "get_hf_tokenizer": "tokenizer",

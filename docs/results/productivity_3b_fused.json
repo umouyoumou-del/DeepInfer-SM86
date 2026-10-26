@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-26T21:54:41+0800",
+  "hardware": {
+    "gpu": "NVIDIA GeForce RTX 3050 Laptop GPU",
+    "vram_gib": 4.0,
+    "os": "Windows"
+  },
+  "protocol": {
+    "system": "你是一个简洁、可靠的中文个人助理。只输出最终答案，不要复述任务。",
+    "prompts": [
+      "用一句话解释 CUDA Graph。",
+      "把下面这段话压缩成一句待办：明天下午三点前把实验报告发给导师，并附上结果表格。"
+    ],
+    "max_tokens": 64,
+    "repeats": 2,
+    "temperature": 0,
+    "top_p": 0.95,
+    "top_k": 50,
+    "seed": 20261026,
+    "native_context": 256,
+    "note": "3B native includes maibot-catgirl-v3 LoRA; 7B native is the base model; Ollama is maibot-catgirl-v3 Q4_K_M."
+  },
+  "backends": {
+    "qwen3b_native": {
+      "label": "qwen3b_w4a16_native",
+      "model_id": "deepinfer-sm86-3b-w4a16",
+      "backend": "w4a16",
+      "checkpoint": "D:\\Qwen3B-W4A16-SM86",
+      "load_seconds": 12.299,
+      "gpu": "NVIDIA GeForce RTX 3050 Laptop GPU",
+      "max_cache": 256,
+      "runs": [
+        {
+          "repeat": 0,
+          "prompt_index": 0,
+          "prompt": "用一句话解释 CUDA Graph。",
+          "wall_seconds": 0.861072,
+          "prompt_tokens": 38,
+          "completion_tokens": 18,
+          "prefill_seconds": 0.451974,
+          "decode_seconds": 0.402777,
+          "decode_tokens_per_second": 44.69,
+          "text": "CUDA Graph允许开发者高效管理GPU执行流程，减少不必要的资源准备和清理。"
+        },
+        {
+          "repeat": 0,
+          "prompt_index": 1,
+          "prompt": "把下面这段话压缩成一句待办：明天下午三点前把实验报告发给导师，并附上结果表格。",
+          "wall_seconds": 0.934485,
+          "prompt_tokens": 58,
+          "completion_tokens": 20,
+          "prefill_seconds": 0.477427,
+          "decode_seconds": 0.450761,
+          "decode_tokens_per_second": 44.369,
+          "text": "明天下午三点前将实验报告发给导师，并附上结果表格。事项已完成。"
+        },
+        {
+          "repeat": 1,
+          "prompt_index": 0,
+          "prompt": "用一句话解释 CUDA Graph。",
+          "wall_seconds": 0.885491,
+          "prompt_tokens": 38,
+          "completion_tokens": 18,
+          "prefill_seconds": 0.458242,
+          "decode_seconds": 0.401211,
+          "decode_tokens_per_second": 44.864,
+          "text": "CUDA Graph允许开发者高效管理GPU执行流程，减少不必要的资源准备和清理。"
+        },
+        {
+          "repeat": 1,
+          "prompt_index": 1,
+          "prompt": "把下面这段话压缩成一句待办：明天下午三点前把实验报告发给导师，并附上结果表格。",
+          "wall_seconds": 0.916224,
+          "prompt_tokens": 58,
+          "completion_tokens": 20,
+          "prefill_seconds": 0.449666,
+          "decode_seconds": 0.444487,
+          "decode_tokens_per_second": 44.996,
+          "text": "明天下午三点前将实验报告发给导师，并附上结果表格。事项已完成。"
+        }
+      ],
+      "summary": {
+        "median_wall_seconds": 0.9009,
+        "median_prefill_seconds": 0.4551,
+        "median_decode_tokens_per_second": 44.777,
+        "median_completion_tokens": 19.0
+      }
+    }
+  }
+}
