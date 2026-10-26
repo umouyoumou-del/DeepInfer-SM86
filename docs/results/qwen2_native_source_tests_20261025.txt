@@ -1,0 +1,15 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.13, pytest-9.1.1, pluggy-1.7.0 -- D:\QwenNativeTest-venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: D:\DeepInfer
+configfile: pyproject.toml
+collecting ... collected 6 items
+
+tests/models/test_qwen2_source_integration.py::test_qwen2_config_dispatch_and_registry PASSED [ 16%]
+tests/models/test_qwen2_source_integration.py::test_qwen2_model_config_runtime_attrs PASSED [ 33%]
+tests/models/test_qwen2_source_integration.py::test_qwen2_forward_matches_hf_and_uses_cache PASSED [ 50%]
+tests/models/test_qwen2_source_integration.py::test_qwen2_peft_lora_merge_matches_peft PASSED [ 66%]
+tests/models/test_qwen2_source_integration.py::test_w4a16_linear_dequant_prefill_path_cpu PASSED [ 83%]
+tests/models/test_qwen2_source_integration.py::test_real_qwen2_checkpoint_key_coverage PASSED [100%]
+
+============================= 6 passed in 10.60s ==============================

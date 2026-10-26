@@ -1,0 +1,28 @@
+{
+  "status": "passed",
+  "route": "deepinfer.model_executor.models.qwen2.Qwen2ForCausalLM",
+  "full_engine": false,
+  "native_kernel": false,
+  "model": "F:\\QwenQLoRA\\models\\Qwen2.5-3B-Instruct-smallshards",
+  "adapter": "F:\\QwenQLoRA\\train\\maibot-catgirl-v3\\checkpoint-120",
+  "device": "cpu",
+  "torch": "2.5.1+cpu",
+  "threads": 6,
+  "load_seconds": 345.469,
+  "rss_after_load_gib": 5.454,
+  "parameter_count": 3085938688,
+  "parameter_dtype": "torch.bfloat16",
+  "prompt": "你好",
+  "prompt_tokens": 30,
+  "generated_tokens": 3,
+  "generated_ids": [
+    108386,
+    104256,
+    6313
+  ],
+  "generated_text": "你好呀！",
+  "ttft_seconds": 66.13106,
+  "decode_seconds": 4.801285,
+  "decode_tokens_per_second": 0.417,
+  "rss_final_gib": 5.785
+}

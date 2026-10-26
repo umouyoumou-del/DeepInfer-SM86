@@ -1,0 +1,14 @@
+F:\QwenQLoRA\venv\lib\site-packages\cupy\_environment.py:286: UserWarning: CUDA path could not be detected. Set CUDA_PATH environment variable if CuPy fails to load.
+  warnings.warn(
+GPU=NVIDIA GeForce RTX 3050 Laptop GPU SM=8.6
+correctness {'cosine': 1.0, 'max_abs': 0.001953, 'mean_abs': 9.8e-05}
+gate_proj {'median_ms': 0.366592, 'min_ms': 0.365568, 'max_ms': 0.41472, 'n_rows': 18944, 'k_size': 3584}
+up_proj {'median_ms': 0.366592, 'min_ms': 0.365568, 'max_ms': 0.410624, 'n_rows': 18944, 'k_size': 3584}
+down_proj {'median_ms': 0.615424, 'min_ms': 0.6144, 'max_ms': 1.125376, 'n_rows': 3584, 'k_size': 18944}
+{
+  "mlp_per_layer_ms": 1.348608,
+  "28_layers_mlp_only_ms": 37.761024,
+  "28_layers_mlp_only_tokens_per_second": 26.482,
+  "note": "Excludes 4-bit attention, embedding/lm_head, RMSNorm, RoPE, KV cache and launch overhead."
+}
+output=D:\DeepInfer\doc\results\w3a16_sm86_microbench.json

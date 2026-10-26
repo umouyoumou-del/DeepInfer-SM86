@@ -1,0 +1,39 @@
+{
+  "model": "Qwen2.5-7B-Instruct",
+  "config": {
+    "hidden_size": 3584,
+    "intermediate_size": 18944,
+    "vocab_size": 152064,
+    "num_hidden_layers": 28,
+    "num_key_value_heads": 4,
+    "head_dim": 128,
+    "tie_word_embeddings": false,
+    "group_size": 128
+  },
+  "parameters": {
+    "linear_per_layer": 233046016,
+    "linear_total": 6525288448,
+    "embed": 544997376,
+    "lm_head": 544997376,
+    "total": 7615283200
+  },
+  "quantized_gib": {
+    "linear_weights": 3.134,
+    "embed_weights": 0.262,
+    "lm_head_weights": 0.262,
+    "total_weights": 3.657,
+    "kv_cache_128_slots": 0.0068
+  },
+  "gpu_budget": {
+    "total_gpu_gib": 4.0,
+    "free_at_test_gib": 3.237,
+    "weights_deficit_gib": 0.42
+  },
+  "offload_measurements": {
+    "cpu_fp16_one_layer_ms": 194.71,
+    "cpu_8_layers_tps_ceiling": 0.64,
+    "gpu_3_8gib_read_gib_per_second": 32.8,
+    "gpu_3_2gib_read_gib_per_second": 170.6
+  },
+  "conclusion": "7B int4 weights alone exceed usable VRAM; full-GPU is impossible without paging or lower-bit quantization. CPU offload of enough layers is far below tens of tokens/s."
+}

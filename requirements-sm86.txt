@@ -1,0 +1,10 @@
+# DeepInfer Qwen2 SM86 W4A16 model_executor backend
+# Install the CUDA build of PyTorch separately, for example:
+#   pip install --index-url https://download.pytorch.org/whl/cu121 torch==2.5.1
+torch==2.5.1
+cupy-cuda12x[ctk]>=14.2,<15
+transformers>=4.50,<5
+peft>=0.14,<1
+safetensors>=0.5,<0.6
+accelerate>=1.3,<2
+psutil>=5.9

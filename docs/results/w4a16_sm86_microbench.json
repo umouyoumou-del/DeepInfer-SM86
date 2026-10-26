@@ -1,0 +1,74 @@
+{
+  "device": "NVIDIA GeForce RTX 3050 Laptop GPU",
+  "compute_capability": "8.6",
+  "kernel": "shared",
+  "block": 256,
+  "rows_per_warp": 8,
+  "group_size": 128,
+  "repeats": 20,
+  "shapes": {
+    "q_proj": {
+      "median_ms": 0.259584,
+      "min_ms": 0.257024,
+      "max_ms": 0.582656,
+      "n_rows": 2048,
+      "k_size": 2048
+    },
+    "k_proj": {
+      "median_ms": 0.150528,
+      "min_ms": 0.146432,
+      "max_ms": 0.150528,
+      "n_rows": 256,
+      "k_size": 2048
+    },
+    "v_proj": {
+      "median_ms": 0.150528,
+      "min_ms": 0.149504,
+      "max_ms": 0.155648,
+      "n_rows": 256,
+      "k_size": 2048
+    },
+    "o_proj": {
+      "median_ms": 0.259072,
+      "min_ms": 0.257024,
+      "max_ms": 0.306176,
+      "n_rows": 2048,
+      "k_size": 2048
+    },
+    "gate_proj": {
+      "median_ms": 0.292352,
+      "min_ms": 0.284672,
+      "max_ms": 0.672768,
+      "n_rows": 11008,
+      "k_size": 2048
+    },
+    "up_proj": {
+      "median_ms": 0.29184,
+      "min_ms": 0.283648,
+      "max_ms": 0.5632,
+      "n_rows": 11008,
+      "k_size": 2048
+    },
+    "down_proj": {
+      "median_ms": 1.312768,
+      "min_ms": 1.306624,
+      "max_ms": 1.892352,
+      "n_rows": 2048,
+      "k_size": 11008
+    },
+    "lm_head": {
+      "median_ms": 24.472576,
+      "min_ms": 23.936001,
+      "max_ms": 25.486336,
+      "n_rows": 151936,
+      "k_size": 2048
+    }
+  },
+  "started_at": "2026-10-26T00:37:40+0800",
+  "projection": {
+    "per_layer_gemv_ms": 2.716672,
+    "36_layers_plus_lm_head_ms": 122.272768,
+    "gemv_only_tokens_per_second": 8.178,
+    "note": "Upper-bound feasibility estimate only; attention, RMSNorm, RoPE, sampling, KV-cache and launch overhead are excluded."
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "gpu": "RTX 3050 Laptop 4GB",
+  "test": "uint8 max scan (read bandwidth / paging probe)",
+  "free_at_start_gib": 3.237,
+  "rows": [
+    {
+      "gib": 2.0,
+      "median_ms": 12.571,
+      "effective_gib_per_second": 162.9
+    },
+    {
+      "gib": 2.8,
+      "median_ms": 17.273,
+      "effective_gib_per_second": 166.0
+    },
+    {
+      "gib": 3.2,
+      "median_ms": 19.202,
+      "effective_gib_per_second": 170.6
+    },
+    {
+      "gib": 3.5,
+      "median_ms": 63.597,
+      "effective_gib_per_second": 56.4
+    },
+    {
+      "gib": 3.8,
+      "median_ms": 118.468,
+      "effective_gib_per_second": 32.8
+    }
+  ]
+}

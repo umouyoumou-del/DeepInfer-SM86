@@ -1,0 +1,57 @@
+{
+  "hidden": 3584,
+  "intermediate": 18944,
+  "group_size": 128,
+  "threads": 6,
+  "shapes": {
+    "q_proj": {
+      "out_features": 3584,
+      "in_features": 3584,
+      "median_ms": 34.453,
+      "min_ms": 31.708
+    },
+    "k_proj": {
+      "out_features": 512,
+      "in_features": 3584,
+      "median_ms": 3.331,
+      "min_ms": 3.148
+    },
+    "v_proj": {
+      "out_features": 512,
+      "in_features": 3584,
+      "median_ms": 3.304,
+      "min_ms": 3.134
+    },
+    "o_proj": {
+      "out_features": 3584,
+      "in_features": 3584,
+      "median_ms": 33.58,
+      "min_ms": 32.329
+    },
+    "gate_proj": {
+      "out_features": 18944,
+      "in_features": 3584,
+      "median_ms": 189.532,
+      "min_ms": 180.644
+    },
+    "up_proj": {
+      "out_features": 18944,
+      "in_features": 3584,
+      "median_ms": 183.481,
+      "min_ms": 181.727
+    },
+    "down_proj": {
+      "out_features": 3584,
+      "in_features": 18944,
+      "median_ms": 177.29,
+      "min_ms": 173.564
+    }
+  },
+  "layer_total_ms": 624.971,
+  "layer_tokens_per_second_if_only_cpu": 1.6,
+  "4_cpu_layers_tps_ceiling": 0.4,
+  "6_cpu_layers_tps_ceiling": 0.267,
+  "8_cpu_layers_tps_ceiling": 0.2,
+  "10_cpu_layers_tps_ceiling": 0.16,
+  "12_cpu_layers_tps_ceiling": 0.133
+}

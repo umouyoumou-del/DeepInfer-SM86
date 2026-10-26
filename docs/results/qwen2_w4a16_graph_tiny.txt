@@ -1,0 +1,2 @@
+diagnostics {'cache_key_diff': 0.0, 'cache_value_diff': 0.0, 'graph_cosine': 1.0, 'argmax_slots': [0, 0], 'argmax_slot_values': [0.0, 0.0]}
+{'status': 'passed', 'prompt_tokens': 4, 'native_vs_sdpa_cosine': 1.0, 'native_vs_sdpa_max_abs_diff': 0.015625, 'graph_vs_native_max_abs_diff': 0.0, 'next_token': 217, 'max_seq': 128}

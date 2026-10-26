@@ -1,0 +1,42 @@
+{
+  "source": "doc/results/qwen7b_mixed_head3_final.json",
+  "route": "DeepInfer Qwen2.5-7B SM86 model_executor",
+  "checkpoint": "D:\\Qwen7B-Mixed-SM86",
+  "full_engine": false,
+  "native_w4a16_kernel": true,
+  "native_w3a16_kernel": true,
+  "native_attention_kernel": true,
+  "quantization": {
+    "attention": 4,
+    "mlp": 3,
+    "embed": 4,
+    "lm_head": 3,
+    "group_size": 128
+  },
+  "effective_bpw": 3.3045,
+  "checkpoint_gib": 2.93,
+  "gpu": "NVIDIA GeForce RTX 3050 Laptop GPU",
+  "load_seconds": 4.445,
+  "prefill_ttft_seconds": 3.061421,
+  "graph_capture_seconds": 0.120515,
+  "graph_first_replay_seconds": 0.033087,
+  "graph_replay_tokens": 19,
+  "graph_replay_seconds": 0.73184,
+  "average_tokens_per_second": 25.962,
+  "median_latency_ms": 38.186,
+  "median_tokens_per_second": 26.188,
+  "gpu_peak_alloc_gib": 3.196,
+  "gpu_peak_reserved_gib": 3.357,
+  "gpu_memory_after_generation_gib": 2.97,
+  "generated_tokens": 25,
+  "generated_text": "你好！您好吗？我可以帮你回答问题或完成任务，请告诉我需要做的，请告诉我你接下来的目的或任务。",
+  "optimizations": [
+    "construct-time fused qkv",
+    "construct-time fused gate/up",
+    "3-bit MLP",
+    "3-bit lm_head",
+    "W3 block 512/768",
+    "64-slot static cache"
+  ],
+  "note": "DeepInfer model_executor-level mixed 4-bit/3-bit SM86 path; full engine and Sampler are not wired."
+}

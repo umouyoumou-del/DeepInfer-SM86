@@ -1,0 +1,30 @@
+{
+  "source": "doc/results/qwen2_w4a16_native_gqa_gpu.json",
+  "route": "DeepInfer Qwen2/W4A16 source + standalone Python3.10 harness",
+  "full_engine": false,
+  "native_w4a16_kernel": true,
+  "native_attention_kernel": true,
+  "gpu": "NVIDIA GeForce RTX 3050 Laptop GPU",
+  "quantization": {
+    "scheme": "symmetric_int4",
+    "group_size": 128
+  },
+  "graph_replay_tokens": 24,
+  "graph_replay_seconds": 0.645914,
+  "average_tokens_per_second": 37.157,
+  "median_latency_ms": 23.438,
+  "median_tokens_per_second": 42.666,
+  "steady_state_tokens": 23,
+  "steady_state_mean_latency_ms": 23.408,
+  "steady_state_mean_tokens_per_second": 42.721,
+  "steady_state_median_latency_ms": 23.406,
+  "steady_state_median_tokens_per_second": 42.724,
+  "prefill_ttft_seconds": 4.554802,
+  "graph_capture_seconds": 0.233954,
+  "graph_first_replay_seconds": 0.136684,
+  "gpu_peak_alloc_gib": 2.493,
+  "gpu_peak_reserved_gib": 2.627,
+  "eos_index": 13,
+  "generated_text_before_eos": "你好！有什么问题请尽管告诉我，我会尽力回答的。",
+  "note": "Single request, 128-slot static cache, short context; DeepInfer model_executor-level SM86 W4A16+GQA kernels, full engine not wired."
+}

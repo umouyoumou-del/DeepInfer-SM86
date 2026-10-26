@@ -1,0 +1,2 @@
+{'shape': (1, 1, 256), 'cosine': 0.996838, 'mean_abs_error': 0.034428}
+{'shape': (1, 5, 256), 'cosine': 0.997703, 'mean_abs_error': 0.030618}

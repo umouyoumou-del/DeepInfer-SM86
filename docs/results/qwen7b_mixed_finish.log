@@ -1,0 +1,3 @@
+embed.safetensors packed=(152064, 1792) scales=(152064, 28)
+lm_head.safetensors packed=(152064, 1792) scales=(152064, 28)
+done total_safetensors_gib=2.994
