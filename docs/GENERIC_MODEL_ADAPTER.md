@@ -1,5 +1,7 @@
 # DeepInfer SM86 通用模型抽象层
 
+> 系列扩展篇：完整过程见 `docs/ARTICLE_3_DEEPINFER_SM86_GENERIC.md`。
+
 > 方向一：构建模型抽象层，解耦“模型定义”与“执行逻辑”。
 
 ## 1. 为什么要做

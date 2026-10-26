@@ -994,6 +994,8 @@ https://github.com/umouyoumou-del/DeepInfer-SM86
 
 - **上篇**：`docs/ARTICLE_1_DEEPINFER_SM86_KERNEL.md`  
   DeepInfer SM86 内核、量化、显存预算和生成正确性。
+- **扩展篇**：`docs/ARTICLE_3_DEEPINFER_SM86_GENERIC.md`  
+  ModelSpec 抽象层、Llama 接入和速度回归。
 - **下篇（本篇）**：3B/7B 常驻网关、个人生产力入口和 Ollama 基准。
 
 > 内核细节看上篇；服务、交互、基准和发布状态看本篇。

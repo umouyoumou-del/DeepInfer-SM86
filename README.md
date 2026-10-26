@@ -130,6 +130,7 @@ tests/
 docs/
   ARTICLE_1_DEEPINFER_SM86_KERNEL.md          上篇：内核与量化工程
   ARTICLE_2_DEEPINFER_SM86_PRODUCTIVITY.md    下篇：生产力、网关与基准
+  ARTICLE_3_DEEPINFER_SM86_GENERIC.md          扩展篇：通用化与 Llama
   QWEN_DEEPINFER_4GB_ENGINEERING_ARTICLE.md   合并稿存档
   QWEN_SM86_W4A16_NATIVE.md
   QWEN_7B_MIXED_SM86.md
@@ -420,6 +421,7 @@ python scripts\export_sm86_kernels.py
 
 - 上篇（内核/量化）：`docs/ARTICLE_1_DEEPINFER_SM86_KERNEL.md`
 - 下篇（生产力/基准）：`docs/ARTICLE_2_DEEPINFER_SM86_PRODUCTIVITY.md`
+- 扩展篇（通用化/Llama）：`docs/ARTICLE_3_DEEPINFER_SM86_GENERIC.md`
 - 合并稿存档：`docs/QWEN_DEEPINFER_4GB_ENGINEERING_ARTICLE.md`
 - 3B：`docs/QWEN_SM86_W4A16_NATIVE.md`
 - 7B 混合：`docs/QWEN_7B_MIXED_SM86.md`

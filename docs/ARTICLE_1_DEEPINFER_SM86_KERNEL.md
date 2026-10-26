@@ -906,5 +906,7 @@ SM86 扩展仓库、3B 常驻服务、基准和最新源码在本地工作区中
 - **上篇（本篇）**：DeepInfer SM86 内核与量化工程
 - **下篇**：`docs/ARTICLE_2_DEEPINFER_SM86_PRODUCTIVITY.md`  
   3B 常驻网关、OpenAI API、桌面快捷操作、3B/7B/Ollama 基准与服务层弯路。
+- **扩展篇**：`docs/ARTICLE_3_DEEPINFER_SM86_GENERIC.md`  
+  ModelSpec 抽象层、Llama 接入、通用 W4A16 exporter 和速度回归。
 
 > 下篇是“把内核变成每天会用的工具”；本篇只讨论内核、量化、显存和生成正确性。
