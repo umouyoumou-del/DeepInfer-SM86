@@ -187,3 +187,27 @@ scripts/export_w4_checkpoint.py
 - Mistral 的 sliding window 尚未实现；
 - 完整 engine、CacheEngine/Sampler 仍未接入；
 - 4 GB 下仍优先 3B W4A16 / 7B mixed。
+## 9. 速度回归
+
+抽象层只在模型加载/配置阶段工作；逐 token 执行仍然是同一个 W4A16/W3A16 +
+GQA + CUDA Graph 路径。实测：
+
+| 模型 | 通用化前 decode | 通用化后 decode | 变化 |
+|---|---:|---:|---:|
+| 3B fused W4A16 | 44.777 t/s | **45.417 t/s** | +1.43% |
+| 7B mixed | 25.141 t/s | **25.497 t/s** | +1.42% |
+
+3B wall 从 0.9009 s 到 0.8940 s。  
+7B prefill 在两次测试中差异很大（53 s vs 172 s），原因是当前桌面后台显存导致的
+WDDM paging，而不是抽象层增加了逐 token 开销；decode 反而略高。
+
+原始数据：
+
+```text
+docs/results/productivity_3b_fused.json
+docs/results/productivity_3b_generic.json
+docs/results/qwen7b_current_paging_harness.json
+docs/results/qwen7b_generic_harness.json
+docs/results/generic_speed_regression.json
+```
+

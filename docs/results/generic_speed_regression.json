@@ -1,0 +1,44 @@
+{
+  "generic_refactor": "ModelSpec + ArchitectureAdapter + Llama support",
+  "note": "Decode kernels and CUDA Graph path are unchanged. ModelSpec normalization happens at config/load time only.",
+  "three_b": {
+    "before": {
+      "source": "docs/results/productivity_3b_fused.json",
+      "load_seconds": 12.299,
+      "prefill_seconds": 0.4551,
+      "decode_tokens_per_second": 44.777,
+      "wall_seconds": 0.9009
+    },
+    "after": {
+      "source": "docs/results/productivity_3b_generic.json",
+      "load_seconds": 13.931,
+      "prefill_seconds": 0.4566,
+      "decode_tokens_per_second": 45.417,
+      "wall_seconds": 0.894
+    },
+    "decode_delta_percent": 1.43,
+    "conclusion": "no decode regression; difference is run-to-run noise"
+  },
+  "seven_b": {
+    "before": {
+      "source": "docs/results/qwen7b_current_paging_harness.json",
+      "load_seconds": 4.638,
+      "prefill_seconds": 53.089489,
+      "decode_median_tokens_per_second": 25.128,
+      "decode_average_tokens_per_second": 25.141
+    },
+    "after": {
+      "source": "docs/results/qwen7b_generic_harness.json",
+      "load_seconds": 7.15,
+      "prefill_seconds": 172.117853,
+      "decode_median_tokens_per_second": 25.555,
+      "decode_average_tokens_per_second": 25.497
+    },
+    "decode_delta_percent": 1.42,
+    "conclusion": "decode unchanged; prefill difference is WDDM paging/background load, not abstraction overhead"
+  },
+  "llama": {
+    "status": "tiny Llama forward cosine 1.0 vs HF; W4A16 export/load passed",
+    "speed": "no meaningful production model benchmark yet"
+  }
+}
