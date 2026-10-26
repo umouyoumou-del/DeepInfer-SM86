@@ -7,8 +7,8 @@ venv/
 *.safetensors
 *.gguf
 *.bin
-models/
-checkpoints/
+/models/
+/checkpoints/
 outputs/
 dist/
 build/

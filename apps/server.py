@@ -231,6 +231,8 @@ def main() -> int:
         description="DeepInfer-SM86 OpenAI-compatible local server"
     )
     parser.add_argument("--checkpoint", type=Path, default=DEFAULT_CHECKPOINT)
+    parser.add_argument("--backend", choices=("mixed", "w4a16"), default="mixed")
+    parser.add_argument("--model-id", default=None)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=18000)
     parser.add_argument("--max-cache", type=int, default=256)
@@ -243,7 +245,10 @@ def main() -> int:
         args.checkpoint,
         max_cache=args.max_cache,
         use_graph=not args.no_graph,
+        backend=args.backend,
+        model_id=args.model_id,
     )
+    MODEL_ID = RUNTIME.model_id
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     server.daemon_threads = True
     print(f"DeepInfer-SM86 listening on http://{args.host}:{args.port}", flush=True)

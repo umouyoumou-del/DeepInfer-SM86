@@ -1,5 +1,7 @@
 # 把 DeepInfer-SM86 用到个人生产力
 
+> 这里的 native 指 DeepInfer SM86 native 路径，不是 Ollama 或兼容层。
+
 这不是“再跑一次 benchmark”，而是把 4 GB 上的本地模型变成一个每天可以调用的工具。
 
 ## 1. 最终形态
@@ -18,9 +20,8 @@
 └────────────┬────────────┘
              │ resident model
 ┌────────────▼────────────┐
-│ Qwen2.5-7B mixed Q4/Q3  │
-│ 3-bit MLP/head          │
-│ 4-bit attention/embed   │
+│ 3B W4A16（默认快）       │
+│ 或 7B mixed Q4/Q3       │
 │ static KV + CUDA Graph  │
 │ RTX 3050 4 GB           │
 └─────────────────────────┘
@@ -103,13 +104,13 @@ PowerShell 脚本保存为 UTF-8 with BOM，否则 Windows PowerShell 5.1 会把
 
 在 4 GB 3050、MaiBot 同时占用后台显存的环境下：
 
-| 指标 | 值 |
-|---|---:|
-| prefill | 约 5.8–6.3 秒 |
-| decode | 约 25.7 tokens/s |
-| 64-token 请求总延迟 | 约 8.4 秒 |
-| 单次 24-token 快捷回答 | 约 7.3 秒 |
-| context | 256 tokens（prompt + output） |
+| 后端 | prefill | decode | 一次请求 |
+|---|---:|---:|---:|
+| 3B DeepInfer SM86 native W4A16 | 约 0.46 秒 | 约 44.8 tokens/s | 约 0.90 秒 |
+| 7B DeepInfer SM86 native（隔离） | 约 3.06 秒 | 约 25.96 tokens/s | 约 6–7 秒 |
+| 7B DeepInfer SM86 native（paging） | 53 秒以上 | 约 25.1 tokens/s | 不建议日常 |
+| Ollama 3B Q4_K_M | 约 0.06 秒 | 约 57.3 tokens/s | 约 0.46 秒 |
+| context | 256（native）/ 4096（Ollama） | | |
 
 时间主要花在 prefill，而不是 decode。对选中段落的总结、改写、翻译，这个延迟
 可以接受；对长文总结，需要分段。
@@ -127,12 +128,19 @@ PowerShell 脚本保存为 UTF-8 with BOM，否则 Windows PowerShell 5.1 会把
 下一步可以把这个 map-reduce 流程放进 `apps/long_text.py`，并接入本地
 Markdown/PDF 索引。
 
-## 7. 与 3B 的关系
+## 7. 3B / 7B / Ollama 怎么选
 
-- 7B 混合：质量更好，当前网关默认，约 25.7 tokens/s decode；
-- 3B 原生：约 42.7 tokens/s，但当前是测速 harness，尚未做成常驻 3B checkpoint 服务。
+- **3B DeepInfer SM86 native**：当前个人快捷操作的默认推荐，约 0.9 秒一次请求；
+- **7B DeepInfer SM86 native**：质量更高，但 4 GB 上很容易 paging，建议只在高价值短任务使用；
+- **Ollama 3B**：同协议下最快，约 0.46 秒；但这是 Ollama 引擎，不是 DeepInfer 原生；
+- **DeepInfer 3B DeepInfer SM86 native** 约 44.8 tokens/s，已经进入可用区间；与 Ollama 的差距主要在
+  prefill 和完整 engine，而不是模型权重本身。
 
-因此当前网关选择 7B；后续可以增加 `--checkpoint` 切换 3B/7B，或做任务路由。
+完整数据见：
+
+- `docs/ARTICLE_2_DEEPINFER_SM86_PRODUCTIVITY.md`
+- `docs/PRODUCTIVITY_BENCHMARK_3B_7B_OLLAMA.md`
+- `docs/results/productivity_backends_combined.json`
 
 ## 8. 隐私与安全
 
@@ -156,8 +164,11 @@ Markdown/PDF 索引。
 ## 10. 最小验收
 
 ```powershell
-# 1. 启动网关
-python apps\server.py --max-cache 256 --port 18000
+# 1. 启动 3B 网关
+python apps\server.py --checkpoint D:\Qwen3B-W4A16-SM86 --backend w4a16 --max-cache 256 --port 18001
+
+# 1b. 或启动 7B 网关
+python apps\server.py --checkpoint D:\Qwen7B-Mixed-SM86 --backend mixed --max-cache 256 --port 18000
 
 # 2. 健康检查
 curl.exe http://127.0.0.1:18000/health

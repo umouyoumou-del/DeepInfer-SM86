@@ -23,11 +23,31 @@ engine。当前重点是：
 |---|---|---:|---:|
 | Qwen2.5-3B 兼容层（NF4） | NF4 | 2.28 GiB reserved | 5.859 tokens/s |
 | Qwen2.5-3B DeepInfer SM86 原生 | W4A16 + GQA + Graph | 2.49 GiB allocated | **42.7 tokens/s（稳态）** |
+| Qwen2.5-3B 常驻网关 | W4A16 + 256 context | 约 2.5 GiB | **44.773 tokens/s / 0.895 秒一次请求** |
 | Qwen2.5-7B 混合精度 | 4-bit attention/embed + 3-bit MLP/head | 3.20 GiB allocated | **25.962 平均 / 26.188 中位** |
 | Qwen2.5-7B 整体 Q4 | 全 4-bit | 3.92 GiB allocated | 7.942 tokens/s（持续 paging） |
 
 > 这些结果均为 `model_executor` 级；`full_engine=false`、`native_runner_ready=false`。
 > 不能把它们写成“完整 DeepInfer engine 已支持 Qwen2.5”。
+
+## 本次更新（2026-10-26）
+
+- 新增 3B W4A16 分层 checkpoint 导出与常驻加载：
+  - `scripts/export_qwen3b_w4_checkpoint.py`
+  - `Qwen2W4A16ForCausalLM.from_checkpoint(...)`
+  - `D:\Qwen3B-W4A16-SM86` 约 1.912 GiB，加载约 11.75 秒
+- 网关新增 `--backend w4a16` / `--backend mixed`，3B 与 7B 都可作为 OpenAI 兼容服务；
+- 新增 256-slot DeepInfer SM86 native GQA kernel；
+- 新增 3B / 7B / Ollama 顺序基准脚本和原始结果：
+  - `scripts/bench_productivity_backends.py`
+  - `docs/results/productivity_backends_combined.json`
+- 修复 `.gitignore` 中 `models/` 误忽略
+  `deepinfer/model_executor/models/` 源码的问题；
+- 补齐 `deepinfer/model_executor/`、`config.py`、`environ.py`、engine 类型和源码测试；
+- 长文拆分为两篇独立文章：
+  - 上篇：`docs/ARTICLE_1_DEEPINFER_SM86_KERNEL.md`
+  - 下篇：`docs/ARTICLE_2_DEEPINFER_SM86_PRODUCTIVITY.md`
+- 合并稿保留为：`docs/QWEN_DEEPINFER_4GB_ENGINEERING_ARTICLE.md`
 
 ### 7B 为什么不是纯 4-bit
 
@@ -82,6 +102,7 @@ kernels/
   qwen2_w4a16_gemv.cu
   qwen2_w3a16_gemv.cu
   qwen2_gqa_decode.cu
+  qwen2_gqa_decode_256.cu
 apps/
   server.py                             OpenAI 兼容本地网关
   runtime.py                            常驻模型 + 静态 cache + Graph
@@ -90,6 +111,8 @@ desktop/
   quick_ask.ps1                         剪贴板总结/改写/翻译/待办
 scripts/
   run_qwen2_w4a16_gpu_harness.py        3B 原生测速入口
+  export_qwen3b_w4_checkpoint.py        导出 3B 分层 W4A16 checkpoint
+  bench_productivity_backends.py        3B/7B/Ollama 顺序基准
   run_qwen7b_mixed_gpu_harness.py       3B/7B/Q4 通用测速入口
   quantize_qwen7b_mixed.py              7B 逐层量化
   finish_qwen7b_mixed_quantize.py       分块量化 embedding/head 并补 manifest
@@ -102,13 +125,16 @@ tests/
   models/test_qwen2_source_integration.py
   models/test_qwen2_w4a16_gpu.py
 docs/
-  QWEN_DEEPINFER_4GB_ENGINEERING_ARTICLE.md   两日工程全记录
+  ARTICLE_1_DEEPINFER_SM86_KERNEL.md          上篇：内核与量化工程
+  ARTICLE_2_DEEPINFER_SM86_PRODUCTIVITY.md    下篇：生产力、网关与基准
+  QWEN_DEEPINFER_4GB_ENGINEERING_ARTICLE.md   合并稿存档
   QWEN_SM86_W4A16_NATIVE.md
   QWEN_7B_MIXED_SM86.md
   QWEN_7B_Q4_SM86.md
   QWEN_7B_4GB_FEASIBILITY.md
   QWEN_NATIVE_MODEL_EXECUTOR.md
   PERSONAL_PRODUCTIVITY.md                     从网关到桌面快捷操作
+  PRODUCTIVITY_BENCHMARK_3B_7B_OLLAMA.md       3B/7B/Ollama 完整基准
   results/                                     选定的可复现结果
 docs/results/
   qwen2_w4a16_native_gqa_gpu.json
@@ -197,19 +223,33 @@ F:\QwenQLoRA\venv\Scripts\python.exe `
 
 4 GB 上 Q4 会持续 paging；不要把这个结果当作生产吞吐。
 
-### 6. 启动个人生产力网关
+### 6. 启动个人生产力网关（3B / 7B）
 
-常驻加载 7B 混合 checkpoint，并提供 OpenAI 兼容接口：
+3B W4A16 网关：
+
+```powershell
+cd D:\DeepInfer-SM86
+python apps\server.py `
+  --checkpoint D:\Qwen3B-W4A16-SM86 `
+  --backend w4a16 `
+  --model-id deepinfer-sm86-3b-w4a16 `
+  --max-cache 256 `
+  --port 18001
+```
+
+7B 混合网关：
 
 ```powershell
 cd D:\DeepInfer-SM86
 python apps\server.py `
   --checkpoint D:\Qwen7B-Mixed-SM86 `
+  --backend mixed `
+  --model-id deepinfer-sm86-7b-mixed `
   --max-cache 256 `
   --port 18000
 ```
 
-接口：
+接口（3B 使用 18001，7B 使用 18000）：
 
 ```text
 GET  http://127.0.0.1:18000/health
@@ -253,13 +293,30 @@ curl.exe -N http://127.0.0.1:18000/v1/chat/completions `
 | 指标 | 值 |
 |---|---:|
 | context 上限 | 256 tokens（prompt + output） |
-| 7B 混合 decode | 约 25.8 tokens/s |
-| 首次 prefill | 约 5.8–6.3 秒（后台有其它 GPU 程序时） |
-| 64-token 请求总延迟 | 约 8.4 秒（含 prefill） |
+| 3B W4A16 decode | 约 44.8 tokens/s |
+| 3B 一次请求 wall | 约 0.90 秒 |
+| 3B prefill | 约 0.46 秒 |
+| 7B 混合 decode | 约 25.8 tokens/s（隔离环境） |
+| 7B prefill | 3.06 秒（隔离）；53 秒以上（paging） |
 | 并发 | 单请求串行 |
 
 256 context 适合总结选中段落、改写、翻译、提取待办。长文档需要先分段；
 后续再接入 map-reduce 和本地文件 RAG。
+
+---
+
+## 3B W4A16 checkpoint
+
+3B 每次启动都重新做 dense→W4A16 会花约 5 分钟，因此先导出分层 checkpoint：
+
+```powershell
+python scripts\export_qwen3b_w4_checkpoint.py `
+  --model F:\QwenQLoRA\models\Qwen2.5-3B-Instruct-smallshards `
+  --adapter F:\QwenQLoRA\train\maibot-catgirl-v3\checkpoint-120 `
+  --output D:\Qwen3B-W4A16-SM86
+```
+
+产物约 1.912 GiB，加载约 11.75 秒。
 
 ---
 
@@ -350,19 +407,22 @@ python scripts\export_sm86_kernels.py
 - 4 GB 上整体 Q4 只能作为质量/兼容实验，速度约 8 tokens/s；
 - 单请求、短上下文，不是生产吞吐；
 - 网关 context 上限为 256 token，尚未接入长文 map-reduce；
-- 网关目前只支持 7B 混合 checkpoint，3B 还没有常驻服务入口；
+- 3B 与 7B 网关不能同时常驻 4 GB；
 - 桌面快捷操作依赖 Windows PowerShell 剪贴板和本地 HTTP 网关。
 
 ---
 
 ## 结果与文档
 
-- 两日全过程：`docs/QWEN_DEEPINFER_4GB_ENGINEERING_ARTICLE.md`
+- 上篇（内核/量化）：`docs/ARTICLE_1_DEEPINFER_SM86_KERNEL.md`
+- 下篇（生产力/基准）：`docs/ARTICLE_2_DEEPINFER_SM86_PRODUCTIVITY.md`
+- 合并稿存档：`docs/QWEN_DEEPINFER_4GB_ENGINEERING_ARTICLE.md`
 - 3B：`docs/QWEN_SM86_W4A16_NATIVE.md`
 - 7B 混合：`docs/QWEN_7B_MIXED_SM86.md`
 - 7B Q4：`docs/QWEN_7B_Q4_SM86.md`
 - 7B 可行性：`docs/QWEN_7B_4GB_FEASIBILITY.md`
 - 个人生产力落地：`docs/PERSONAL_PRODUCTIVITY.md`
+- 3B/7B/Ollama 基准：`docs/PRODUCTIVITY_BENCHMARK_3B_7B_OLLAMA.md`
 - 结构化结果：`docs/results/`
 
 ---

@@ -1,0 +1,228 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-26T19:15:00+08:00",
+  "hardware": {
+    "gpu": "NVIDIA GeForce RTX 3050 Laptop GPU",
+    "vram_gib": 4.0,
+    "os": "Windows"
+  },
+  "protocol": {
+    "system": "你是一个简洁、可靠的中文个人助理。只输出最终答案，不要复述任务。",
+    "prompts": [
+      "用一句话解释 CUDA Graph。",
+      "把下面这段话压缩成一句待办：明天下午三点前把实验报告发给导师，并附上结果表格。"
+    ],
+    "max_tokens": 64,
+    "repeats": 2,
+    "temperature": 0,
+    "top_p": 0.95,
+    "top_k": 50,
+    "seed": 20261026,
+    "native_context": 256,
+    "note": "3B native includes maibot-catgirl-v3 LoRA; 7B native is the base model; Ollama is maibot-catgirl-v3 Q4_K_M."
+  },
+  "backends": {
+    "qwen3b_native": {
+      "label": "qwen3b_w4a16_native",
+      "model_id": "deepinfer-sm86-3b-w4a16",
+      "backend": "w4a16",
+      "checkpoint": "D:\\Qwen3B-W4A16-SM86",
+      "load_seconds": 11.75,
+      "gpu": "NVIDIA GeForce RTX 3050 Laptop GPU",
+      "max_cache": 256,
+      "runs": [
+        {
+          "repeat": 0,
+          "prompt_index": 0,
+          "prompt": "用一句话解释 CUDA Graph。",
+          "wall_seconds": 0.863216,
+          "prompt_tokens": 38,
+          "completion_tokens": 18,
+          "prefill_seconds": 0.456009,
+          "decode_seconds": 0.400732,
+          "decode_tokens_per_second": 44.918,
+          "text": "CUDA Graph允许开发者高效管理GPU执行流程，减少不必要的资源准备和清理。"
+        },
+        {
+          "repeat": 0,
+          "prompt_index": 1,
+          "prompt": "把下面这段话压缩成一句待办：明天下午三点前把实验报告发给导师，并附上结果表格。",
+          "wall_seconds": 1.004158,
+          "prompt_tokens": 58,
+          "completion_tokens": 20,
+          "prefill_seconds": 0.549768,
+          "decode_seconds": 0.448161,
+          "decode_tokens_per_second": 44.627,
+          "text": "明天下午三点前将实验报告发给导师，并附上结果表格。事项已完成。"
+        },
+        {
+          "repeat": 1,
+          "prompt_index": 0,
+          "prompt": "用一句话解释 CUDA Graph。",
+          "wall_seconds": 0.86136,
+          "prompt_tokens": 38,
+          "completion_tokens": 18,
+          "prefill_seconds": 0.454701,
+          "decode_seconds": 0.399181,
+          "decode_tokens_per_second": 45.092,
+          "text": "CUDA Graph允许开发者高效管理GPU执行流程，减少不必要的资源准备和清理。"
+        },
+        {
+          "repeat": 1,
+          "prompt_index": 1,
+          "prompt": "把下面这段话压缩成一句待办：明天下午三点前把实验报告发给导师，并附上结果表格。",
+          "wall_seconds": 0.926476,
+          "prompt_tokens": 58,
+          "completion_tokens": 20,
+          "prefill_seconds": 0.455816,
+          "decode_seconds": 0.450063,
+          "decode_tokens_per_second": 44.438,
+          "text": "明天下午三点前将实验报告发给导师，并附上结果表格。事项已完成。"
+        }
+      ],
+      "summary": {
+        "median_wall_seconds": 0.8948,
+        "median_prefill_seconds": 0.4559,
+        "median_decode_tokens_per_second": 44.773,
+        "median_completion_tokens": 19.0
+      }
+    },
+    "qwen7b_native": {
+      "status": "partially_benchmarked",
+      "label": "qwen7b_mixed_native",
+      "model_id": "deepinfer-sm86-7b-mixed",
+      "backend": "mixed",
+      "isolated_best": {
+        "source": "docs/results/qwen7b_mixed_head3_final.json",
+        "prefill_seconds": 3.061421,
+        "average_tokens_per_second": 25.962,
+        "median_tokens_per_second": 26.188,
+        "median_latency_ms": 38.186,
+        "gpu_peak_alloc_gib": 3.196,
+        "gpu_peak_reserved_gib": 3.357,
+        "load_seconds": 4.445,
+        "prompt": "你好",
+        "max_new_tokens": 24,
+        "text": "你好！您好吗？我可以帮你回答问题或完成任务，请告诉我需要做的，请告诉我你接下来的目的或任务。",
+        "note": "Isolated run; background GPU usage was lower."
+      },
+      "paging_current": {
+        "source": "docs/results/qwen7b_current_paging_harness.json",
+        "prefill_seconds": 53.089489,
+        "average_tokens_per_second": 25.141,
+        "median_tokens_per_second": 25.128,
+        "median_latency_ms": 39.796,
+        "gpu_peak_alloc_gib": 3.196,
+        "gpu_peak_reserved_gib": 3.357,
+        "load_seconds": 4.638,
+        "prompt": "用一句话解释 CUDA Graph。",
+        "max_new_tokens": 16,
+        "text": "CUDA Graph是一种编译时<decltypeoriouslylopenngen<decltypeoriouslylopenngen>>>>>>>>来优化计算图以",
+        "note": "Current desktop had ~500 MiB background GPU usage; prefill entered WDDM paging."
+      },
+      "reason": "7B gateway prefill did not complete without severe paging under the background GPU load; the native harness was used for the current measurement. The earlier isolated result is kept for context."
+    },
+    "ollama_3b": {
+      "label": "ollama_3b_q4km",
+      "model_id": "maibot-catgirl-v3:latest",
+      "backend": "ollama",
+      "model_detail": "maibot-catgirl-v3:latest",
+      "runs": [
+        {
+          "repeat": 0,
+          "prompt_index": 0,
+          "prompt": "用一句话解释 CUDA Graph。",
+          "wall_seconds": 0.439561,
+          "prompt_tokens": 38,
+          "completion_tokens": 15,
+          "load_seconds": 0.122036,
+          "prefill_seconds": 0.017359,
+          "decode_seconds": 0.257574,
+          "decode_tokens_per_second": 58.236,
+          "ttft_proxy_seconds": 0.139395,
+          "text": "CUDA Graph 是一种用于优化 CUDA 应用程序性能的技术。"
+        },
+        {
+          "repeat": 0,
+          "prompt_index": 1,
+          "prompt": "把下面这段话压缩成一句待办：明天下午三点前把实验报告发给导师，并附上结果表格。",
+          "wall_seconds": 0.499255,
+          "prompt_tokens": 58,
+          "completion_tokens": 16,
+          "load_seconds": 0.112615,
+          "prefill_seconds": 0.070977,
+          "decode_seconds": 0.276193,
+          "decode_tokens_per_second": 57.93,
+          "ttft_proxy_seconds": 0.183592,
+          "text": "明天下午三点前把实验报告发给导师，并附上结果表格"
+        },
+        {
+          "repeat": 1,
+          "prompt_index": 0,
+          "prompt": "用一句话解释 CUDA Graph。",
+          "wall_seconds": 0.485539,
+          "prompt_tokens": 38,
+          "completion_tokens": 15,
+          "load_seconds": 0.085863,
+          "prefill_seconds": 0.114966,
+          "decode_seconds": 0.264832,
+          "decode_tokens_per_second": 56.64,
+          "ttft_proxy_seconds": 0.200829,
+          "text": "CUDA Graph 是一种用于优化 CUDA 应用程序性能的技术。"
+        },
+        {
+          "repeat": 1,
+          "prompt_index": 1,
+          "prompt": "把下面这段话压缩成一句待办：明天下午三点前把实验报告发给导师，并附上结果表格。",
+          "wall_seconds": 0.441871,
+          "prompt_tokens": 58,
+          "completion_tokens": 16,
+          "load_seconds": 0.087823,
+          "prefill_seconds": 0.049554,
+          "decode_seconds": 0.283564,
+          "decode_tokens_per_second": 56.425,
+          "ttft_proxy_seconds": 0.137377,
+          "text": "明天下午三点前把实验报告发给导师，并附上结果表格"
+        }
+      ],
+      "summary": {
+        "median_wall_seconds": 0.4637,
+        "median_prefill_seconds": 0.0603,
+        "median_decode_tokens_per_second": 57.285,
+        "median_completion_tokens": 15.5
+      }
+    }
+  },
+  "comparison": {
+    "three_b_vs_ollama_same_protocol": {
+      "native_decode_tps": 44.773,
+      "ollama_decode_tps": 57.285,
+      "native_wall_seconds": 0.8948,
+      "ollama_wall_seconds": 0.4637,
+      "native_prefill_seconds": 0.4559,
+      "ollama_prefill_seconds": 0.0603,
+      "note": "Both are 3B catgirl models; native is W4A16 with 256 context, Ollama is Q4_K_M with 4096 context."
+    },
+    "seven_b": {
+      "isolated_decode_tps": 25.962,
+      "isolated_median_tps": 26.188,
+      "isolated_prefill_seconds": 3.061421,
+      "paging_decode_tps": 25.141,
+      "paging_prefill_seconds": 53.089489
+    }
+  },
+  "detours": [
+    "3B dense weights were converted once into D:\\Qwen3B-W4A16-SM86 to avoid the ~5 minute startup conversion.",
+    "7B gateway prefill paged for >120 seconds when desktop GPU background usage was ~500 MiB; the current 7B measurement uses the native harness instead.",
+    "512-slot GQA path was not shipped because the integrated runtime produced degenerate output; the gateway is capped at 256 slots.",
+    "The 3B checkpoint is tied-embedding; only embed.safetensors is saved, lm_head shares it."
+  ],
+  "artifacts": {
+    "3b_checkpoint": "D:\\Qwen3B-W4A16-SM86",
+    "7b_checkpoint": "D:\\Qwen7B-Mixed-SM86",
+    "3b_raw": "docs/results/productivity_3b_only.json",
+    "ollama_raw": "docs/results/productivity_ollama_only.json",
+    "7b_isolated": "docs/results/qwen7b_mixed_head3_final.json",
+    "7b_paging": "docs/results/qwen7b_current_paging_harness.json"
+  }
+}

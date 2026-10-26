@@ -32,13 +32,13 @@ class GenerationStats:
     completion_tokens: int
 
 
-def _load_backend_modules() -> tuple[Any, Any]:
+def _load_backend_modules() -> tuple[Any, Any, Any]:
     _install_deepinfer_import_stubs()
     _load_module("deepinfer.hugging_face.qwen2_config", "hugging_face/qwen2_config.py")
     qwen2_module = _load_module(
         "deepinfer.model_executor.models.qwen2", "model_executor/models/qwen2.py"
     )
-    _load_module(
+    w4a16_module = _load_module(
         "deepinfer.model_executor.models.qwen2_w4a16",
         "model_executor/models/qwen2_w4a16.py",
     )
@@ -46,7 +46,7 @@ def _load_backend_modules() -> tuple[Any, Any]:
         "deepinfer.model_executor.models.qwen2_mixed_sm86",
         "model_executor/models/qwen2_mixed_sm86.py",
     )
-    return qwen2_module, mixed_module
+    return qwen2_module, w4a16_module, mixed_module
 
 
 class QwenSm86Runtime:
@@ -59,12 +59,20 @@ class QwenSm86Runtime:
         max_cache: int = DEFAULT_MAX_CACHE,
         device: str = "cuda",
         use_graph: bool = True,
+        backend: str = "mixed",
+        model_id: str | None = None,
     ) -> None:
         if max_cache > 256:
             raise ValueError(
                 "max_cache > 256 is not supported by the current SM86 GQA kernel"
             )
         self.checkpoint = Path(checkpoint)
+        self.backend = backend
+        self.model_id = model_id or (
+            "deepinfer-sm86-3b-w4a16"
+            if backend == "w4a16"
+            else "deepinfer-sm86-7b-mixed"
+        )
         self.max_cache = max_cache
         self.device = torch.device(device)
         self.use_graph = use_graph
@@ -78,13 +86,22 @@ class QwenSm86Runtime:
             local_files_only=True,
             trust_remote_code=True,
         )
-        qwen2_module, mixed_module = _load_backend_modules()
+        qwen2_module, w4a16_module, mixed_module = _load_backend_modules()
         self.qwen2_module = qwen2_module
-        self.model = mixed_module.Qwen2MixedForCausalLM.from_checkpoint(
-            self.checkpoint,
-            device=device,
-            group_size=128,
-        )
+        if backend == "w4a16":
+            self.model = w4a16_module.Qwen2W4A16ForCausalLM.from_checkpoint(
+                self.checkpoint,
+                device=device,
+                group_size=128,
+            )
+        elif backend == "mixed":
+            self.model = mixed_module.Qwen2MixedForCausalLM.from_checkpoint(
+                self.checkpoint,
+                device=device,
+                group_size=128,
+            )
+        else:
+            raise ValueError(f"unknown backend: {backend}")
         self.model.eval()
         self._build_static_cache()
         self.graph = None
@@ -322,6 +339,8 @@ class QwenSm86Runtime:
     def health(self) -> dict[str, Any]:
         return {
             "status": "ok",
+            "model_id": self.model_id,
+            "backend": self.backend,
             "checkpoint": str(self.checkpoint),
             "max_cache": self.max_cache,
             "device": str(self.device),

@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-26T19:11:03+0800",
+  "hardware": {
+    "gpu": "NVIDIA GeForce RTX 3050 Laptop GPU",
+    "vram_gib": 4.0,
+    "os": "Windows"
+  },
+  "protocol": {
+    "system": "你是一个简洁、可靠的中文个人助理。只输出最终答案，不要复述任务。",
+    "prompts": [
+      "用一句话解释 CUDA Graph。",
+      "把下面这段话压缩成一句待办：明天下午三点前把实验报告发给导师，并附上结果表格。"
+    ],
+    "max_tokens": 64,
+    "repeats": 2,
+    "temperature": 0,
+    "top_p": 0.95,
+    "top_k": 50,
+    "seed": 20261026,
+    "native_context": 256,
+    "note": "3B native includes maibot-catgirl-v3 LoRA; 7B native is the base model; Ollama is maibot-catgirl-v3 Q4_K_M."
+  },
+  "backends": {
+    "ollama_3b": {
+      "label": "ollama_3b_q4km",
+      "model_id": "maibot-catgirl-v3:latest",
+      "backend": "ollama",
+      "model_detail": "maibot-catgirl-v3:latest",
+      "runs": [
+        {
+          "repeat": 0,
+          "prompt_index": 0,
+          "prompt": "用一句话解释 CUDA Graph。",
+          "wall_seconds": 0.439561,
+          "prompt_tokens": 38,
+          "completion_tokens": 15,
+          "load_seconds": 0.122036,
+          "prefill_seconds": 0.017359,
+          "decode_seconds": 0.257574,
+          "decode_tokens_per_second": 58.236,
+          "ttft_proxy_seconds": 0.139395,
+          "text": "CUDA Graph 是一种用于优化 CUDA 应用程序性能的技术。"
+        },
+        {
+          "repeat": 0,
+          "prompt_index": 1,
+          "prompt": "把下面这段话压缩成一句待办：明天下午三点前把实验报告发给导师，并附上结果表格。",
+          "wall_seconds": 0.499255,
+          "prompt_tokens": 58,
+          "completion_tokens": 16,
+          "load_seconds": 0.112615,
+          "prefill_seconds": 0.070977,
+          "decode_seconds": 0.276193,
+          "decode_tokens_per_second": 57.93,
+          "ttft_proxy_seconds": 0.183592,
+          "text": "明天下午三点前把实验报告发给导师，并附上结果表格"
+        },
+        {
+          "repeat": 1,
+          "prompt_index": 0,
+          "prompt": "用一句话解释 CUDA Graph。",
+          "wall_seconds": 0.485539,
+          "prompt_tokens": 38,
+          "completion_tokens": 15,
+          "load_seconds": 0.085863,
+          "prefill_seconds": 0.114966,
+          "decode_seconds": 0.264832,
+          "decode_tokens_per_second": 56.64,
+          "ttft_proxy_seconds": 0.200829,
+          "text": "CUDA Graph 是一种用于优化 CUDA 应用程序性能的技术。"
+        },
+        {
+          "repeat": 1,
+          "prompt_index": 1,
+          "prompt": "把下面这段话压缩成一句待办：明天下午三点前把实验报告发给导师，并附上结果表格。",
+          "wall_seconds": 0.441871,
+          "prompt_tokens": 58,
+          "completion_tokens": 16,
+          "load_seconds": 0.087823,
+          "prefill_seconds": 0.049554,
+          "decode_seconds": 0.283564,
+          "decode_tokens_per_second": 56.425,
+          "ttft_proxy_seconds": 0.137377,
+          "text": "明天下午三点前把实验报告发给导师，并附上结果表格"
+        }
+      ],
+      "summary": {
+        "median_wall_seconds": 0.4637,
+        "median_prefill_seconds": 0.0603,
+        "median_decode_tokens_per_second": 57.285,
+        "median_completion_tokens": 15.5
+      }
+    }
+  }
+}
