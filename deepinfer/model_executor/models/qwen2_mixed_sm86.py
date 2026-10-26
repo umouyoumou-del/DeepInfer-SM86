@@ -52,8 +52,10 @@ extern "C" __global__ void qwen2_w3a16_gemv(
     int k_size,
     int group_size)
 {
+    const int batch = blockIdx.y;
+    const __half* xb = x + (size_t)batch * k_size;
     extern __shared__ __half shared_x[];
-    for (int i = threadIdx.x; i < k_size; i += blockDim.x) shared_x[i] = x[i];
+    for (int i = threadIdx.x; i < k_size; i += blockDim.x) shared_x[i] = xb[i];
     __syncthreads();
 
     const int lane = threadIdx.x & 31;
@@ -86,7 +88,7 @@ extern "C" __global__ void qwen2_w3a16_gemv(
         }
     }
     acc = warp_sum3v(acc);
-    if (lane == 0) out[row] = __float2half_rn(acc);
+    if (lane == 0) out[(size_t)batch * n_rows + row] = __float2half_rn(acc);
 }
 """
 
@@ -216,9 +218,10 @@ class W3A16Linear(nn.Module):
     def _forward_gemv(self, inputs: torch.Tensor) -> torch.Tensor:
         if self._packed_cp is None or self._scales_cp is None:
             self._bind_cupy()
-        flat = inputs.reshape(1, self.in_features).to(torch.float16).contiguous()
+        flat = inputs.reshape(-1, self.in_features).to(torch.float16).contiguous()
+        batch = int(flat.shape[0])
         output = torch.empty(
-            (1, self.out_features), dtype=torch.float16, device=flat.device
+            (batch, self.out_features), dtype=torch.float16, device=flat.device
         )
         kernel = _w3_kernel()
         # Large-K down_proj benefits from 24 rows/block; gate/up are best at
@@ -227,7 +230,10 @@ class W3A16Linear(nn.Module):
             block_size, rows_per_block = 768, 24
         else:
             block_size, rows_per_block = 512, 16
-        grid = ((self.out_features + rows_per_block - 1) // rows_per_block,)
+        grid = (
+            (self.out_features + rows_per_block - 1) // rows_per_block,
+            batch,
+        )
         stream = cp.cuda.ExternalStream(torch.cuda.current_stream().cuda_stream)
         with stream:
             kernel(
@@ -251,7 +257,7 @@ class W3A16Linear(nn.Module):
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         original_shape = inputs.shape
         flat = inputs.reshape(-1, self.in_features)
-        if flat.shape[0] == 1:
+        if flat.shape[0] <= 32 and flat.is_cuda:
             output = self._forward_gemv(flat)
         else:
             chunk_rows = self.prefill_chunk_rows or self.out_features

@@ -85,6 +85,7 @@ lm_head           : 3-bit, group 128
 - 3-bit lm_head；
 - 3B/7B 测速 harness 和 CPU 复核工具；
 - 本地 OpenAI 兼容网关（`/v1/models`、`/v1/chat/completions`、SSE 流式）；
+- 固定槽位连续动态批处理调度器（W4/W3 batch GEMV + batch CUDA Graph）；
 - 桌面剪贴板快捷操作脚本。
 
 ---
@@ -138,6 +139,7 @@ docs/
   QWEN_7B_4GB_FEASIBILITY.md
   QWEN_NATIVE_MODEL_EXECUTOR.md
   GENERIC_MODEL_ADAPTER.md                     通用模型抽象层
+  DYNAMIC_BATCHING_SCHEDULER.md                 动态批处理与调度器
   PERSONAL_PRODUCTIVITY.md                     从网关到桌面快捷操作
   PRODUCTIVITY_BENCHMARK_3B_7B_OLLAMA.md       3B/7B/Ollama 完整基准
   results/                                     选定的可复现结果
@@ -239,6 +241,17 @@ python apps\server.py `
   --backend w4a16 `
   --model-id deepinfer-sm86-3b-w4a16 `
   --max-cache 256 `
+  --port 18001
+```
+
+3B 动态批处理（固定 2 slot）：
+
+```powershell
+python apps\server.py `
+  --checkpoint D:\Qwen3B-W4A16-SM86 `
+  --backend w4a16 `
+  --max-cache 256 `
+  --scheduler --max-batch-size 2 `
   --port 18001
 ```
 
@@ -430,6 +443,7 @@ python scripts\export_sm86_kernels.py
 - 个人生产力落地：`docs/PERSONAL_PRODUCTIVITY.md`
 - 3B/7B/Ollama 基准：`docs/PRODUCTIVITY_BENCHMARK_3B_7B_OLLAMA.md`
 - 通用模型抽象层：`docs/GENERIC_MODEL_ADAPTER.md`
+- 动态批处理与调度器：`docs/DYNAMIC_BATCHING_SCHEDULER.md`
 - 结构化结果：`docs/results/`
 
 ---

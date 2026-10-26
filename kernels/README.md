@@ -11,6 +11,11 @@ arguments and kernel selection.
 | `qwen2_gqa_decode.cu` | `qwen2_gqa_decode` | single-token GQA decode, up to 128 slots |
 | `qwen2_gqa_decode_256.cu` | `qwen2_gqa_decode_256` | single-token GQA decode, up to 256 slots |
 
+## Batch support
+
+W4/W3 GEMV support a batch dimension via `blockIdx.y`; grid.y is the number of
+active tokens. GQA decode is still batch=1; batch>1 uses SDPA.
+
 ## Launch notes
 
 ### W4A16 GEMV

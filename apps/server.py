@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import queue
 import sys
 import time
 import traceback
@@ -18,9 +19,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from apps.runtime import DEFAULT_CHECKPOINT, QwenSm86Runtime
+from apps.scheduler import DynamicBatchScheduler
 
 MODEL_ID = "deepinfer-sm86-7b-mixed"
 RUNTIME: QwenSm86Runtime | None = None
+SCHEDULER: DynamicBatchScheduler | None = None
 STARTED = time.time()
 
 
@@ -101,6 +104,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/health":
             status = RUNTIME.health()
             status["uptime_seconds"] = round(time.time() - STARTED, 1)
+            if SCHEDULER is not None:
+                status["scheduler"] = SCHEDULER.status()
             _json_response(self, HTTPStatus.OK, status)
             return
         if self.path == "/v1/models":
@@ -182,6 +187,81 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             stream.close()
 
+    def _scheduled_chat(
+        self,
+        body: dict[str, Any],
+        messages: list[dict[str, str]],
+        max_tokens: int,
+        stream: bool,
+    ) -> None:
+        assert SCHEDULER is not None
+        request = SCHEDULER.submit(
+            messages,
+            max_new_tokens=max_tokens,
+            temperature=float(body.get("temperature", 0.0)),
+            top_p=float(body.get("top_p", 0.95)),
+            top_k=int(body.get("top_k", 50)),
+            stream=stream,
+        )
+        if not stream:
+            result = request.future.result(timeout=600)
+            _json_response(
+                self,
+                HTTPStatus.OK,
+                _completion_payload(
+                    result.text, result.prompt_tokens, result.completion_tokens
+                ),
+            )
+            return
+
+        request_id = f"chatcmpl-{uuid.uuid4().hex}"
+        created = int(time.time())
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "close")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        first = True
+        assert request.stream_queue is not None
+        try:
+            while True:
+                delta = request.stream_queue.get(timeout=600)
+                if delta is None:
+                    break
+                chunk = {
+                    "id": request_id,
+                    "object": "chat.completion.chunk",
+                    "created": created,
+                    "model": MODEL_ID,
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": (
+                                {"role": "assistant", "content": delta}
+                                if first
+                                else {"content": delta}
+                            ),
+                            "finish_reason": None,
+                        }
+                    ],
+                }
+                first = False
+                self._sse(chunk)
+            final = {
+                "id": request_id,
+                "object": "chat.completion.chunk",
+                "created": created,
+                "model": MODEL_ID,
+                "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+            }
+            self._sse(final)
+            self.wfile.write(b"data: [DONE]\n\n")
+            self.wfile.flush()
+            self.close_connection = True
+        except queue.Empty:
+            return
+
     def do_POST(self) -> None:
         assert RUNTIME is not None
         if self.path != "/v1/chat/completions":
@@ -197,6 +277,9 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         try:
+            if SCHEDULER is not None:
+                self._scheduled_chat(body, messages, max_tokens, stream)
+                return
             if stream:
                 self._stream_chat(body, messages, max_tokens)
                 return
@@ -226,7 +309,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> int:
-    global RUNTIME
+    global MODEL_ID, RUNTIME, SCHEDULER
     parser = argparse.ArgumentParser(
         description="DeepInfer-SM86 OpenAI-compatible local server"
     )
@@ -239,21 +322,30 @@ def main() -> int:
     parser.add_argument(
         "--no-graph", action="store_true", help="disable CUDA Graph (debug/fallback)"
     )
+    parser.add_argument(
+        "--scheduler", action="store_true", help="enable dynamic batching"
+    )
+    parser.add_argument("--max-batch-size", type=int, default=2)
     args = parser.parse_args()
 
     RUNTIME = QwenSm86Runtime(
         args.checkpoint,
         max_cache=args.max_cache,
-        use_graph=not args.no_graph,
+        use_graph=not args.no_graph and not args.scheduler,
+        single_request_cache=not args.scheduler,
         backend=args.backend,
         model_id=args.model_id,
     )
     MODEL_ID = RUNTIME.model_id
+    if args.scheduler:
+        SCHEDULER = DynamicBatchScheduler(RUNTIME, max_batch_size=args.max_batch_size)
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     server.daemon_threads = True
     print(f"DeepInfer-SM86 listening on http://{args.host}:{args.port}", flush=True)
     print(
-        f"model={MODEL_ID} checkpoint={args.checkpoint} max_cache={args.max_cache} graph={not args.no_graph}",
+        f"model={MODEL_ID} checkpoint={args.checkpoint} max_cache={args.max_cache} "
+        f"graph={not args.no_graph and not args.scheduler} scheduler={args.scheduler} "
+        f"max_batch={args.max_batch_size if args.scheduler else 1}",
         flush=True,
     )
     try:

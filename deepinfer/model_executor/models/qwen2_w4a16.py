@@ -55,9 +55,11 @@ extern "C" __global__ void qwen2_w4a16_gemv(
     int k_size,
     int group_size)
 {
+    const int batch = blockIdx.y;
+    const __half* xb = x + (size_t)batch * k_size;
     extern __shared__ __half shared_x[];
     for (int i = threadIdx.x; i < k_size; i += blockDim.x) {
-        shared_x[i] = x[i];
+        shared_x[i] = xb[i];
     }
     __syncthreads();
 
@@ -87,7 +89,7 @@ extern "C" __global__ void qwen2_w4a16_gemv(
         }
     }
     acc = warp_sum(acc);
-    if (lane == 0) out[row] = __float2half_rn(acc);
+    if (lane == 0) out[(size_t)batch * n_rows + row] = __float2half_rn(acc);
 }
 """
 
@@ -454,16 +456,19 @@ class W4A16Linear(nn.Module):
             raise RuntimeError("CuPy is unavailable")
         if self._packed_cp is None or self._scales_cp is None:
             self._bind_cupy()
-        flat = inputs.reshape(1, self.in_features).contiguous()
-        flat = flat.to(torch.float16)
+        flat = inputs.reshape(-1, self.in_features).to(torch.float16).contiguous()
+        batch = int(flat.shape[0])
         output = torch.empty(
-            (1, self.out_features), dtype=torch.float16, device=flat.device
+            (batch, self.out_features), dtype=torch.float16, device=flat.device
         )
         input_cp = _torch_to_cupy(flat)
         output_cp = _torch_to_cupy(output)
         kernel = _raw_kernel()
         rows_per_block = self.gemv_block_size // 32
-        grid = ((self.out_features + rows_per_block - 1) // rows_per_block,)
+        grid = (
+            (self.out_features + rows_per_block - 1) // rows_per_block,
+            batch,
+        )
         stream = cp.cuda.ExternalStream(torch.cuda.current_stream().cuda_stream)
         with stream:
             kernel(
@@ -487,7 +492,7 @@ class W4A16Linear(nn.Module):
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         original_shape = inputs.shape
         flat = inputs.reshape(-1, self.in_features)
-        if flat.shape[0] == 1:
+        if flat.shape[0] <= 32 and flat.is_cuda:
             output = self._forward_gemv(flat)
         else:
             chunk_rows = self.prefill_chunk_rows or self.out_features

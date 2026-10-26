@@ -24,8 +24,10 @@ extern "C" __global__ void qwen2_w3a16_gemv(
     int k_size,
     int group_size)
 {
+    const int batch = blockIdx.y;
+    const __half* xb = x + (size_t)batch * k_size;
     extern __shared__ __half shared_x[];
-    for (int i = threadIdx.x; i < k_size; i += blockDim.x) shared_x[i] = x[i];
+    for (int i = threadIdx.x; i < k_size; i += blockDim.x) shared_x[i] = xb[i];
     __syncthreads();
 
     const int lane = threadIdx.x & 31;
@@ -58,5 +60,5 @@ extern "C" __global__ void qwen2_w3a16_gemv(
         }
     }
     acc = warp_sum3v(acc);
-    if (lane == 0) out[row] = __float2half_rn(acc);
+    if (lane == 0) out[(size_t)batch * n_rows + row] = __float2half_rn(acc);
 }

@@ -64,6 +64,7 @@ class QwenSm86Runtime:
         max_cache: int = DEFAULT_MAX_CACHE,
         device: str = "cuda",
         use_graph: bool = True,
+        single_request_cache: bool = True,
         backend: str = "mixed",
         model_id: str | None = None,
     ) -> None:
@@ -81,6 +82,7 @@ class QwenSm86Runtime:
         self.max_cache = max_cache
         self.device = torch.device(device)
         self.use_graph = use_graph
+        self.single_request_cache = single_request_cache
         self.lock = threading.Lock()
         self.last_stats = GenerationStats(0, 0)
         self.last_timings: dict[str, float] = {}
@@ -118,10 +120,13 @@ class QwenSm86Runtime:
         else:
             raise ValueError(f"unknown backend: {backend}")
         self.model.eval()
-        self._build_static_cache()
         self.graph = None
-        if self.use_graph:
-            self._capture_graph()
+        if self.single_request_cache:
+            self._build_static_cache()
+            if self.use_graph:
+                self._capture_graph()
+        else:
+            self.static_cache = []
 
     def _build_static_cache(self) -> None:
         self.static_cache = []

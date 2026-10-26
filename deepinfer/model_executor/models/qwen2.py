@@ -82,8 +82,17 @@ class Qwen2StaticLayerKVCache:
         cache_positions: torch.Tensor,
     ) -> None:
         positions = cache_positions.reshape(-1).to(torch.long)
-        self.key.index_copy_(2, positions, key)
-        self.value.index_copy_(2, positions, value)
+        batch = int(self.key.shape[0])
+        if key.shape[2] == 1 and positions.numel() == batch:
+            # Dynamic batching: each sequence writes one token into its own
+            # slot.  Use tensor indices only: calling int(position) would force
+            # a GPU->CPU sync and is illegal during CUDA Graph capture.
+            batch_indices = torch.arange(batch, device=self.key.device)
+            self.key[batch_indices, :, positions, :] = key[:, :, 0, :]
+            self.value[batch_indices, :, positions, :] = value[:, :, 0, :]
+        else:
+            self.key.index_copy_(2, positions, key)
+            self.value.index_copy_(2, positions, value)
 
 
 @dataclass
@@ -304,6 +313,7 @@ class Qwen2Attention(nn.Module):
             self.native_gqa_decode is not None
             and isinstance(layer_cache, Qwen2StaticLayerKVCache)
             and sequence == 1
+            and query.shape[0] == 1
         ):
             attention = self.native_gqa_decode(query, key, value, attention_mask)
         else:

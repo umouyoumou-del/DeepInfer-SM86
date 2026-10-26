@@ -1,0 +1,60 @@
+{
+  "protocol": {
+    "backends": "3B DeepInfer SM86 W4A16 fused",
+    "scheduler": "fixed 2-slot continuous batching",
+    "cache": "256",
+    "max_new_tokens": 16,
+    "prompts": [
+      "用一句话解释 CUDA Graph。",
+      "把这句话压缩成一句待办：明天下午三点前把实验报告发给导师，并附上结果表格。"
+    ]
+  },
+  "serial": {
+    "wall_seconds": 2.500503,
+    "requests": [
+      {
+        "wall": 1.447506,
+        "usage": {
+          "prompt_tokens": 35,
+          "completion_tokens": 16,
+          "total_tokens": 51
+        },
+        "text": "CUDA Graph允许开发者高效地记录和执行GPU执行图，优化程序执行"
+      },
+      {
+        "wall": 1.052645,
+        "usage": {
+          "prompt_tokens": 53,
+          "completion_tokens": 14,
+          "total_tokens": 67
+        },
+        "text": "明天下午三点前导师处提交实验报告及结果表格。"
+      }
+    ]
+  },
+  "concurrent": {
+    "wall_seconds": 1.576444,
+    "requests": [
+      {
+        "wall": 1.575338,
+        "usage": {
+          "prompt_tokens": 35,
+          "completion_tokens": 16,
+          "total_tokens": 51
+        },
+        "text": "CUDA Graph允许开发者高效地记录和执行GPU执行图，优化程序执行"
+      },
+      {
+        "wall": 1.486972,
+        "usage": {
+          "prompt_tokens": 53,
+          "completion_tokens": 14,
+          "total_tokens": 67
+        },
+        "text": "明天下午三点前导师处提交实验报告及结果表格。"
+      }
+    ]
+  },
+  "speedup": 1.586,
+  "note": "Prefill is admitted serially; concurrent wall covers two prefills plus batched decode."
+}
