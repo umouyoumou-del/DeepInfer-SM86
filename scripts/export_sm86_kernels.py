@@ -34,6 +34,12 @@ def main() -> int:
         banner = f"// Extracted from {path.relative_to(ROOT).as_posix()}:{variable}\n\n"
         (output / name).write_text(banner + body, encoding="utf-8")
         print(f"wrote {name}")
+    base = (output / "qwen2_gqa_decode.cu").read_text(encoding="utf-8")
+    extended = base.replace("QWEN2_GQA_MAX_SEQ 128", "QWEN2_GQA_MAX_SEQ 256").replace(
+        "qwen2_gqa_decode", "qwen2_gqa_decode_256"
+    )
+    (output / "qwen2_gqa_decode_256.cu").write_text(extended, encoding="utf-8")
+    print("wrote qwen2_gqa_decode_256.cu")
     return 0
 
 

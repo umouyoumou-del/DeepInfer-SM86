@@ -12,3 +12,8 @@ checkpoints/
 outputs/
 dist/
 build/
+server.log
+*.out
+chat*.json
+debug_runtime*
+*.log

@@ -897,3 +897,109 @@ ahead/behind = 0/0
 > 要两者兼得，至少需要 8 GB 以上显存。
 
 这也是这两天最值得保留的结论。
+
+---
+
+## 16. 补充：把成果推到个人生产力
+
+跑分解决的是“能不能快”，个人生产力解决的是“每天会不会用”。
+
+最终增加了一层本地网关：
+
+```text
+Chatbox / Obsidian / VS Code / 浏览器插件
+                │
+                ▼
+      http://127.0.0.1:18000/v1
+                │
+                ▼
+        apps/server.py
+        /v1/models
+        /v1/chat/completions
+                │
+                ▼
+    Qwen2.5-7B mixed Q4/Q3
+    常驻模型 + 256-slot static KV + CUDA Graph
+```
+
+### 16.1 已实现
+
+- OpenAI 兼容的 `/v1/models`；
+- `/v1/chat/completions`；
+- SSE 流式输出；
+- EOS 停止；
+- 256 token context；
+- 单请求串行与显存保护；
+- `apps/ask.py` CLI；
+- `desktop/quick_ask.ps1` 剪贴板总结/改写/翻译/待办；
+- 建议用 PowerToys 绑定 `Win+Alt+Q` 等快捷键。
+
+### 16.2 实测
+
+在 4 GB 3050、后台还有 MaiBot 占用显存的情况下：
+
+| 指标 | 结果 |
+|---|---:|
+| prefill | 约 5.8–6.3 秒 |
+| decode | 约 25.7 tokens/s |
+| 64-token 请求总延迟 | 约 8.4 秒 |
+| 24-token 快捷回答 | 约 7.3 秒 |
+
+时间主要花在 prefill。对于“选中一段文字，总结/改写/翻译”这种短上下文任务，
+这是可用水平；对于整篇长文，需要分段 map-reduce。
+
+### 16.3 这一层新增的弯路
+
+#### 512 context 退化
+
+直接测试 512-slot GQA kernel 时 cosine 为 1.0；但接进 7B runtime 后，
+256/512 context 的输出出现重复和 `!`。最终定位到 512-thread 路径在集成
+环境下不稳定，而 256-slot / 256-thread kernel 输出正常。
+
+处理方式不是把错误路径包装成“能用”，而是**收口到 256 context**，并在
+README 和结果中明确标注。512-slot 只保留为后续研究项。
+
+#### UTF-8 流式重复
+
+Qwen 的 byte-level BPE 会在一个 UTF-8 汉字中间切断 token。直接对每个
+token prefix 做 `decode` 会得到 `�`，下个 token 补齐后又会把整段文本重新
+输出，造成重复。
+
+修复方式：
+
+- 流式时截断第一个 `U+FFFD` 之后的内容；
+- 只发送已经稳定的文本前缀；
+- 等下一个 token 补齐后再发送增量；
+- 非流式则收集完整 token IDs，最后一次性 `decode`。
+
+#### SSE 不关闭
+
+最初发送 `[DONE]` 后仍保持 keep-alive，`curl` 会一直等待。改为
+`Connection: close` 并在 `[DONE]` 后显式关闭连接。
+
+#### 端口 8000 被占用
+
+本机 8000 已被 MaiBot 使用。网关默认改到 `18000`，避免“服务启动成功但
+请求打到别的进程”。
+
+#### PowerShell 中文乱码
+
+Windows PowerShell 5.1 会把无 BOM 的 UTF-8 脚本按 ANSI 读取，中文
+`ValidateSet` 直接语法错误。`desktop/quick_ask.ps1` 必须保存为
+UTF-8 with BOM。
+
+### 16.4 当前边界
+
+- 网关仍然只是 model_executor 级原生模型的 HTTP 包装；
+- `full_engine=false`；
+- 256 context；
+- 单请求串行；
+- 没有 RAG、工具调用、邮件/日历写操作；
+- 3B 原生还没有常驻 checkpoint 服务入口；
+- 3-bit 量化仍是有损的。
+
+但至少现在，这个成果不再只是 `doc/results/*.json` 里的数字，而是可以：
+
+1. 作为 OpenAI 兼容服务接入现有客户端；
+2. 用剪贴板快捷键处理每天遇到的文字；
+3. 在断网、本地、4 GB 显卡上完成总结、改写、翻译和待办提取。

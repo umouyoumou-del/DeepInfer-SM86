@@ -61,7 +61,9 @@ lm_head           : 3-bit, group 128
 - 构造期 fused qkv / fused gate-up，避免加载后替换造成显存碎片；
 - 7B 流式量化、按层 safetensors checkpoint；
 - 3-bit lm_head；
-- 3B/7B 测速 harness 和 CPU 复核工具。
+- 3B/7B 测速 harness 和 CPU 复核工具；
+- 本地 OpenAI 兼容网关（`/v1/models`、`/v1/chat/completions`、SSE 流式）；
+- 桌面剪贴板快捷操作脚本。
 
 ---
 
@@ -80,6 +82,12 @@ kernels/
   qwen2_w4a16_gemv.cu
   qwen2_w3a16_gemv.cu
   qwen2_gqa_decode.cu
+apps/
+  server.py                             OpenAI 兼容本地网关
+  runtime.py                            常驻模型 + 静态 cache + Graph
+  ask.py                                CLI 客户端
+desktop/
+  quick_ask.ps1                         剪贴板总结/改写/翻译/待办
 scripts/
   run_qwen2_w4a16_gpu_harness.py        3B 原生测速入口
   run_qwen7b_mixed_gpu_harness.py       3B/7B/Q4 通用测速入口
@@ -100,6 +108,7 @@ docs/
   QWEN_7B_Q4_SM86.md
   QWEN_7B_4GB_FEASIBILITY.md
   QWEN_NATIVE_MODEL_EXECUTOR.md
+  PERSONAL_PRODUCTIVITY.md                     从网关到桌面快捷操作
   results/                                     选定的可复现结果
 docs/results/
   qwen2_w4a16_native_gqa_gpu.json
@@ -188,6 +197,70 @@ F:\QwenQLoRA\venv\Scripts\python.exe `
 
 4 GB 上 Q4 会持续 paging；不要把这个结果当作生产吞吐。
 
+### 6. 启动个人生产力网关
+
+常驻加载 7B 混合 checkpoint，并提供 OpenAI 兼容接口：
+
+```powershell
+cd D:\DeepInfer-SM86
+python apps\server.py `
+  --checkpoint D:\Qwen7B-Mixed-SM86 `
+  --max-cache 256 `
+  --port 18000
+```
+
+接口：
+
+```text
+GET  http://127.0.0.1:18000/health
+GET  http://127.0.0.1:18000/v1/models
+POST http://127.0.0.1:18000/v1/chat/completions
+```
+
+OpenAI 客户端把 Base URL 设为：
+
+```text
+http://127.0.0.1:18000/v1
+```
+
+命令行：
+
+```powershell
+python apps\ask.py --server http://127.0.0.1:18000 "用一句话解释 CUDA Graph。"
+```
+
+流式请求：
+
+```powershell
+curl.exe -N http://127.0.0.1:18000/v1/chat/completions `
+  -H "Content-Type: application/json" `
+  -d "{\"model\":\"deepinfer-sm86-7b-mixed\",\"messages\":[{\"role\":\"user\",\"content\":\"写三句话解释 CUDA Graph\"}],\"max_tokens\":64,\"stream\":true}"
+```
+
+桌面剪贴板动作：
+
+```powershell
+.\desktop\quick_ask.ps1 -Task 总结
+.\desktop\quick_ask.ps1 -Task 翻译成英文
+.\desktop\quick_ask.ps1 -Task 提取待办
+```
+
+结果会写回剪贴板。建议用 PowerToys Keyboard Manager 绑定
+`Win+Alt+Q` 等快捷键，详见 `desktop/README.md`。
+
+当前网关的已验证参数：
+
+| 指标 | 值 |
+|---|---:|
+| context 上限 | 256 tokens（prompt + output） |
+| 7B 混合 decode | 约 25.8 tokens/s |
+| 首次 prefill | 约 5.8–6.3 秒（后台有其它 GPU 程序时） |
+| 64-token 请求总延迟 | 约 8.4 秒（含 prefill） |
+| 并发 | 单请求串行 |
+
+256 context 适合总结选中段落、改写、翻译、提取待办。长文档需要先分段；
+后续再接入 map-reduce 和本地文件 RAG。
+
 ---
 
 ## 7B 量化流程
@@ -275,7 +348,10 @@ python scripts\export_sm86_kernels.py
 - GPU harness 在 Python 3.10 下验证；Python 3.12 GPU package 验证未完成；
 - 3-bit MLP/lm_head 是有损量化，短输出可读不代表与 BF16 等价；
 - 4 GB 上整体 Q4 只能作为质量/兼容实验，速度约 8 tokens/s；
-- 单请求、短上下文，不是生产吞吐。
+- 单请求、短上下文，不是生产吞吐；
+- 网关 context 上限为 256 token，尚未接入长文 map-reduce；
+- 网关目前只支持 7B 混合 checkpoint，3B 还没有常驻服务入口；
+- 桌面快捷操作依赖 Windows PowerShell 剪贴板和本地 HTTP 网关。
 
 ---
 
@@ -286,6 +362,7 @@ python scripts\export_sm86_kernels.py
 - 7B 混合：`docs/QWEN_7B_MIXED_SM86.md`
 - 7B Q4：`docs/QWEN_7B_Q4_SM86.md`
 - 7B 可行性：`docs/QWEN_7B_4GB_FEASIBILITY.md`
+- 个人生产力落地：`docs/PERSONAL_PRODUCTIVITY.md`
 - 结构化结果：`docs/results/`
 
 ---
