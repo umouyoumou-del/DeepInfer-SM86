@@ -65,7 +65,8 @@ engine。当前重点是：
   - AWQ AutoAWQ GEMM 4-bit 布局；
   - GGUF 单文件，支持 `gguf` 包可反量化的 ggml 类型（Q4_0、Q4_K 等）；
   - 统一转换为 SM86 layered W4A16 checkpoint；
-  - 新增 CLI `scripts/import_quantized_checkpoint.py` 和端到端 CPU 测试。
+  - 新增 CLI `scripts/import_quantized_checkpoint.py` 和端到端 CPU 测试；
+  - 新增复盘文章 `docs/ARTICLE_5_QUANTIZATION_FORMAT_COMPATIBILITY.md`。
 
 ## 上一轮更新（2026-10-26）
 
@@ -234,6 +235,7 @@ docs/
   ENGINE_CORE_PAGED_CONTINUOUS_BATCHING.md      分页 KV、连续批处理与架构扩展
   ARTICLE_4_ENGINE_CORE_POSTMORTEM.md           engine-core 改造复盘与弯路记录
   QUANTIZATION_FORMAT_COMPATIBILITY.md          量化格式兼容与转换说明
+  ARTICLE_5_QUANTIZATION_FORMAT_COMPATIBILITY.md 量化格式改造复盘与弯路
   PERSONAL_PRODUCTIVITY.md                     从网关到桌面快捷操作
   PRODUCTIVITY_BENCHMARK_3B_7B_OLLAMA.md       3B/7B/Ollama 完整基准
   results/                                     选定的可复现结果
@@ -630,6 +632,7 @@ python scripts\export_sm86_kernels.py
   `docs/ENGINE_CORE_PAGED_CONTINUOUS_BATCHING.md`
 - 工程复盘与弯路记录：`docs/ARTICLE_4_ENGINE_CORE_POSTMORTEM.md`
 - 量化格式兼容与转换：`docs/QUANTIZATION_FORMAT_COMPATIBILITY.md`
+- 量化格式改造复盘：`docs/ARTICLE_5_QUANTIZATION_FORMAT_COMPATIBILITY.md`
 - GPU 吞吐基准脚本：`scripts/bench_paged_scheduler.py`
 - 结构化结果：`docs/results/`
 
