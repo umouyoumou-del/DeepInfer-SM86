@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
-from typing import Any, Self
+from typing import Any
+
+from typing_extensions import Self  # noqa: UP035
 
 __all__ = ["AttrDict", "merge"]
 

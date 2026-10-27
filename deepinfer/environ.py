@@ -4,7 +4,7 @@ import os
 import threading
 from collections.abc import Callable
 from datetime import timedelta
-from typing import Any
+from typing import Any, Generic, TypeVar
 
 DEFAULT_PREFILL_MAX_SUM_SEQLEN_K = 2**30
 
@@ -25,10 +25,12 @@ def _str(v: str | None, default: str = "") -> str:
     return v if v is not None else default
 
 
+T = TypeVar("T")
+
 _descriptors: dict[str, EnvVar[Any]] = {}
 
 
-class EnvVar[T]:
+class EnvVar(Generic[T]):
     """Non-data descriptor, resolved on first access"""
 
     __slots__ = ("init", "lock", "name")

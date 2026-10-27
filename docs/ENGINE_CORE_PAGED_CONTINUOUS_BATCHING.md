@@ -55,7 +55,8 @@ PagedKVCacheManager
           │
           ▼
 Qwen2 generic decoder
-  ├─ paged attention reference path (SDPA)
+  ├─ native paged GQA decode kernel (FP16/INT8)
+  ├─ SDPA fallback for prefill / external mask
   ├─ sliding-window / alternating SWA masks
   ├─ Gemma/Gemma2 norm、GeGLU、softcap
   └─ existing W4A16 / W3A16 batch GEMV
@@ -343,7 +344,7 @@ decode 最低延迟路径。
 CPU 正确性回归：
 
 ```text
-18 passed, 1 skipped
+44 passed, 1 skipped
 ```
 
 覆盖：
@@ -363,23 +364,26 @@ GPU 吞吐基准脚本：
 python scripts\bench_paged_scheduler.py `
   --checkpoint D:\Qwen3B-W4A16-SM86 `
   --backend w4a16 `
-  --max-cache 256 --max-num-seqs 4 --block-size 16 `
-  --max-new-tokens 32 `
-  --output docs\results\paged_scheduler_3b.json
+  --max-cache 128 --block-size 16 --prefill-chunk-tokens 32 `
+  --max-new-tokens 16 --concurrency 1,2,4 `
+  --reserve-memory-mb 384 --no-prefix-cache `
+  --output docs\results\paged_concurrency_3b_native_batched_fp16.json
 ```
 
-脚本会比较串行提交与并发提交的 wall time、aggregate tokens/s、prefix 复用和
-block 状态。**本仓库当前没有伪造这次 GPU 基准结果**；需要在目标机器上实际
-运行后记录。
+RTX 3050 Laptop 4 GB 上 native paged + batched W4 的结果是 c1 8.592、
+c4 14.736 tokens/s。长文档插入抖动、INT8 KV 和完整数字见
+`docs/P0_CHUNKED_PREFILL_AND_MEMORY_BUDGET.md` 与
+`docs/ARTICLE_6_NATIVE_PAGED_KERNEL_AND_4GB_BENCH.md`。
 
 ## 11. 还没解决的部分
 
 必须明确，以下仍然是缺口：
 
-- paged attention 目前是 PyTorch SDPA reference path，不是 paged native GQA
-  CUDA kernel；
+- native paged GQA 只覆盖 decode `T=1`、`D<=128`、`max_length<=1024`；
+  prefill / external mask 仍走 SDPA；
 - 动态 batch 下没有 CUDA Graph；
 - chunked prefill 与 decode 是交替执行，不是同一次 forward 内混合；
+- 长 prefill 插入时，固定 chunk size 无法同时压低 TPOT 中位数和 p95 尖峰；
 - 没有 preemption / CPU KV swap；
 - 没有 beam search、speculative decoding；
 - 没有 MoE / MLA 执行层；

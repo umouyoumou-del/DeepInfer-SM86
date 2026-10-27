@@ -11,3 +11,4 @@ psutil>=5.9
 # GPTQ/AWQ/GGUF -> native W4A16 conversion
 numpy>=1.24
 gguf>=0.19,<1
+typing-extensions>=4.8

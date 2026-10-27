@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
@@ -39,6 +40,7 @@ from torch import nn
 
 from deepinfer import AttrDict
 from deepinfer.engine.kv_cache import PagedLayerKVCache
+from deepinfer.engine.paged_attention import native_paged_gqa_decode
 from deepinfer.logger import init_logger
 from deepinfer.model_executor.model_output import CausalLMForwardOutput
 
@@ -257,6 +259,13 @@ class Qwen2Attention(nn.Module):
             else self.head_dim**-0.5
         )
         self.attn_logit_softcapping = cfg.get("attn_logit_softcapping")
+        self.native_paged_attention = bool(
+            cfg.get("native_paged_attention", True)
+        ) and os.getenv("DEEPINFER_DISABLE_NATIVE_PAGED_ATTENTION") not in (
+            "1",
+            "true",
+            "True",
+        )
         window = cfg.get("window_size")
         if isinstance(window, (tuple, list)):
             window = max(int(value) for value in window)
@@ -327,11 +336,25 @@ class Qwen2Attention(nn.Module):
         query, key = _apply_rotary(query, key, cos, sin)
 
         paged_valid = None
+        paged_attention_output = None
         if isinstance(layer_cache, PagedLayerKVCache):
             if cache_positions is None:
                 raise ValueError("paged KV cache requires cache_positions")
             layer_cache.update(key, value, cache_positions)
-            key, value, paged_valid = layer_cache.materialize()
+            if (
+                self.native_paged_attention
+                and sequence == 1
+                and attention_mask is None
+            ):
+                paged_attention_output = native_paged_gqa_decode(
+                    query,
+                    layer_cache,
+                    scale=self.scaling,
+                    sliding_window=self.sliding_window,
+                    softcap=self.attn_logit_softcapping,
+                )
+            if paged_attention_output is None:
+                key, value, paged_valid = layer_cache.materialize()
         elif isinstance(layer_cache, Qwen2StaticLayerKVCache):
             if cache_positions is None:
                 raise ValueError("static KV cache requires cache_positions")
@@ -348,6 +371,12 @@ class Qwen2Attention(nn.Module):
                 layer_cache.value = torch.cat((layer_cache.value, value), dim=2)
             key = layer_cache.key
             value = layer_cache.value
+
+        if paged_attention_output is not None:
+            attention = paged_attention_output.transpose(1, 2).reshape(
+                batch, sequence, self.num_heads * self.head_dim
+            )
+            return self.o_proj(attention)
 
         key_length = int(key.shape[2])
         if cache_positions is not None:

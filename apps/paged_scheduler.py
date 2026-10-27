@@ -827,6 +827,12 @@ class PagedBatchScheduler:
             "chunked_prefill": True,
             "batched_decode": True,
             "paged_kv_cache": True,
+            "native_paged_attention": bool(
+                getattr(self.runtime.model, "native_paged_attention_kernel", False)
+            ),
+            "native_batched_w4_gemv": bool(
+                getattr(self.runtime.model, "native_batched_w4_gemv", False)
+            ),
             "memory_budget": self.memory_budget.as_dict(),
             "prefix_cache": self.manager.prefix_cache.stats(),
             "kv_cache": self.manager.stats(),

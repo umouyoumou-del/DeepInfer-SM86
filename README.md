@@ -8,7 +8,7 @@ Qwen2.5 / Llama / Mistral / Gemma 等 dense decoder 的 model_executor 原生
 engine。当前重点是：
 
 - SM86 可运行的 W4A16、W3A16 CUDA GEMV；
-- 原生 GQA decode kernel 与 dense static-cache CUDA Graph；
+- 原生 GQA decode kernel（static + paged FP16/INT8）与 dense static-cache CUDA Graph；
 - paged / elastic KV cache、prefix cache、连续批处理调度器；
 - Qwen2.5-3B / 7B 的量化、加载和测速；
 - Qwen2 / Llama / Mistral / Gemma / Gemma2 dense 架构适配；
@@ -31,8 +31,31 @@ engine。当前重点是：
 > 这些结果均为 `model_executor` 级；`full_engine=false`、`native_runner_ready=false`。
 > 不能把它们写成“完整 DeepInfer engine 已支持 Qwen2.5”。当前新增的是
 > engine-core 原型，不是官方 engine 接入。上表是旧有单请求 / 固定槽位路径的
-> 实测；新 paged scheduler 的 TTFT/TPOT/并发吞吐需用
-> `scripts/bench_paged_scheduler.py` 在目标机器上重新测量，本仓库不预填未实测数字。
+> 实测。
+
+### Paged continuous batching（3B W4A16，4 GB）
+
+同一台 RTX 3050 Laptop 4 GB、Qwen2.5-3B W4A16，`max_cache=128`、
+`prefill_chunk_tokens=32`、`max_new_tokens=16`、无 prefix cache：
+
+| 路径 | concurrency | tokens/s | TTFT p50 | TPOT p50 |
+|---|---:|---:|---:|---:|
+| SDPA reference | 1 | 6.906 | 0.946 s | 0.0914 s |
+| native paged GQA | 1 | 8.144 | 0.924 s | 0.0693 s |
+| native paged + batched W4 GEMV | 1 | 8.592 | 0.712 s | 0.0766 s |
+| SDPA reference | 4 | 12.049 | 3.510 s | 0.1398 s |
+| native paged GQA | 4 | 12.466 | 3.475 s | 0.1299 s |
+| native paged + batched W4 GEMV | 4 | 14.736 | 2.746 s | 0.1214 s |
+| native paged + batched W4 + INT8 KV | 4 | 13.868 | 2.831 s | 0.1324 s |
+
+`max_num_seqs=8` 时，native+batched 路径达到 15.931 tokens/s，但 TTFT p50
+约 5.24 s，说明当前串行 prefill/decode 结构还不能让高并发免费扩展。
+完整数据和长文档插入抖动实验见
+`docs/P0_CHUNKED_PREFILL_AND_MEMORY_BUDGET.md`。
+
+> 不要把上表的 8.592 tokens/s 和旧静态 Graph 路径的 42~44 tokens/s 直接比较：
+> 前者是 eager 动态 batch + chunked prefill + paged KV，后者是固定 shape
+> static cache + CUDA Graph 的单请求最低延迟路径。两条路径的目标不同。
 
 ## 本次更新（2026-10-27）
 
@@ -53,7 +76,10 @@ engine。当前重点是：
   - 根据模型权重、CUDA 空闲显存、reserve、utilization 计算 KV block 数；
   - `/health` 输出 memory_budget / KV usage / prefill / decode / queued 状态。
 - 网关新增 `/v1/completions`、stop 截断、`user` / `X-Tenant-ID` 租户隔离；
-- 新增 `--kv-cache-dtype int8`：paged K/V 用 int8 存储，FP16 scale sidecar；
+- 新增 `--kv-cache-dtype int8`：paged K/V 用 int8 存储，FP16 scale sidecar，
+  并有独立 native paged decode kernel；
+- 新增 native paged GQA decode kernel 与 batched W4A16 GEMV，详见
+  `docs/ARTICLE_6_NATIVE_PAGED_KERNEL_AND_4GB_BENCH.md`；
 - 新增 `scripts/probe_model.py`，自动探测 HF/量化模型目录的支持状态；
 - 新增 `docs/P0_CHUNKED_PREFILL_AND_MEMORY_BUDGET.md`。
 - 通用 decoder 增加绝对 position 的 causal mask、paged mask 和 sliding-window mask；
@@ -169,8 +195,9 @@ lm_head           : 3-bit, group 128
 | TTFT / TPOT metrics | ✅ | mean/p50/p95 benchmark，Prometheus summary |
 | model directory probe | ✅ | supported / runtime_ready / 明确拒绝原因 |
 | tenant prefix isolation | ✅ | `user` / `X-Tenant-ID` 命名空间 |
-| native paged GQA kernel | ❌ | 当前 paged attention 仍是 SDPA reference |
-| KV INT8 paged cache | ✅ | 参考路径，带 FP16 K/V scales |
+| native paged GQA kernel | ✅ | block-table FP16/INT8 decode kernel，SDPA fallback |
+| batched W4 GEMV | ✅ | batch tile 8，权重只读一次 |
+| KV INT8 paged cache | ✅ | native paged kernel，带 FP16 K/V scales |
 | KV FP8 / CPU cold-block offload | ❌ | 尚未实现 |
 | Prometheus / health | ✅ | block/prefix/queue/prefill/decode 指标 |
 | MoE / MLA | ❌ | 未实现执行层 |
@@ -235,7 +262,10 @@ scripts/
   bench_w4a16_sm86.py                   W4A16 微基准
   bench_w3a16_sm86.py                   W3A16 微基准
   export_sm86_kernels.py                导出 .cu 源文件
-  bench_paged_scheduler.py              串行 vs 分页连续批处理 GPU 基准
+  bench_paged_scheduler.py              分页连续批处理并发 sweep
+  bench_tpot_jitter.py                  长 prefill 插入时的流式 TPOT 抖动
+  bench_w4a16_batched_gemv.py           batch-tile W4 GEMV 微基准
+  validate_sm86_kernels.py              native kernel 数值校验
   import_quantized_checkpoint.py        GPTQ/AWQ/GGUF -> W4A16 CLI
   probe_model.py                        模型目录支持状态探测
 tests/
@@ -654,12 +684,15 @@ python scripts\export_sm86_kernels.py
 
 - 这是 **model_executor + engine-core 原型**，不是完整 DeepInfer engine；
 - 没有接入官方 `worker/cache_engine.py` 和原生 Sampler；
-- paged attention 当前是 PyTorch SDPA reference path，不是 paged native GQA；
+- native paged GQA 只覆盖 decode `T=1`、FP16 query/output、`D<=128`、
+  `max_length<=1024`；prefill 和 external mask 仍走 SDPA；
 - 可变 batch 下没有 CUDA Graph；dense static-cache 路径仍支持 Graph；
 - chunked prefill 与 decode 是交替执行，不是同一次 forward 内真正混合；
+  小 chunk 能压低 ITL 抖动，但会抬高插入期间的 TPOT；大 chunk 相反；
 - 每个 scheduling iteration 只推进一个 prefill chunk；
 - 没有 preemption、CPU KV swap、KV FP8、beam search 或 speculative decoding；
-- KV INT8 是 paged 参考路径的存储优化，未融合进 native attention kernel；
+- INT8 KV 已有 native decode kernel，但 dequant 有成本；3B c4 比 FP16 native
+  慢约 6%，主要价值是 KV 容量减半；
 - prefill 计算仍是分块 dequant + cuBLAS，不是 tiled W4/W3 GEMM；
 - GPU harness 在 Python 3.10 下验证；Python 3.12 GPU package 验证未完成；
 - 3-bit MLP/lm_head 是有损量化，短输出可读不代表与 BF16 等价；
@@ -696,9 +729,13 @@ python scripts\export_sm86_kernels.py
 - 工程复盘与弯路记录：`docs/ARTICLE_4_ENGINE_CORE_POSTMORTEM.md`
 - 量化格式兼容与转换：`docs/QUANTIZATION_FORMAT_COMPATIBILITY.md`
 - 量化格式改造复盘：`docs/ARTICLE_5_QUANTIZATION_FORMAT_COMPATIBILITY.md`
+- native paged kernel / batched GEMV / 4GB 实测：`docs/ARTICLE_6_NATIVE_PAGED_KERNEL_AND_4GB_BENCH.md`
 - P0 低延迟/显存预算说明：
   `docs/P0_CHUNKED_PREFILL_AND_MEMORY_BUDGET.md`
 - GPU TTFT/TPOT/并发 benchmarks：`scripts/bench_paged_scheduler.py`
+- 长文档插入 TPOT 抖动：`scripts/bench_tpot_jitter.py`
+- batched W4 GEMV 微基准：`scripts/bench_w4a16_batched_gemv.py`
+- native kernel 数值校验：`scripts/validate_sm86_kernels.py`
 - 模型目录探测：`scripts/probe_model.py`
 - 结构化结果：`docs/results/`
 

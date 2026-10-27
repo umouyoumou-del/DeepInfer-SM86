@@ -8,21 +8,23 @@
 ```text
 Chunked Prefill        ✅
 Request-state scheduler ✅
-Batched paged decode    ✅（SDPA reference path）
+Batched paged decode    ✅（native FP16 + SDPA fallback）
+Native paged GQA kernel ✅
+Batched W4 GEMV         ✅
 KV memory budget        ✅
 Admission OOM isolation ✅
 TTFT / TPOT metrics     ✅
 OpenAI /v1/completions  ✅
 Tenant prefix isolation ✅
-KV INT8 paged cache     ✅（SDPA reference path）
+KV INT8 paged cache     ✅（native + SDPA fallback）
 ```
 
 仍未完成：
 
 ```text
-paged native GQA CUDA kernel  ❌
 prefill+decode 单次混合 forward ❌
-KV FP8 / CPU offload           ❌
+dynamic-batch CUDA Graph        ❌
+KV FP8 / CPU offload            ❌
 ```
 
 ## 2. Chunked Prefill
@@ -146,23 +148,42 @@ python scripts/bench_paged_scheduler.py \
 - prefix reused tokens；
 - memory budget。
 
-### 3.4 还没做到的 native kernel
+### 3.4 Native paged GQA decode kernel
 
-当前 paged attention 仍是：
-
-```text
-block gather → dense K/V → SDPA
-```
-
-不是：
+新增 `deepinfer/engine/paged_attention.py`，decode 阶段直接读取：
 
 ```text
-native paged GQA kernel
+query [B, H, 1, D]
+key/value pool [num_blocks, KVH, block_size, D]
+block_table [B, max_blocks]
+valid_lengths [B]
 ```
 
-原因很现实：当前没有 CUDA 测试环境，不能把未验证的 block-table kernel 直接放进
-主链路。下一步应在目标 3050 上用 cosine + 变长 batch + sliding-window 回归后，
-再把 native kernel 设为默认路径。
+kernel 完成 score、softmax、value 加权，不再 materialize dense K/V，也不调用
+SDPA。支持：
+
+- 变长 batch；
+- GQA；
+- sliding window；
+- Gemma2 attention logit softcap；
+- FP16 KV 和 INT8 KV + FP16 scale；
+- `D <= 128`、`max_length <= 1024`。
+
+超出 envelope、prefill `T > 1`、存在 external attention mask 时自动回退
+SDPA。环境变量 `DEEPINFER_DISABLE_NATIVE_PAGED_ATTENTION=1` 可强制回退。
+
+同时新增 batched W4A16 GEMV：decode batch 2..8 时一个行 block 只读取一次 packed
+weight，在寄存器里同时累加 8 个 batch，不再让 `grid.y=batch` 重复读权重。
+`DEEPINFER_DISABLE_BATCHED_GEMV=1` 可回退旧 kernel。
+
+实际验证（RTX 3050 Laptop 4 GB、Qwen2.5-3B W4A16）：
+
+```text
+paged attention vs reference: cosine 1.0, max abs 0.0009765625
+batched W4 vs dequant ref:    cosine 0.99999994, max abs 0.0009765625
+end-to-end logits vs SDPA:    cosine 0.9999988, argmax 一致
+单次 decode: native 0.0659 s vs SDPA 0.0863 s，约 1.31x
+```
 
 ## 4. KV INT8 缓存
 
@@ -170,12 +191,18 @@ native paged GQA kernel
 
 - paged K/V pool 使用 int8；
 - 每个 token/head 保存 FP16 K scale 和 V scale；
-- attention gather 后参考路径反量化回计算 dtype 再做 SDPA；
+- native paged kernel 内读取 FP16 scale 并反量化；prefill 仍走 SDPA；
 - block 大小估算包含 scale sidecar；
 - CPU 测试中 chunked paged prefill 与完整 FP32 prefill 对齐（cosine > 0.999）。
 
-它不是 native INT8 attention kernel，而是 paged reference path 的低显存存储优化。
-下一步需要把 dequant 融合进 native paged kernel。
+INT8 现在有独立 native paged decode kernel：K/V 以 int8 存储，kernel 内读取
+FP16 scale 并完成反量化；gather/softmax/value 累加不再 materialize dense K/V。
+变长 batch、GQA、sliding window、softcap 与 FP16 kernel 一致。
+
+实机 synthetic 校验：cosine 1.0，max abs 0.0009765625。INT8 的收益主要是容量
+（block bytes 589824 → 299520，约减半），不是免费提速；因为多了一次 scale
+读取和反量化，3B 上 c4 aggregate 约 13.87 tokens/s，低于 FP16 native 的
+14.74 tokens/s。
 
 ## 5. 显存预算和 OOM 策略
 
@@ -340,15 +367,92 @@ ruff: All checks passed
 - 模型目录 probe 的 supported/unsupported 分支；
 - INT8 KV cache 的写入、读取、scale sidecar 和 chunked prefill logits 对齐。
 
-## 10. 仍未完成
+实机 kernel 校验：
 
-- native paged GQA CUDA kernel；
+```powershell
+python scriptsalidate_sm86_kernels.py `
+  --checkpoint D:\Qwen3B-W4A16-SM86 `
+  --output docs
+esults\sm86_kernel_validation_3b.json
+```
+
+## 10. 实机结果：RTX 3050 Laptop 4 GB
+
+模型：Qwen2.5-3B W4A16；`max_cache=128`、`block_size=16`、
+`prefill_chunk_tokens=32`、`max_new_tokens=16`、无 prefix cache、
+`gpu_memory_utilization=0.80`、`reserve_memory_mb=384`。
+
+### 10.1 并发 sweep
+
+| 路径 | concurrency | tokens/s | TTFT p50 | TPOT p50 | TPOT p95-p50 | max decode batch |
+|---|---:|---:|---:|---:|---:|---:|
+| SDPA reference | 1 | 6.906 | 0.946 s | 0.0914 s | 0.0066 s | 1 |
+| SDPA reference | 2 | 9.845 | 1.486 s | 0.0865 s | 0.0114 s | 2 |
+| SDPA reference | 4 | 12.049 | 3.510 s | 0.1398 s | 0.3735 s | 4 |
+| native paged attn | 1 | 8.144 | 0.924 s | 0.0693 s | 0.0036 s | 1 |
+| native paged attn | 2 | 10.709 | 1.500 s | 0.0695 s | 0.0159 s | 2 |
+| native paged attn | 4 | 12.466 | 3.475 s | 0.1299 s | 0.3546 s | 4 |
+| + batched W4 GEMV | 1 | 8.592 | 0.712 s | 0.0766 s | 0.0123 s | 1 |
+| + batched W4 GEMV | 2 | 12.227 | 1.159 s | 0.0724 s | 0.0057 s | 2 |
+| + batched W4 GEMV | 4 | 14.736 | 2.746 s | 0.1214 s | 0.2903 s | 4 |
+
+完整数据：
+
+- `docs/results/paged_concurrency_3b_fp16.json`
+- `docs/results/paged_concurrency_3b_native_fp16.json`
+- `docs/results/paged_concurrency_3b_native_batched_fp16.json`
+- `docs/results/paged_concurrency_3b_native_batched_c8.json`
+- `docs/results/paged_concurrency_3b_int8kv_native.json`
+- `docs/results/sm86_kernel_validation_3b.json`
+- `docs/results/w4_batched_gemv_microbench.json`
+
+### 10.2 长文档插入时的流式 TPOT 抖动
+
+短流先生成，在首个 token 后插入 189-token 长 prompt。完整数据见
+`docs/results/tpot_jitter_3b.json`。
+
+| chunk | 基线 TPOT p50 | 插入后 TPOT p50 | 插入后 ITL p95 | p95-p50 | 最大 ITL | 长 prompt TTFT |
+|---:|---:|---:|---:|---:|---:|---:|
+| 8 | 0.0706 s | 0.1885 s | 0.1981 s | 0.0095 s | 0.1992 s | 4.481 s |
+| 16 | 0.0706 s | 0.2659 s | 0.2943 s | 0.0285 s | 0.2959 s | 3.465 s |
+| 32 | 0.0705 s | 0.0692 s | 0.4926 s | 0.4234 s | 0.4950 s | 2.927 s |
+| 64 | 0.0726 s | 0.0722 s | 0.5336 s | 0.4615 s | 0.5368 s | 1.606 s |
+
+结论：
+
+- chunk 8 抖动最低，但长 prefill 持续期间 TPOT 从 0.074 s 抬到约 0.185 s；
+- chunk 32/64 的中位 TPOT 不受影响，但每隔一个 prefill chunk 出现约 0.5 s 尖峰；
+- 当前是“decode 后串行做一个 prefill chunk”，没有跨 CUDA stream 并行，
+  因此 TTFT 和 TPOT 抖动存在结构性 trade-off；
+- 生产默认推荐从 chunk 8 或 16 开始，按目标 SLA 在 `bench_tpot_jitter.py`
+  上选择，而不是只看 aggregate tokens/s。
+
+### 10.3 max_num_seqs=8 和 INT8 KV
+
+`max_cache=256` 下 c8 也能完成 8 路 decode，没有 OOM：
+
+| c | tokens/s | TTFT p50 | TPOT p50 | max decode batch |
+|---:|---:|---:|---:|---:|
+| 1 | 8.897 | 0.715 s | 0.0722 s | 1 |
+| 4 | 14.756 | 2.720 s | 0.1222 s | 4 |
+| 8 | 15.931 | 5.243 s | 0.1910 s | 8 |
+
+c8 相对 c1 只有约 1.79x，说明瓶颈已经从“KV 放不下”转为“prefill/decode
+串行 + launch/Python 开销”。
+
+INT8 KV native 路径在 c4 为 13.868 tokens/s，低于 FP16 native 的 14.736；
+block bytes 从 589824 降到 299520，约减半。当前 3B 的 KV 只占约 18 MiB，因此
+INT8 主要价值是容量而不是速度。
+
+更完整的弯路和数字见:
+`docs/ARTICLE_6_NATIVE_PAGED_KERNEL_AND_4GB_BENCH.md`。
+
+## 11. 仍未完成
+
 - prefill + decode 真正的单次 mixed forward；
-- TPOT 抖动自动反馈调节 chunk size；
-- native INT8 attention kernel、KV FP8、CPU cold-block offload；
-- CUDA Graph 用于动态 batch；
-- 真实 3B/7B 的 TTFT/TPOT/吞吐数据。
-
-下一阶段应先在实际 RTX 3050 上跑 `bench_paged_scheduler.py` 的并发 sweep，
-根据 TTFT/TPOT 和 OOM 数据决定是否调小 `prefill_chunk_tokens` 或降低
-`max_num_seqs`，再开发 native paged kernel。
+- prefill 独立 CUDA stream 并发执行；
+- TPOT 抖动闭环调节 chunk size；
+- dynamic batch CUDA Graph；
+- KV FP8、CPU cold-block offload；
+- W4/W3 tiled prefill GEMM；
+- 7B 在 4 GB 下的系统 sweep（当前聚焦 3B W4A16）。

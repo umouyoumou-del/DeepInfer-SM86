@@ -9,6 +9,9 @@
 > 后续更新：P0 chunked prefill、KV 显存预算、OpenAI completions API 和
 > tenant prefix isolation 已经落地，见
 > `docs/P0_CHUNKED_PREFILL_AND_MEMORY_BUDGET.md`。
+>
+> 再后续：native paged GQA、batched W4 GEMV 和 RTX 3050 4 GB 实测已经落地，
+> 见 `docs/ARTICLE_6_NATIVE_PAGED_KERNEL_AND_4GB_BENCH.md`。
 
 ## 1. 结论先行
 

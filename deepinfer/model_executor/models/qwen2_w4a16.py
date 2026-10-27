@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import gc
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -90,6 +91,84 @@ extern "C" __global__ void qwen2_w4a16_gemv(
     }
     acc = warp_sum(acc);
     if (lane == 0) out[(size_t)batch * n_rows + row] = __float2half_rn(acc);
+}
+"""
+
+_SM86_W4A16_BATCHED_KERNEL = r"""
+#include <cuda_fp16.h>
+
+#define DP_BATCH_TILE 8
+
+__device__ __forceinline__ float dp_int4_value(unsigned int value) {
+    int v = (int)(value & 0x0f);
+    if (v >= 8) v -= 16;
+    return (float)v;
+}
+
+__device__ __forceinline__ float dp_warp_sum(float value) {
+    for (int offset = 16; offset > 0; offset >>= 1) {
+        value += __shfl_down_sync(0xffffffffu, value, offset);
+    }
+    return value;
+}
+
+extern "C" __global__ void qwen2_w4a16_batched_gemv(
+    const __half* __restrict__ x,
+    const unsigned char* __restrict__ packed,
+    const __half* __restrict__ scales,
+    __half* __restrict__ out,
+    int n_rows,
+    int k_size,
+    int group_size,
+    int batch_size)
+{
+    const int batch_start = blockIdx.y * DP_BATCH_TILE;
+    const int lane = threadIdx.x & 31;
+    const int warp = threadIdx.x >> 5;
+    const int warps_per_block = blockDim.x >> 5;
+    const int row = blockIdx.x * warps_per_block + warp;
+    if (row >= n_rows) return;
+
+    const int groups_per_row = k_size / group_size;
+    const unsigned char* row_packed = packed + (size_t)row * (k_size / 2);
+    const __half* row_scales = scales + (size_t)row * groups_per_row;
+    const int vec = 8;
+    const int stride = 32 * vec;
+    float acc[DP_BATCH_TILE];
+#pragma unroll
+    for (int b = 0; b < DP_BATCH_TILE; ++b) acc[b] = 0.0f;
+
+    for (int k0 = lane * vec; k0 < k_size; k0 += stride) {
+        const unsigned int word = *reinterpret_cast<const unsigned int*>(
+            row_packed + (size_t)k0 / 2
+        );
+        const float scale = __half2float(row_scales[k0 / group_size]);
+#pragma unroll
+        for (int j = 0; j < 4; ++j) {
+            const int kk = k0 + j * 2;
+            const float v0 = scale * dp_int4_value((word >> (j * 8)) & 0x0f);
+            const float v1 = scale * dp_int4_value((word >> (j * 8 + 4)) & 0x0f);
+#pragma unroll
+            for (int b = 0; b < DP_BATCH_TILE; ++b) {
+                const int batch = batch_start + b;
+                if (batch < batch_size) {
+                    const __half* xb = x + (size_t)batch * k_size;
+                    acc[b] += __half2float(xb[kk]) * v0;
+                    acc[b] += __half2float(xb[kk + 1]) * v1;
+                }
+            }
+        }
+    }
+#pragma unroll
+    for (int b = 0; b < DP_BATCH_TILE; ++b) {
+        const int batch = batch_start + b;
+        if (batch < batch_size) {
+            const float value = dp_warp_sum(acc[b]);
+            if (lane == 0) {
+                out[(size_t)batch * n_rows + row] = __float2half_rn(value);
+            }
+        }
+    }
 }
 """
 
@@ -174,6 +253,8 @@ _SM86_GQA_DECODE_KERNEL_256 = _SM86_GQA_DECODE_KERNEL.replace(
 ).replace("qwen2_gqa_decode", "qwen2_gqa_decode_256")
 
 _RAW_KERNEL: Any = None
+_BATCHED_RAW_KERNEL: Any = None
+_BATCHED_BATCH_TILE = 8
 _GQA_KERNEL: Any = None
 _GQA_KERNEL_256: Any = None
 _BLOCK_SIZE = 256
@@ -227,6 +308,19 @@ def _raw_kernel() -> Any:
             options=("--std=c++14", "--use_fast_math"),
         )
     return _RAW_KERNEL
+
+
+def _batched_raw_kernel() -> Any:
+    global _BATCHED_RAW_KERNEL
+    if cp is None:
+        raise RuntimeError("CuPy is required for the SM86 batched W4A16 kernel")
+    if _BATCHED_RAW_KERNEL is None:
+        _BATCHED_RAW_KERNEL = cp.RawKernel(
+            _SM86_W4A16_BATCHED_KERNEL,
+            "qwen2_w4a16_batched_gemv",
+            options=("--std=c++14", "--use_fast_math"),
+        )
+    return _BATCHED_RAW_KERNEL
 
 
 def _gqa_kernel(max_seq: int) -> Any:
@@ -463,28 +557,62 @@ class W4A16Linear(nn.Module):
         )
         input_cp = _torch_to_cupy(flat)
         output_cp = _torch_to_cupy(output)
-        kernel = _raw_kernel()
         rows_per_block = self.gemv_block_size // 32
-        grid = (
-            (self.out_features + rows_per_block - 1) // rows_per_block,
-            batch,
-        )
+        grid_x = (self.out_features + rows_per_block - 1) // rows_per_block
         stream = cp.cuda.ExternalStream(torch.cuda.current_stream().cuda_stream)
-        with stream:
-            kernel(
-                grid,
-                (self.gemv_block_size,),
-                (
-                    input_cp,
-                    self._packed_cp,
-                    self._scales_cp,
-                    output_cp,
-                    self.out_features,
-                    self.in_features,
-                    self.group_size,
-                ),
-                shared_mem=self.in_features * 2,
-            )
+        if batch == 1:
+            with stream:
+                _raw_kernel()(
+                    (grid_x, 1),
+                    (self.gemv_block_size,),
+                    (
+                        input_cp,
+                        self._packed_cp,
+                        self._scales_cp,
+                        output_cp,
+                        self.out_features,
+                        self.in_features,
+                        self.group_size,
+                    ),
+                    shared_mem=self.in_features * 2,
+                )
+        elif os.getenv("DEEPINFER_DISABLE_BATCHED_GEMV") not in (
+            "1",
+            "true",
+            "True",
+        ):
+            batch_groups = (batch + _BATCHED_BATCH_TILE - 1) // _BATCHED_BATCH_TILE
+            with stream:
+                _batched_raw_kernel()(
+                    (grid_x, batch_groups),
+                    (self.gemv_block_size,),
+                    (
+                        input_cp,
+                        self._packed_cp,
+                        self._scales_cp,
+                        output_cp,
+                        self.out_features,
+                        self.in_features,
+                        self.group_size,
+                        batch,
+                    ),
+                )
+        else:
+            with stream:
+                _raw_kernel()(
+                    (grid_x, batch),
+                    (self.gemv_block_size,),
+                    (
+                        input_cp,
+                        self._packed_cp,
+                        self._scales_cp,
+                        output_cp,
+                        self.out_features,
+                        self.in_features,
+                        self.group_size,
+                    ),
+                    shared_mem=self.in_features * 2,
+                )
         if self.bias is not None:
             output.add_(self.bias)
         return output
@@ -519,7 +647,9 @@ class Qwen2W4A16ForCausalLM(Qwen2ForCausalLM):
 
     source_backend = "qwen2_w4a16_sm86_model_executor"
     native_w4a16_kernel = True
+    native_batched_w4_gemv = True
     native_attention_kernel = True
+    native_paged_attention_kernel = True
     native_runner_ready = False
 
     def __init__(

@@ -1,0 +1,160 @@
+{
+  "checkpoint": "D:\\Qwen3B-W4A16-SM86",
+  "backend": "w4a16",
+  "max_new_tokens": 16,
+  "max_cache": 256,
+  "block_size": 16,
+  "prefill_chunk_tokens": 32,
+  "kv_cache_dtype": "int8",
+  "prefix_cache": false,
+  "concurrency_runs": [
+    {
+      "concurrency": 1,
+      "wall_seconds": 2.619075,
+      "requests": 1,
+      "failed_requests": 0,
+      "oom_rate": 0.0,
+      "completion_tokens": 16,
+      "aggregate_tokens_per_second": 6.109,
+      "ttft_seconds": {
+        "mean": 0.739797,
+        "p50": 0.739797,
+        "p95": 0.739797
+      },
+      "tpot_seconds": {
+        "mean": 0.125251,
+        "p50": 0.125251,
+        "p95": 0.125251
+      },
+      "inter_token_seconds": {
+        "mean": 0.125251,
+        "p50": 0.120991,
+        "p95": 0.144792
+      },
+      "tpot_jitter_p95_minus_p50": 0.023801,
+      "kv_cache_oom_delta": 0,
+      "max_decode_batch_size": 1,
+      "prefix_cache_hits": 0,
+      "prefix_cache_misses": 0,
+      "prefix_cache_hit_rate": 0.0,
+      "prefix_reused_tokens": 0,
+      "speedup_vs_first": 1.0
+    },
+    {
+      "concurrency": 4,
+      "wall_seconds": 5.097753,
+      "requests": 4,
+      "failed_requests": 0,
+      "oom_rate": 0.0,
+      "completion_tokens": 64,
+      "aggregate_tokens_per_second": 12.555,
+      "ttft_seconds": {
+        "mean": 2.70368,
+        "p50": 2.920376,
+        "p95": 3.336438
+      },
+      "tpot_seconds": {
+        "mean": 0.147888,
+        "p50": 0.158129,
+        "p95": 0.17899
+      },
+      "inter_token_seconds": {
+        "mean": 0.147888,
+        "p50": 0.119781,
+        "p95": 0.418854
+      },
+      "tpot_jitter_p95_minus_p50": 0.299073,
+      "kv_cache_oom_delta": 0,
+      "max_decode_batch_size": 4,
+      "prefix_cache_hits": 0,
+      "prefix_cache_misses": 0,
+      "prefix_cache_hit_rate": 0.0,
+      "prefix_reused_tokens": 0,
+      "speedup_vs_first": 2.055
+    }
+  ],
+  "memory_budget": {
+    "mode": "cuda",
+    "device": "cuda",
+    "total_memory_bytes": 4294443008,
+    "free_memory_bytes_before_pool": 1361523508,
+    "model_parameter_bytes": 622813184,
+    "model_buffer_bytes": 1430618112,
+    "gpu_memory_utilization": 0.8,
+    "reserve_memory_bytes": 402653184,
+    "kv_budget_bytes": 958870324,
+    "block_bytes": 299520,
+    "block_size": 16,
+    "num_blocks": 64,
+    "max_cache": 256,
+    "max_num_seqs": 4,
+    "prefix_cache_blocks": 0,
+    "capacity_tokens": 1024
+  },
+  "scheduler": {
+    "mode": "paged_continuous",
+    "max_num_seqs": 4,
+    "block_size": 16,
+    "prefill_chunk_tokens": 32,
+    "kv_cache_dtype": "int8",
+    "max_model_len": 256,
+    "active": 0,
+    "prefill": 0,
+    "decode": 0,
+    "queued": 0,
+    "chunked_prefill": true,
+    "batched_decode": true,
+    "paged_kv_cache": true,
+    "native_paged_attention": true,
+    "native_batched_w4_gemv": true,
+    "memory_budget": {
+      "mode": "cuda",
+      "device": "cuda",
+      "total_memory_bytes": 4294443008,
+      "free_memory_bytes_before_pool": 1361523508,
+      "model_parameter_bytes": 622813184,
+      "model_buffer_bytes": 1430618112,
+      "gpu_memory_utilization": 0.8,
+      "reserve_memory_bytes": 402653184,
+      "kv_budget_bytes": 958870324,
+      "block_bytes": 299520,
+      "block_size": 16,
+      "num_blocks": 64,
+      "max_cache": 256,
+      "max_num_seqs": 4,
+      "prefix_cache_blocks": 0,
+      "capacity_tokens": 1024
+    },
+    "prefix_cache": {
+      "max_blocks": 0,
+      "cached_blocks": 0,
+      "hits": 0,
+      "misses": 0,
+      "reused_blocks": 0,
+      "evictions": 0
+    },
+    "kv_cache": {
+      "block_size": 16,
+      "num_blocks": 64,
+      "kv_cache_dtype": "torch.int8",
+      "memory_bytes": 19169280,
+      "block_bytes": 299520,
+      "allocator": {
+        "num_blocks": 64,
+        "used_blocks": 0,
+        "free_blocks": 64,
+        "shared_blocks": 0,
+        "peak_refcount": 0
+      },
+      "prefix_cache": {
+        "max_blocks": 0,
+        "cached_blocks": 0,
+        "hits": 0,
+        "misses": 0,
+        "reused_blocks": 0,
+        "evictions": 0
+      }
+    },
+    "requests": []
+  }
+}

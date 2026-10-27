@@ -1,0 +1,37 @@
+{
+  "device": "NVIDIA GeForce RTX 3050 Laptop GPU",
+  "in_features": 2048,
+  "out_features": 1024,
+  "group_size": 128,
+  "iterations": 200,
+  "rows": [
+    {
+      "batch": 1,
+      "seconds": 0.00010012,
+      "tokens_per_second": 9987.865,
+      "cosine": 1.0,
+      "max_abs_error": 0.0009765625
+    },
+    {
+      "batch": 2,
+      "seconds": 9.445e-05,
+      "tokens_per_second": 21174.216,
+      "cosine": 0.9999999403953552,
+      "max_abs_error": 0.0009765625
+    },
+    {
+      "batch": 4,
+      "seconds": 9.357e-05,
+      "tokens_per_second": 42748.973,
+      "cosine": 0.9999999403953552,
+      "max_abs_error": 0.0009765625
+    },
+    {
+      "batch": 8,
+      "seconds": 0.00010099,
+      "tokens_per_second": 79213.803,
+      "cosine": 0.9999998807907104,
+      "max_abs_error": 0.0009765625
+    }
+  ]
+}

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Self
 
 import torch
+from typing_extensions import Self  # noqa: UP035
 
 
 @dataclass(frozen=True, slots=True)
