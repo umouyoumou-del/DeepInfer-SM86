@@ -7,9 +7,10 @@ Qwen2.5 / Llama / Mistral / Gemma 等 dense decoder 的 model_executor 原生
 这是一个**非官方扩展仓库**，不是 DeepInfer 官方发行版，也不是完整 DeepInfer
 engine。当前重点是：
 
-- SM86 可运行的 W4A16、W3A16 CUDA GEMV；
+- SM86 可运行的 W4A16、W3A16 CUDA GEMV 与 tiled W4/W3 prefill GEMM；
 - 原生 GQA decode kernel（static + paged FP16/INT8）与 dense static-cache CUDA Graph；
 - paged / elastic KV cache、prefix cache、连续批处理调度器；
+- chunked prefill 与 batched decode 的双 CUDA stream overlap；
 - Qwen2.5-3B / 7B 的量化、加载和测速；
 - Qwen2 / Llama / Mistral / Gemma / Gemma2 dense 架构适配；
 - 4 GB 显存下的混合精度（Q4/Q3）与整体 Q4 实验数据。
@@ -57,6 +58,42 @@ engine。当前重点是：
 > 前者是 eager 动态 batch + chunked prefill + paged KV，后者是固定 shape
 > static cache + CUDA Graph 的单请求最低延迟路径。两条路径的目标不同。
 
+### Tiled prefill + prefill/decode overlap（2026-10-27）
+
+在上一节同一套 3B W4A16、`max_cache=128`、`prefill_chunk_tokens=32`、
+`max_new_tokens=16`、无 prefix cache 条件下，本轮新增：
+
+- W4/W3 tiled prefill GEMM；
+- paged scheduler 的 prefill/decode 双 CUDA stream overlap。
+
+新结果：
+
+| 并发 | 旧串行 prefill tokens/s | 新 tiled + overlap tokens/s | 提升 |
+|---:|---:|---:|---:|
+| 1 | 8.592 | **11.189** | 1.30× |
+| 2 | 12.227 | **17.484** | 1.43× |
+| 4 | 14.736 | **22.779** | 1.55× |
+
+同轮测试 TTFT p50：
+
+| 并发 | 旧 | 新 |
+|---:|---:|---:|
+| 1 | 0.712 s | **0.339 s** |
+| 2 | 1.159 s | **0.515 s** |
+| 4 | 2.746 s | **1.337 s** |
+
+overlap 开关对照（均启用 tiled prefill）：
+
+| 并发 | no-overlap TPOT p50 | overlap TPOT p50 | no-overlap jitter | overlap jitter | actual overlap steps |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 0.0728 s | 0.0727 s | 0.00725 | 0.00842 | 0 |
+| 2 | 0.0796 s | **0.0717 s** | 0.0332 | **0.0087** | 1 |
+| 4 | 0.1056 s | 0.1045 s | 0.1583 | 0.1570 | 3 |
+
+结论：**tiled prefill 是主要吞吐收益来源；stream overlap 在 4 GB 带宽受限卡上
+主要改善部分 TPOT/jitter，不是吞吐翻倍按钮。**
+详见 `docs/ARTICLE_7_PREFILL_DECODE_OVERLAP_AND_TILED_PREFILL.md`。
+
 ## 本次更新（2026-10-27）
 
 - 新增 `deepinfer/engine/kv_cache.py`：
@@ -80,6 +117,14 @@ engine。当前重点是：
   并有独立 native paged decode kernel；
 - 新增 native paged GQA decode kernel 与 batched W4A16 GEMV，详见
   `docs/ARTICLE_6_NATIVE_PAGED_KERNEL_AND_4GB_BENCH.md`；
+- 新增 tiled W4A16 / W3A16 prefill GEMM，peer 对比旧 dequantize fallback：
+  W4 2.24×–2.87×，W3 7.71×–9.45×；
+- 新增 paged scheduler 的 prefill/decode 双 CUDA stream overlap：
+  `_prefill_step` / `_decode_step` 拆成 prepare / launch / finish 三段，
+  支持 `--no-prefill-decode-overlap` 回归开关；
+- 新增 logical overlap 与 actual stream overlap 两个独立指标；
+- 新增 `scripts/bench_sm86_tiled_prefill.py` 和
+  `docs/ARTICLE_7_PREFILL_DECODE_OVERLAP_AND_TILED_PREFILL.md`；
 - 新增 `scripts/probe_model.py`，自动探测 HF/量化模型目录的支持状态；
 - 新增 `docs/P0_CHUNKED_PREFILL_AND_MEMORY_BUDGET.md`。
 - 通用 decoder 增加绝对 position 的 causal mask、paged mask 和 sliding-window mask；
@@ -190,6 +235,8 @@ lm_head           : 3-bit, group 128
 | paged / elastic KV | ✅ | block table、引用计数、OOM 隔离 |
 | prefix cache | ✅ | 完整 prompt block LRU 共享 |
 | continuous batching | ✅ | 可变 batch decode + chunked prefill 交替 |
+| prefill/decode stream overlap | ✅ | 双 CUDA stream launch；4 GB 带宽受限，收益按场景测量 |
+| tiled W4/W3 prefill GEMM | ✅ | 32×64 CTA tile，shared-memory 权重量化 tile |
 | KV memory budget | ✅ | 启动预算、block 预留、admission/runtime OOM 隔离 |
 | OpenAI `/v1/completions` | ✅ | prompt、stream、stop、cancel、tenant |
 | TTFT / TPOT metrics | ✅ | mean/p50/p95 benchmark，Prometheus summary |
@@ -197,6 +244,7 @@ lm_head           : 3-bit, group 128
 | tenant prefix isolation | ✅ | `user` / `X-Tenant-ID` 命名空间 |
 | native paged GQA kernel | ✅ | block-table FP16/INT8 decode kernel，SDPA fallback |
 | batched W4 GEMV | ✅ | batch tile 8，权重只读一次 |
+| W3 batch-tile GEMV 实验 | ⚠️ | 数值正确，但 occupancy 下降，当前不作为默认路径 |
 | KV INT8 paged cache | ✅ | native paged kernel，带 FP16 K/V scales |
 | KV FP8 / CPU cold-block offload | ❌ | 尚未实现 |
 | Prometheus / health | ✅ | block/prefix/queue/prefill/decode 指标 |
@@ -687,13 +735,15 @@ python scripts\export_sm86_kernels.py
 - native paged GQA 只覆盖 decode `T=1`、FP16 query/output、`D<=128`、
   `max_length<=1024`；prefill 和 external mask 仍走 SDPA；
 - 可变 batch 下没有 CUDA Graph；dense static-cache 路径仍支持 Graph；
-- chunked prefill 与 decode 是交替执行，不是同一次 forward 内真正混合；
-  小 chunk 能压低 ITL 抖动，但会抬高插入期间的 TPOT；大 chunk 相反；
+- prefill 与 decode 已可在同一 scheduler cycle 内用两条 CUDA stream 并发，但仍
+  不是单次 forward 内的 mixed batch；4 GB 卡上二者争用内存带宽，overlap 的吞吐
+  收益有限；
+- 小 chunk 能压低 ITL 抖动，但会抬高插入期间的 TPOT；大 chunk 相反；
 - 每个 scheduling iteration 只推进一个 prefill chunk；
 - 没有 preemption、CPU KV swap、KV FP8、beam search 或 speculative decoding；
 - INT8 KV 已有 native decode kernel，但 dequant 有成本；3B c4 比 FP16 native
   慢约 6%，主要价值是 KV 容量减半；
-- prefill 计算仍是分块 dequant + cuBLAS，不是 tiled W4/W3 GEMM；
+- W4/W3 prefill 已切到 tiled GEMM；但当前是 CUDA core + FP32 累加，尚未做 Tensor Core / cp.async pipeline；
 - GPU harness 在 Python 3.10 下验证；Python 3.12 GPU package 验证未完成；
 - 3-bit MLP/lm_head 是有损量化，短输出可读不代表与 BF16 等价；
 - 4 GB 上整体 Q4 只能作为质量/兼容实验，速度约 8 tokens/s；
@@ -730,6 +780,9 @@ python scripts\export_sm86_kernels.py
 - 量化格式兼容与转换：`docs/QUANTIZATION_FORMAT_COMPATIBILITY.md`
 - 量化格式改造复盘：`docs/ARTICLE_5_QUANTIZATION_FORMAT_COMPATIBILITY.md`
 - native paged kernel / batched GEMV / 4GB 实测：`docs/ARTICLE_6_NATIVE_PAGED_KERNEL_AND_4GB_BENCH.md`
+- prefill/decode overlap 与 tiled prefill 复盘：
+  `docs/ARTICLE_7_PREFILL_DECODE_OVERLAP_AND_TILED_PREFILL.md`
+- tiled W4/W3 prefill 微基准：`scripts/bench_sm86_tiled_prefill.py`
 - P0 低延迟/显存预算说明：
   `docs/P0_CHUNKED_PREFILL_AND_MEMORY_BUDGET.md`
 - GPU TTFT/TPOT/并发 benchmarks：`scripts/bench_paged_scheduler.py`

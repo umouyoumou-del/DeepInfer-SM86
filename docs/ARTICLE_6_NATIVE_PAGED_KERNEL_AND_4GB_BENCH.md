@@ -533,3 +533,8 @@ python scripts\bench_w4a16_batched_gemv.py `
 
 下一步如果继续，应该优先做 prefill/decode 并发和 tiled prefill GEMM，而不是
 继续在 API 层加功能。
+
+
+---
+
+下一篇：`ARTICLE_7_PREFILL_DECODE_OVERLAP_AND_TILED_PREFILL.md`，记录 tiled W4/W3 prefill GEMM 与 paged scheduler 双 CUDA stream overlap 的实现、实测和弯路。
