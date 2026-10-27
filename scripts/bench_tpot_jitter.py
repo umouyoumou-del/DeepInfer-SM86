@@ -137,6 +137,11 @@ def main() -> int:
     parser.add_argument("--chunk-sizes", default="8,16,32,64")
     parser.add_argument("--long-repeat", type=int, default=8)
     parser.add_argument("--kv-cache-dtype", choices=("fp16", "int8"), default="fp16")
+    parser.add_argument(
+        "--no-prefill-decode-overlap",
+        action="store_true",
+        help="disable dual-CUDA-stream prefill/decode overlap",
+    )
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args()
     if not torch.cuda.is_available():
@@ -176,6 +181,7 @@ def main() -> int:
             gpu_memory_utilization=0.80,
             reserve_memory_mb=384,
             kv_cache_dtype=args.kv_cache_dtype,
+            enable_prefill_decode_overlap=not args.no_prefill_decode_overlap,
         )
         try:
             warmup = scheduler.submit(
@@ -195,6 +201,14 @@ def main() -> int:
                     ),
                     "prefill_decode_overlap_steps": int(
                         scheduler.metrics.get("prefill_decode_overlap_steps")
+                    ),
+                    "prefill_decode_stream_overlap_steps": int(
+                        scheduler.metrics.get(
+                            "prefill_decode_stream_overlap_steps"
+                        )
+                    ),
+                    "prefill_decode_overlap_enabled": bool(
+                        args.no_prefill_decode_overlap is False
                     ),
                     "max_decode_batch_size": int(
                         scheduler.metrics.get("max_decode_batch_size")

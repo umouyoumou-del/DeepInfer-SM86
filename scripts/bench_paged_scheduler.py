@@ -58,6 +58,10 @@ def _run_concurrency(
     ]
     scheduler.manager.prefix_cache.clear()
     oom_before = scheduler.metrics.get("kv_cache_oom_total")
+    overlap_before = scheduler.metrics.get("prefill_decode_overlap_steps")
+    stream_overlap_before = scheduler.metrics.get(
+        "prefill_decode_stream_overlap_steps"
+    )
     cache_before = scheduler.manager.prefix_cache.stats()
     started = time.perf_counter()
     requests = [
@@ -87,6 +91,10 @@ def _run_concurrency(
     ]
     inter_summary = _latency_summary(inter_token)
     oom_after = scheduler.metrics.get("kv_cache_oom_total")
+    overlap_after = scheduler.metrics.get("prefill_decode_overlap_steps")
+    stream_overlap_after = scheduler.metrics.get(
+        "prefill_decode_stream_overlap_steps"
+    )
     cache_after = scheduler.manager.prefix_cache.stats()
     cache_hits = int(cache_after["hits"] - cache_before["hits"])
     cache_misses = int(cache_after["misses"] - cache_before["misses"])
@@ -108,6 +116,10 @@ def _run_concurrency(
             inter_summary["p95"] - inter_summary["p50"], 6
         ),
         "kv_cache_oom_delta": int(oom_after - oom_before),
+        "prefill_decode_overlap_steps": int(overlap_after - overlap_before),
+        "prefill_decode_stream_overlap_steps": int(
+            stream_overlap_after - stream_overlap_before
+        ),
         "max_decode_batch_size": int(
             scheduler.metrics.get("max_decode_batch_size", 0)
         ),
@@ -143,6 +155,11 @@ def main() -> int:
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.80)
     parser.add_argument("--reserve-memory-mb", type=int, default=512)
     parser.add_argument("--no-prefix-cache", action="store_true")
+    parser.add_argument(
+        "--no-prefill-decode-overlap",
+        action="store_true",
+        help="disable dual-CUDA-stream prefill/decode overlap",
+    )
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args()
     if not torch.cuda.is_available():
@@ -166,6 +183,7 @@ def main() -> int:
         block_size=args.block_size,
         prefill_chunk_tokens=args.prefill_chunk_tokens,
         kv_cache_dtype=args.kv_cache_dtype,
+        enable_prefill_decode_overlap=not args.no_prefill_decode_overlap,
         num_gpu_blocks=args.kv_blocks,
         prefix_cache_blocks=0 if args.no_prefix_cache else None,
         gpu_memory_utilization=args.gpu_memory_utilization,
@@ -202,6 +220,7 @@ def main() -> int:
             "max_cache": args.max_cache,
             "block_size": args.block_size,
             "prefill_chunk_tokens": args.prefill_chunk_tokens,
+            "prefill_decode_overlap": not args.no_prefill_decode_overlap,
             "kv_cache_dtype": args.kv_cache_dtype,
             "prefix_cache": not args.no_prefix_cache,
             "concurrency_runs": runs,

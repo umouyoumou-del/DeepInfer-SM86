@@ -750,6 +750,11 @@ def main() -> int:
     parser.add_argument("--block-size", type=int, default=16)
     parser.add_argument("--prefill-chunk-tokens", type=int, default=64)
     parser.add_argument(
+        "--no-prefill-decode-overlap",
+        action="store_true",
+        help="disable the dual-CUDA-stream prefill/decode overlap path",
+    )
+    parser.add_argument(
         "--kv-cache-dtype", choices=("fp16", "int8"), default="fp16"
     )
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.80)
@@ -790,6 +795,7 @@ def main() -> int:
             block_size=args.block_size,
             prefill_chunk_tokens=args.prefill_chunk_tokens,
             kv_cache_dtype=args.kv_cache_dtype,
+            enable_prefill_decode_overlap=not args.no_prefill_decode_overlap,
             num_gpu_blocks=args.kv_blocks,
             prefix_cache_blocks=args.prefix_cache_blocks,
             gpu_memory_utilization=args.gpu_memory_utilization,
@@ -809,6 +815,7 @@ def main() -> int:
         scheduler_summary = (
             f"paged max_seqs={args.max_num_seqs} block={args.block_size} "
             f"prefill_chunk={args.prefill_chunk_tokens} "
+            f"prefill_decode_overlap={not args.no_prefill_decode_overlap} "
             f"kv_dtype={args.kv_cache_dtype} "
             f"kv_blocks={SCHEDULER.manager.num_blocks} "
             f"kv_bytes={SCHEDULER.memory_budget.kv_budget_bytes}"

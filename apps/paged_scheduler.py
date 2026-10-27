@@ -93,6 +93,31 @@ class PagedScheduledRequest:
     token_times: list[float] = field(default_factory=list)
 
 
+@dataclass
+class _PrefillWork:
+    request: PagedScheduledRequest
+    start: int
+    end: int
+    chunk_length: int
+    input_ids: torch.Tensor
+    positions: torch.Tensor
+    views: list[Any]
+    started_at: float = field(default_factory=time.perf_counter)
+    started_event: Any | None = None
+    finished_event: Any | None = None
+
+
+@dataclass
+class _DecodeWork:
+    requests: list[PagedScheduledRequest]
+    input_ids: torch.Tensor
+    positions: torch.Tensor
+    views: list[Any]
+    started_at: float = field(default_factory=time.perf_counter)
+    started_event: Any | None = None
+    finished_event: Any | None = None
+
+
 class PagedBatchScheduler:
     """Continuous batching with block-level KV allocation and prefix reuse."""
 
@@ -104,6 +129,7 @@ class PagedBatchScheduler:
         block_size: int = 16,
         prefill_chunk_tokens: int = 64,
         kv_cache_dtype: str = "fp16",
+        enable_prefill_decode_overlap: bool = True,
         num_gpu_blocks: int | None = None,
         prefix_cache_blocks: int | None = None,
         gpu_memory_utilization: float = 0.80,
@@ -125,6 +151,12 @@ class PagedBatchScheduler:
         self.block_size = int(block_size)
         self.prefill_chunk_tokens = int(prefill_chunk_tokens)
         self.kv_cache_dtype = str(kv_cache_dtype)
+        self.enable_prefill_decode_overlap = bool(enable_prefill_decode_overlap)
+        self.prefill_stream: torch.cuda.Stream | None = None
+        self.decode_stream: torch.cuda.Stream | None = None
+        if runtime.device.type == "cuda" and self.enable_prefill_decode_overlap:
+            self.prefill_stream = torch.cuda.Stream(device=runtime.device)
+            self.decode_stream = torch.cuda.Stream(device=runtime.device)
         self.max_cache = int(runtime.max_cache)
         self.max_model_len = min(
             self.max_cache,
@@ -543,70 +575,109 @@ class PagedBatchScheduler:
         if self.runtime.device.type == "cuda" and self._is_oom_exception(exc):
             torch.cuda.empty_cache()
 
-    def _prefill_step(self) -> bool:
+    def _prepare_prefill_work(self) -> tuple[_PrefillWork | None, bool]:
         prefill_requests = [
             item
             for item in self.running
             if not item.finished and item.state == RequestState.PREFILL
         ]
         if not prefill_requests:
-            return False
+            return None, False
         request = prefill_requests[self._prefill_cursor % len(prefill_requests)]
         self._prefill_cursor += 1
         if request.cancelled:
             self._fail(request, GenerationCancelledError("request cancelled"))
-            return True
+            return None, True
         if request.prefill_start_time is None:
             request.prefill_start_time = time.perf_counter()
         start = request.prefill_done
-        end = min(
-            request.prompt_length,
-            start + self.prefill_chunk_tokens,
-        )
+        end = min(request.prompt_length, start + self.prefill_chunk_tokens)
         chunk_length = end - start
         if chunk_length < 1:
             self._fail(request, RuntimeError("invalid empty prefill chunk"))
-            return True
-        input_ids = torch.tensor(
-            [request.prompt_ids[start:end]],
-            dtype=torch.long,
-            device=self.runtime.device,
-        )
-        positions = torch.arange(
-            start,
-            end,
-            dtype=torch.long,
-            device=self.runtime.device,
-        ).unsqueeze(0)
-        views = self.manager.make_views(
-            [request.block_ids],
-            [start],
-            max_length=end,
-            new_tokens=chunk_length,
-        )
-        prefill_start = time.perf_counter()
+            return None, True
         try:
-            with torch.inference_mode():
-                logits = self.model.forward_logits(
-                    input_ids,
-                    positions,
-                    kv_cache=views,
-                )
-                if self.runtime.device.type == "cuda":
-                    torch.cuda.synchronize()
+            input_ids = torch.tensor(
+                [request.prompt_ids[start:end]],
+                dtype=torch.long,
+                device=self.runtime.device,
+            )
+            positions = torch.arange(
+                start,
+                end,
+                dtype=torch.long,
+                device=self.runtime.device,
+            ).unsqueeze(0)
+            views = self.manager.make_views(
+                [request.block_ids],
+                [start],
+                max_length=end,
+                new_tokens=chunk_length,
+            )
         except BaseException as exc:  # noqa: BLE001
             self._maybe_clear_cuda_oom(exc)
             self._fail(request, exc)
-            return True
+            return None, True
+        work = _PrefillWork(
+            request=request,
+            start=start,
+            end=end,
+            chunk_length=chunk_length,
+            input_ids=input_ids,
+            positions=positions,
+            views=views,
+        )
+        if self.runtime.device.type == "cuda" and self.enable_prefill_decode_overlap:
+            work.started_event = torch.cuda.Event(enable_timing=True)
+            work.finished_event = torch.cuda.Event(enable_timing=True)
+        return work, True
+
+    def _launch_prefill_work(
+        self, work: _PrefillWork, stream: torch.cuda.Stream | None = None
+    ) -> torch.Tensor:
+        if stream is None:
+            work.started_event = None
+            work.finished_event = None
+            work.started_at = time.perf_counter()
+            with torch.inference_mode():
+                logits = self.model.forward_logits(
+                    work.input_ids,
+                    work.positions,
+                    kv_cache=work.views,
+                )
+            if self.runtime.device.type == "cuda":
+                torch.cuda.synchronize()
+            return logits
+        stream.wait_stream(torch.cuda.current_stream(self.runtime.device))
+        with torch.cuda.stream(stream):
+            assert work.started_event is not None and work.finished_event is not None
+            work.started_event.record()
+            with torch.inference_mode():
+                logits = self.model.forward_logits(
+                    work.input_ids,
+                    work.positions,
+                    kv_cache=work.views,
+                )
+            work.finished_event.record()
+        return logits
+
+    def _work_elapsed(self, work: _PrefillWork | _DecodeWork) -> float:
+        if work.started_event is not None and work.finished_event is not None:
+            return work.started_event.elapsed_time(work.finished_event) / 1000.0
+        return time.perf_counter() - work.started_at
+
+    def _finish_prefill_work(
+        self, work: _PrefillWork, logits: torch.Tensor
+    ) -> bool:
+        request = work.request
         if request.cancelled:
             self._fail(request, GenerationCancelledError("request cancelled"))
             return True
-        elapsed = time.perf_counter() - prefill_start
-        self.metrics.observe("prefill_chunk_seconds", elapsed)
+        self.metrics.observe("prefill_chunk_seconds", self._work_elapsed(work))
         self.metrics.inc("prefill_steps_total")
-        self.metrics.inc("prefill_chunk_tokens_total", chunk_length)
-        request.prefill_done = end
-        if end < request.prompt_length:
+        self.metrics.inc("prefill_chunk_tokens_total", work.chunk_length)
+        request.prefill_done = work.end
+        if work.end < request.prompt_length:
             return True
 
         first_token = self.runtime._sample(
@@ -620,9 +691,7 @@ class PagedBatchScheduler:
         if self.prefix_cache_blocks and new_full_blocks:
             first_new_block = request.shared_block_count
             self.manager.prefix_cache.register(
-                request.prompt_hashes[
-                    request.shared_block_count : full_blocks
-                ],
+                request.prompt_hashes[request.shared_block_count : full_blocks],
                 request.block_ids[
                     first_new_block : first_new_block + new_full_blocks
                 ],
@@ -637,6 +706,18 @@ class PagedBatchScheduler:
         self._refresh_gauges()
         return True
 
+    def _prefill_step(self) -> bool:
+        work, did_work = self._prepare_prefill_work()
+        if work is None:
+            return did_work
+        try:
+            logits = self._launch_prefill_work(work)
+            return self._finish_prefill_work(work, logits)
+        except BaseException as exc:  # noqa: BLE001
+            self._maybe_clear_cuda_oom(exc)
+            self._fail(work.request, exc)
+            return True
+
     def _ensure_decode_blocks(self, request: PagedScheduledRequest) -> None:
         required = (request.cached_tokens + 1 + self.block_size - 1) // self.block_size
         missing = required - len(request.block_ids)
@@ -644,14 +725,14 @@ class PagedBatchScheduler:
             return
         request.block_ids.extend(self.manager.allocator.allocate(missing))
 
-    def _decode_step(self) -> bool:
+    def _prepare_decode_work(self) -> tuple[_DecodeWork | None, bool]:
         active = [
             request
             for request in list(self.running)
             if not request.finished and request.state == RequestState.DECODE
         ]
         if not active:
-            return False
+            return None, False
         ready: list[PagedScheduledRequest] = []
         for request in active:
             if request.cancelled:
@@ -664,53 +745,84 @@ class PagedBatchScheduler:
                 continue
             ready.append(request)
         if not ready:
-            return True
+            return None, True
 
-        max_length = max(request.cached_tokens + 1 for request in ready)
-        block_tables = [request.block_ids for request in ready]
-        seq_lens = [request.cached_tokens for request in ready]
-        views = self.manager.make_views(
-            block_tables,
-            seq_lens,
-            max_length=max_length,
-            new_tokens=1,
-        )
-        input_ids = torch.tensor(
-            [[request.generated_ids[-1]] for request in ready],
-            dtype=torch.long,
-            device=self.runtime.device,
-        )
-        positions = torch.tensor(
-            [[request.cached_tokens] for request in ready],
-            dtype=torch.long,
-            device=self.runtime.device,
-        )
-        decode_start = time.perf_counter()
         try:
-            with torch.inference_mode():
-                logits = self.model.forward_logits(
-                    input_ids,
-                    positions,
-                    kv_cache=views,
-                )
-                if self.runtime.device.type == "cuda":
-                    torch.cuda.synchronize()
+            max_length = max(request.cached_tokens + 1 for request in ready)
+            block_tables = [request.block_ids for request in ready]
+            seq_lens = [request.cached_tokens for request in ready]
+            views = self.manager.make_views(
+                block_tables,
+                seq_lens,
+                max_length=max_length,
+                new_tokens=1,
+            )
+            input_ids = torch.tensor(
+                [[request.generated_ids[-1]] for request in ready],
+                dtype=torch.long,
+                device=self.runtime.device,
+            )
+            positions = torch.tensor(
+                [[request.cached_tokens] for request in ready],
+                dtype=torch.long,
+                device=self.runtime.device,
+            )
         except BaseException as exc:  # noqa: BLE001
             self._maybe_clear_cuda_oom(exc)
             for request in ready:
                 self._fail(request, exc)
-            return True
-        self.metrics.observe(
-            "decode_step_seconds", time.perf_counter() - decode_start
+            return None, True
+        work = _DecodeWork(
+            requests=ready,
+            input_ids=input_ids,
+            positions=positions,
+            views=views,
         )
+        if self.runtime.device.type == "cuda" and self.enable_prefill_decode_overlap:
+            work.started_event = torch.cuda.Event(enable_timing=True)
+            work.finished_event = torch.cuda.Event(enable_timing=True)
+        return work, True
+
+    def _launch_decode_work(
+        self, work: _DecodeWork, stream: torch.cuda.Stream | None = None
+    ) -> torch.Tensor:
+        if stream is None:
+            work.started_event = None
+            work.finished_event = None
+            work.started_at = time.perf_counter()
+            with torch.inference_mode():
+                logits = self.model.forward_logits(
+                    work.input_ids,
+                    work.positions,
+                    kv_cache=work.views,
+                )
+            if self.runtime.device.type == "cuda":
+                torch.cuda.synchronize()
+            return logits
+        stream.wait_stream(torch.cuda.current_stream(self.runtime.device))
+        with torch.cuda.stream(stream):
+            assert work.started_event is not None and work.finished_event is not None
+            work.started_event.record()
+            with torch.inference_mode():
+                logits = self.model.forward_logits(
+                    work.input_ids,
+                    work.positions,
+                    kv_cache=work.views,
+                )
+            work.finished_event.record()
+        return logits
+
+    def _finish_decode_work(
+        self, work: _DecodeWork, logits: torch.Tensor
+    ) -> bool:
+        self.metrics.observe("decode_step_seconds", self._work_elapsed(work))
         self.metrics.inc("decode_steps_total")
-        self.metrics.inc("decode_tokens_total", len(ready))
+        self.metrics.inc("decode_tokens_total", len(work.requests))
         previous_batch = int(self.metrics.get("max_decode_batch_size", 0))
         self.metrics.set_gauge(
-            "max_decode_batch_size", max(previous_batch, len(ready))
+            "max_decode_batch_size", max(previous_batch, len(work.requests))
         )
-
-        for row, request in enumerate(ready):
+        for row, request in enumerate(work.requests):
             if request.finished:
                 continue
             if request.cancelled:
@@ -730,6 +842,102 @@ class PagedBatchScheduler:
             self._accept_token(request, next_token, decode_token=True)
         return True
 
+    def _decode_step(self) -> bool:
+        work, did_work = self._prepare_decode_work()
+        if work is None:
+            return did_work
+        try:
+            logits = self._launch_decode_work(work)
+            return self._finish_decode_work(work, logits)
+        except BaseException as exc:  # noqa: BLE001
+            self._maybe_clear_cuda_oom(exc)
+            for request in work.requests:
+                self._fail(request, exc)
+            return True
+
+    def _join_overlap_streams(self) -> None:
+        assert self.prefill_stream is not None and self.decode_stream is not None
+        current = torch.cuda.current_stream(self.runtime.device)
+        current.wait_stream(self.prefill_stream)
+        current.wait_stream(self.decode_stream)
+        current.synchronize()
+
+    def _overlap_step(
+        self, prefill_work: _PrefillWork, decode_work: _DecodeWork
+    ) -> bool:
+        assert self.prefill_stream is not None and self.decode_stream is not None
+        try:
+            # Decode has latency priority; launch it first, then the prefill
+            # chunk on its own stream.  Both depend only on the default stream
+            # setup performed by _prepare_*_work().
+            decode_logits = self._launch_decode_work(
+                decode_work, self.decode_stream
+            )
+            prefill_logits = self._launch_prefill_work(
+                prefill_work, self.prefill_stream
+            )
+            self._join_overlap_streams()
+            self.metrics.inc("prefill_decode_overlap_steps")
+            self.metrics.inc("prefill_decode_stream_overlap_steps")
+            self._finish_prefill_work(prefill_work, prefill_logits)
+            self._finish_decode_work(decode_work, decode_logits)
+            return True
+        except BaseException as exc:  # noqa: BLE001
+            self._maybe_clear_cuda_oom(exc)
+            # A stream error can invalidate both forwards; isolate the whole
+            # overlapped group rather than returning logits from a failed batch.
+            for request in [prefill_work.request, *decode_work.requests]:
+                self._fail(request, exc)
+            return True
+
+    def _serial_overlap_fallback(
+        self, prefill_work: _PrefillWork, decode_work: _DecodeWork
+    ) -> bool:
+        # CPU / disabled-stream fallback: decode first to keep TPOT low, then
+        # run the prefill chunk.  The logical overlap metric is still useful for
+        # observing that both had work in the same scheduler cycle.
+        self.metrics.inc("prefill_decode_overlap_steps")
+        try:
+            decode_logits = self._launch_decode_work(decode_work)
+            prefill_logits = self._launch_prefill_work(prefill_work)
+            self._finish_prefill_work(prefill_work, prefill_logits)
+            self._finish_decode_work(decode_work, decode_logits)
+            return True
+        except BaseException as exc:  # noqa: BLE001
+            self._maybe_clear_cuda_oom(exc)
+            for request in [prefill_work.request, *decode_work.requests]:
+                self._fail(request, exc)
+            return True
+
+    def _scheduler_cycle_step(self) -> bool:
+        prefill_work, prefill_did_work = self._prepare_prefill_work()
+        decode_work, decode_did_work = self._prepare_decode_work()
+        did_work = prefill_did_work or decode_did_work
+        if prefill_work is not None and decode_work is not None:
+            if self.prefill_stream is not None and self.decode_stream is not None:
+                return self._overlap_step(prefill_work, decode_work) or did_work
+            return self._serial_overlap_fallback(
+                prefill_work, decode_work
+            ) or did_work
+        if prefill_work is not None:
+            try:
+                logits = self._launch_prefill_work(prefill_work)
+                return self._finish_prefill_work(prefill_work, logits) or did_work
+            except BaseException as exc:  # noqa: BLE001
+                self._maybe_clear_cuda_oom(exc)
+                self._fail(prefill_work.request, exc)
+                return True
+        if decode_work is not None:
+            try:
+                logits = self._launch_decode_work(decode_work)
+                return self._finish_decode_work(decode_work, logits) or did_work
+            except BaseException as exc:  # noqa: BLE001
+                self._maybe_clear_cuda_oom(exc)
+                for request in decode_work.requests:
+                    self._fail(request, exc)
+                return True
+        return did_work
+
     def _run(self) -> None:
         while not self.stop_event.is_set():
             did_work = False
@@ -746,24 +954,11 @@ class PagedBatchScheduler:
             if self.running:
                 did_work = True
                 try:
-                    decode_worked = self._decode_step()
-                    if decode_worked and any(
-                        request.state == RequestState.PREFILL
-                        for request in self.running
-                    ):
-                        self.metrics.inc("prefill_decode_overlap_steps")
-                    did_work = decode_worked or did_work
+                    did_work = self._scheduler_cycle_step() or did_work
                 except BaseException as exc:  # noqa: BLE001
                     self._maybe_clear_cuda_oom(exc)
                     for request in list(self.running):
-                        if request.state == RequestState.DECODE:
-                            self._fail(request, exc)
-                try:
-                    did_work = self._prefill_step() or did_work
-                except BaseException as exc:  # noqa: BLE001
-                    self._maybe_clear_cuda_oom(exc)
-                    for request in list(self.running):
-                        if request.state == RequestState.PREFILL:
+                        if request.state in (RequestState.PREFILL, RequestState.DECODE):
                             self._fail(request, exc)
             if not did_work:
                 time.sleep(0.01)
@@ -827,6 +1022,12 @@ class PagedBatchScheduler:
             "chunked_prefill": True,
             "batched_decode": True,
             "paged_kv_cache": True,
+            "prefill_decode_overlap": bool(
+                self.prefill_stream is not None and self.decode_stream is not None
+            ),
+            "prefill_decode_stream_overlap_steps": int(
+                self.metrics.get("prefill_decode_stream_overlap_steps", 0)
+            ),
             "native_paged_attention": bool(
                 getattr(self.runtime.model, "native_paged_attention_kernel", False)
             ),

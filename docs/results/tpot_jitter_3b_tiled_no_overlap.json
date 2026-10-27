@@ -1,0 +1,45 @@
+{
+  "checkpoint": "D:\\Qwen3B-W4A16-SM86",
+  "backend": "w4a16",
+  "max_cache": 256,
+  "max_new_tokens": 12,
+  "long_prompt_tokens": 189,
+  "reports": [
+    {
+      "baseline": {
+        "ttft_seconds": 0.345641,
+        "tpot_seconds": 0.07427,
+        "inter_token": {
+          "mean": 0.07427,
+          "p50": 0.07453,
+          "p95": 0.081519,
+          "max": 0.081519,
+          "p95_minus_p50": 0.006989
+        }
+      },
+      "with_insertion": {
+        "ttft_seconds": 0.408184,
+        "tpot_seconds": 0.164834,
+        "inter_token": {
+          "mean": 0.164834,
+          "p50": 0.238495,
+          "p95": 0.24866,
+          "max": 0.24866,
+          "p95_minus_p50": 0.010165
+        },
+        "long_prompt_tokens": 189,
+        "long_ttft_seconds": 1.446166
+      },
+      "insertion_jitter_delta_seconds": 0.003176,
+      "insertion_max_itl_seconds": 0.24866,
+      "prefill_chunk_tokens": 32,
+      "kv_cache_dtype": "fp16",
+      "long_prompt_tokens": 189,
+      "prefill_steps_total": 12,
+      "prefill_decode_overlap_steps": 6,
+      "prefill_decode_stream_overlap_steps": 0,
+      "prefill_decode_overlap_enabled": false,
+      "max_decode_batch_size": 2
+    }
+  ]
+}
