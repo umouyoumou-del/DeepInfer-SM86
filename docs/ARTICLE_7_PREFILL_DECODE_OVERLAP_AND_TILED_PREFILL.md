@@ -723,6 +723,9 @@ D:\QwenNativeTest-venv\Scripts\python.exe -m pytest -q tests
 42 passed, 7 skipped
 ```
 
+这是本文当时的 CPU 结果；后续 ARTICLE_8 又加入了 FP8 和 CPU offload 测试，
+当前 QwenNativeGPU CPU 回归为 `53 passed, 6 skipped`。
+
 覆盖：
 
 - paged KV block 分配、prefix cache、INT8 KV；
@@ -1156,3 +1159,5 @@ paged scheduler + 双 CUDA stream prefill/decode overlap
 
 > 在 4 GB 带宽受限的 RTX 3050 上，stream overlap 是正确性和延迟结构上的进步，
 > 不是吞吐翻倍按钮；这次真正的吞吐收益主要来自 tiled prefill GEMM。
+
+后续：`docs/ARTICLE_8_KV_FP8_AND_CPU_OFFLOAD.md`，记录 KV FP8 native decode 与 CPU cold-block offload。

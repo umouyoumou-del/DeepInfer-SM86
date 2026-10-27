@@ -11,6 +11,16 @@
     "cosine": 1.0,
     "max_abs_error": 0.0009765625
   },
+  "paged_attention_fp8": {
+    "kv_cache_dtype": "fp8",
+    "cosine": 1.0,
+    "max_abs_error": 0.0009765625
+  },
+  "paged_attention_fp8_e5m2": {
+    "kv_cache_dtype": "fp8_e5m2",
+    "cosine": 0.9999998807907104,
+    "max_abs_error": 0.0009765625
+  },
   "batched_w4": {
     "cosine": 0.9999999403953552,
     "max_abs_error": 0.0009765625,
@@ -19,12 +29,12 @@
   "checkpoint": "D:\\Qwen3B-W4A16-SM86",
   "end_to_end": {
     "prompt_tokens": 36,
-    "cosine": 0.9999988079071045,
+    "cosine": 0.9999987483024597,
     "max_abs_error": 0.03515625,
     "native_argmax": 18538,
     "fallback_argmax": 18538,
-    "native_decode_seconds": 0.0658904000010807,
-    "fallback_decode_seconds": 0.08633570000529289,
-    "speedup": 1.3102925464692405
+    "native_decode_seconds": 0.06697929999791086,
+    "fallback_decode_seconds": 0.10103840002557263,
+    "speedup": 1.508501880860566
   }
 }

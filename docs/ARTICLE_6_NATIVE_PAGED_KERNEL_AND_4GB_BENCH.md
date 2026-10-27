@@ -456,7 +456,7 @@ prompt 的 prefill 可能把正在 decode 的流卡住 0.5 秒，而平均吞吐
 - prefill 独立 CUDA stream 并发；
 - 抖动闭环自动调节 chunk size；
 - dynamic batch CUDA Graph；
-- KV FP8、CPU cold-block offload；
+- KV FP8、CPU cold-block offload（后续已在 ARTICLE_8 实现）；
 - W4/W3 tiled prefill GEMM；
 - 7B 在 4 GB 下的系统 sweep；
 - pip / Docker / 生产部署。
@@ -538,3 +538,5 @@ python scripts\bench_w4a16_batched_gemv.py `
 ---
 
 下一篇：`ARTICLE_7_PREFILL_DECODE_OVERLAP_AND_TILED_PREFILL.md`，记录 tiled W4/W3 prefill GEMM 与 paged scheduler 双 CUDA stream overlap 的实现、实测和弯路。
+
+后续：`docs/ARTICLE_8_KV_FP8_AND_CPU_OFFLOAD.md`，记录 KV FP8 native decode 与 CPU cold-block offload。

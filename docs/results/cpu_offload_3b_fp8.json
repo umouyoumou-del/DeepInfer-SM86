@@ -1,0 +1,174 @@
+{
+  "checkpoint": "D:\\Qwen3B-W4A16-SM86",
+  "backend": "w4a16",
+  "kv_cache_dtype": "fp8",
+  "block_size": 16,
+  "max_new_tokens": 8,
+  "gpu_blocks": 3,
+  "blocks_per_request": 3,
+  "max_cpu_offload_mb": 256,
+  "prompt_tokens": [
+    36,
+    36
+  ],
+  "iterations": [
+    {
+      "iteration": 0,
+      "wall_seconds": 2.389204,
+      "first_completion_tokens": 8,
+      "second_completion_tokens": 8,
+      "first_tpot_seconds": 0.200075,
+      "second_tpot_seconds": 0.082203,
+      "swapped_delta": 1,
+      "resumed_delta": 1,
+      "offload_blocks_delta": 3,
+      "reload_blocks_delta": 3
+    },
+    {
+      "iteration": 1,
+      "wall_seconds": 1.69104,
+      "first_completion_tokens": 8,
+      "second_completion_tokens": 8,
+      "first_tpot_seconds": 0.200622,
+      "second_tpot_seconds": 0.079796,
+      "swapped_delta": 1,
+      "resumed_delta": 1,
+      "offload_blocks_delta": 3,
+      "reload_blocks_delta": 3
+    },
+    {
+      "iteration": 2,
+      "wall_seconds": 1.644693,
+      "first_completion_tokens": 8,
+      "second_completion_tokens": 8,
+      "first_tpot_seconds": 0.196894,
+      "second_tpot_seconds": 0.077696,
+      "swapped_delta": 1,
+      "resumed_delta": 1,
+      "offload_blocks_delta": 3,
+      "reload_blocks_delta": 3
+    },
+    {
+      "iteration": 3,
+      "wall_seconds": 1.633046,
+      "first_completion_tokens": 8,
+      "second_completion_tokens": 8,
+      "first_tpot_seconds": 0.19551,
+      "second_tpot_seconds": 0.078239,
+      "swapped_delta": 1,
+      "resumed_delta": 1,
+      "offload_blocks_delta": 3,
+      "reload_blocks_delta": 3
+    },
+    {
+      "iteration": 4,
+      "wall_seconds": 1.64664,
+      "first_completion_tokens": 8,
+      "second_completion_tokens": 8,
+      "first_tpot_seconds": 0.196939,
+      "second_tpot_seconds": 0.079539,
+      "swapped_delta": 1,
+      "resumed_delta": 1,
+      "offload_blocks_delta": 3,
+      "reload_blocks_delta": 3
+    }
+  ],
+  "cpu_offload": {
+    "enabled": true,
+    "payload_bytes": 0,
+    "budget_bytes": 268435456,
+    "max_swapped_requests": 1
+  },
+  "memory_budget": {
+    "mode": "cuda",
+    "device": "cuda",
+    "total_memory_bytes": 4294443008,
+    "free_memory_bytes_before_pool": 1348940596,
+    "model_parameter_bytes": 622813184,
+    "model_buffer_bytes": 1430618112,
+    "gpu_memory_utilization": 0.8,
+    "reserve_memory_bytes": 402653184,
+    "kv_budget_bytes": 946287412,
+    "block_bytes": 294912,
+    "block_size": 16,
+    "num_blocks": 3,
+    "max_cache": 128,
+    "max_num_seqs": 2,
+    "prefix_cache_blocks": 0,
+    "capacity_tokens": 48
+  },
+  "metrics": {
+    "uptime_seconds": 9.007,
+    "counters": {
+      "requests_total": 10.0,
+      "prefill_steps_total": 20.0,
+      "prefill_chunk_tokens_total": 360.0,
+      "prompt_tokens_total": 360.0,
+      "generated_tokens_total": 80.0,
+      "requests_swapped_total": 5.0,
+      "kv_cpu_offload_blocks_total": 15.0,
+      "kv_cpu_offload_bytes_total": 4423680.0,
+      "decode_steps_total": 70.0,
+      "decode_tokens_total": 140.0,
+      "requests_finished_total": 10.0,
+      "requests_resumed_total": 5.0,
+      "kv_cpu_reload_blocks_total": 15.0
+    },
+    "gauges": {
+      "up": 1.0,
+      "running_requests": 0.0,
+      "swapped_requests": 0.0,
+      "queued_requests": 0.0,
+      "cpu_offload_bytes": 0.0,
+      "cpu_offload_budget_bytes": 268435456.0,
+      "cpu_offload_enabled": 1.0,
+      "max_swapped_requests": 1.0,
+      "prefill_requests": 0.0,
+      "decode_requests": 0.0,
+      "kv_cache_blocks_used": 0.0,
+      "kv_cache_blocks_free": 3.0,
+      "kv_cache_blocks_total": 3.0,
+      "kv_cache_usage_ratio": 0.0,
+      "max_decode_batch_size": 1.0
+    },
+    "summaries": {
+      "prefill_chunk_seconds": {
+        "sum": 3.444479899975704,
+        "count": 20,
+        "avg": 0.1722239949987852
+      },
+      "ttft_seconds": {
+        "sum": 3.493032400001539,
+        "count": 10,
+        "avg": 0.3493032400001539
+      },
+      "cpu_offload_seconds": {
+        "sum": 0.005578599986620247,
+        "count": 5,
+        "avg": 0.0011157199973240496
+      },
+      "decode_step_seconds": {
+        "sum": 5.426299000158906,
+        "count": 70,
+        "avg": 0.07751855714512723
+      },
+      "tpot_seconds": {
+        "sum": 9.712582999985898,
+        "count": 70,
+        "avg": 0.13875118571408426
+      },
+      "cpu_reload_seconds": {
+        "sum": 0.0013074999733362347,
+        "count": 5,
+        "avg": 0.00026149999466724695
+      }
+    },
+    "requests_finished": 10.0,
+    "requests_failed": 0.0,
+    "generated_tokens": 80.0,
+    "decode_tokens_per_second": 14.743,
+    "avg_ttft_seconds": 0.349303,
+    "avg_tpot_seconds": 0.138751,
+    "kv_cache_usage_ratio": 0.0
+  }
+}

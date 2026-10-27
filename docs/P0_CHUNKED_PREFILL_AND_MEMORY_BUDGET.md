@@ -17,6 +17,8 @@ TTFT / TPOT metrics     ✅
 OpenAI /v1/completions  ✅
 Tenant prefix isolation ✅
 KV INT8 paged cache     ✅（native + SDPA fallback）
+KV FP8 paged cache      ✅（E4M3/E5M2 native decode）
+CPU KV cold offload     ✅（request-level swap）
 ```
 
 仍未完成：
@@ -24,7 +26,6 @@ KV INT8 paged cache     ✅（native + SDPA fallback）
 ```text
 prefill+decode 单次混合 forward ❌
 dynamic-batch CUDA Graph        ❌
-KV FP8 / CPU offload            ❌
 ```
 
 ## 2. Chunked Prefill
@@ -185,7 +186,7 @@ end-to-end logits vs SDPA:    cosine 0.9999988, argmax 一致
 单次 decode: native 0.0659 s vs SDPA 0.0863 s，约 1.31x
 ```
 
-## 4. KV INT8 缓存
+## 4. KV 量化缓存：INT8 与 FP8
 
 新增 `--kv-cache-dtype int8`：
 
@@ -199,10 +200,21 @@ INT8 现在有独立 native paged decode kernel：K/V 以 int8 存储，kernel �
 FP16 scale 并完成反量化；gather/softmax/value 累加不再 materialize dense K/V。
 变长 batch、GQA、sliding window、softcap 与 FP16 kernel 一致。
 
-实机 synthetic 校验：cosine 1.0，max abs 0.0009765625。INT8 的收益主要是容量
-（block bytes 589824 → 299520，约减半），不是免费提速；因为多了一次 scale
-读取和反量化，3B 上 c4 aggregate 约 13.87 tokens/s，低于 FP16 native 的
-14.74 tokens/s。
+新增 `--kv-cache-dtype fp8` / `fp8_e5m2`：
+
+- FP8 直接 cast，无 per-token scale sidecar；
+- block bytes 294912，是 FP16 的 1/2、INT8 的约 98%；
+- native paged kernel 将 FP8 byte bit pattern 在 CUDA 内解码成 float；
+- 支持 E4M3 和 E5M2 两种 FP8；
+- 与 FP16/INT8 一样支持 ragged batch、GQA、sliding window、softcap。
+
+实机 synthetic 校验：INT8/E4M3 cosine 1.0；E5M2 cosine 0.99999988。
+3B c1/c2/c4：11.089 / 17.317 / 22.527 tokens/s，接近 FP16 native 的
+11.189 / 17.484 / 22.779，但 KV block 只占一半。FP8 先验版本走 SDPA fallback
+时 c4 只有 21.4 tokens/s；native FP8 kernel 把这部分差距基本补平。
+
+CPU cold offload 见 10.5。它和 KV 数据类型正交：FP16/INT8/FP8 payload 都能
+swap 到 CPU。
 
 ## 5. 显存预算和 OOM 策略
 
@@ -365,15 +377,17 @@ ruff: All checks passed
 - tenant prefix isolation 与命中后结果一致；
 - `/v1/chat/completions` 和 `/v1/completions` 路由/流式；
 - 模型目录 probe 的 supported/unsupported 分支；
-- INT8 KV cache 的写入、读取、scale sidecar 和 chunked prefill logits 对齐。
+- INT8 KV cache 的写入、读取、scale sidecar 和 chunked prefill logits 对齐；
+- FP8 paged KV 写入/读取和 block 预算；
+- CPU payload 的 FP16/INT8/FP8 offload/reload roundtrip；
+- PREFILL/DECODE 请求 swap/resume、CPU budget=0 拒绝路径。
 
 实机 kernel 校验：
 
 ```powershell
-python scriptsalidate_sm86_kernels.py `
+python scripts\validate_sm86_kernels.py `
   --checkpoint D:\Qwen3B-W4A16-SM86 `
-  --output docs
-esults\sm86_kernel_validation_3b.json
+  --output docs\results\sm86_kernel_validation_3b.json
 ```
 
 ## 10. 实机结果：RTX 3050 Laptop 4 GB
@@ -405,6 +419,9 @@ esults\sm86_kernel_validation_3b.json
 - `docs/results/paged_concurrency_3b_int8kv_native.json`
 - `docs/results/sm86_kernel_validation_3b.json`
 - `docs/results/w4_batched_gemv_microbench.json`
+- `docs/results/paged_concurrency_3b_fp8kv.json`
+- `docs/results/cpu_offload_3b_fp16.json`
+- `docs/results/cpu_offload_3b_fp8.json`
 
 ### 10.2 长文档插入时的流式 TPOT 抖动
 
@@ -447,12 +464,40 @@ INT8 主要价值是容量而不是速度。
 更完整的弯路和数字见:
 `docs/ARTICLE_6_NATIVE_PAGED_KERNEL_AND_4GB_BENCH.md`。
 
+### 10.5 CPU cold-block offload
+
+新增请求级 swap：
+
+- GPU block 不足时，选最久未活跃的 PREFILL/DECODE 请求；
+- 把它已经使用的 KV block 复制到 pinned CPU payload；
+- 释放整段 GPU block，请求状态变为 `SWAPPED`；
+- 后续 GPU block 足够时重新分配并 reload，恢复原 PREFILL/DECODE 状态；
+- `--max-cpu-offload-mb` 限制 CPU payload 总量。
+
+3B W4A16、强制只给 3 个 GPU block、每个请求 3 blocks、prompt 36 tokens、
+max_new=8、连续 5 轮：
+
+| dtype | 完成请求 | swap/resume 每轮 | offload copy | reload copy |
+|---|---:|---:|---:|---:|
+| FP16 | 10/10 | 1/1 | 1.46 ms | 0.26 ms |
+| FP8 | 10/10 | 1/1 | 1.12 ms | 0.26 ms |
+
+没有 OOM，也没有请求丢失。被换出的第一个请求 TPOT 约 0.18–0.19 s，第二个
+请求约 0.07 s；这个差异不是 kernel 变慢，而是 token interval 包含了整个
+swap 等待窗口。CPU offload 是 OOM 压力释放阀，不是吞吐优化。
+
+原始数据：
+
+- `docs/results/cpu_offload_3b_fp16.json`
+- `docs/results/cpu_offload_3b_fp8.json`
+- `docs/results/paged_concurrency_3b_fp8kv.json`
+
 ## 11. 仍未完成
 
-- prefill + decode 真正的单次 mixed forward；
-- prefill 独立 CUDA stream 并发执行；
-- TPOT 抖动闭环调节 chunk size；
+- prefill + decode 真正的单次 forward mixed batch；
+- tiled W4/W3 GEMM 的 Tensor Core / cp.async / double buffering；
+- TPOT 抖动闭环、time-sliced prefill、decode stream 优先级；
 - dynamic batch CUDA Graph；
-- KV FP8、CPU cold-block offload；
-- W4/W3 tiled prefill GEMM；
-- 7B 在 4 GB 下的系统 sweep（当前聚焦 3B W4A16）。
+- 按 block 热度的细粒度 cold/hot 迁移（当前是整请求 swap）；
+- CPU offload 的 SLA 感知调度和后台预取；
+- 7B 在 4 GB 下的稳定性 sweep（已有 mixed smoke，但性能不稳定）。

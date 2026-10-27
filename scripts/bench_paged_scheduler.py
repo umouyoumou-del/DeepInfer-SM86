@@ -143,8 +143,16 @@ def main() -> int:
     parser.add_argument("--block-size", type=int, default=16)
     parser.add_argument("--prefill-chunk-tokens", type=int, default=64)
     parser.add_argument(
-        "--kv-cache-dtype", choices=("fp16", "int8"), default="fp16"
+        "--kv-cache-dtype",
+        choices=("fp16", "int8", "fp8", "fp8_e5m2"),
+        default="fp16",
     )
+    parser.add_argument(
+        "--cpu-offload",
+        action="store_true",
+        help="enable CPU block swap when GPU KV blocks are exhausted",
+    )
+    parser.add_argument("--max-cpu-offload-mb", type=int, default=2048)
     parser.add_argument(
         "--concurrency",
         default="1,2,4,8",
@@ -184,6 +192,8 @@ def main() -> int:
         prefill_chunk_tokens=args.prefill_chunk_tokens,
         kv_cache_dtype=args.kv_cache_dtype,
         enable_prefill_decode_overlap=not args.no_prefill_decode_overlap,
+        enable_cpu_offload=args.cpu_offload,
+        max_cpu_offload_mb=args.max_cpu_offload_mb,
         num_gpu_blocks=args.kv_blocks,
         prefix_cache_blocks=0 if args.no_prefix_cache else None,
         gpu_memory_utilization=args.gpu_memory_utilization,
@@ -222,6 +232,8 @@ def main() -> int:
             "prefill_chunk_tokens": args.prefill_chunk_tokens,
             "prefill_decode_overlap": not args.no_prefill_decode_overlap,
             "kv_cache_dtype": args.kv_cache_dtype,
+            "cpu_offload": args.cpu_offload,
+            "max_cpu_offload_mb": args.max_cpu_offload_mb,
             "prefix_cache": not args.no_prefix_cache,
             "concurrency_runs": runs,
             "memory_budget": scheduler.memory_budget.as_dict(),

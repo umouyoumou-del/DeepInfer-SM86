@@ -9,6 +9,7 @@ from deepinfer.engine.kv_cache import (
     CacheOutOfMemoryError,
     PagedKVCacheManager,
     PrefixCache,
+    paged_kv_block_bytes,
 )
 from deepinfer.model_executor.models.qwen2 import Qwen2ForCausalLM
 
@@ -391,3 +392,101 @@ def test_int8_read_blocks_preserves_head_and_block_order() -> None:
     assert read_key is not None and read_value is not None
     assert torch.allclose(read_key, key, atol=0.02, rtol=0.02)
     assert torch.allclose(read_value, value, atol=0.02, rtol=0.02)
+
+
+def test_fp8_paged_cache_roundtrip_and_memory_size() -> None:
+    manager = PagedKVCacheManager(
+        num_layers=1,
+        num_kv_heads=1,
+        head_dim=4,
+        block_size=4,
+        num_blocks=4,
+        dtype=torch.float32,
+        kv_cache_dtype="fp8",
+        device="cpu",
+    )
+    assert manager.kv_cache_dtype == torch.float8_e4m3fn
+    assert manager.key_pool.dtype == torch.float8_e4m3fn
+    blocks = manager.allocate_tokens(6)
+    key = torch.randn(1, 1, 6, 4)
+    value = torch.randn(1, 1, 6, 4)
+    view = manager.make_layer_view(
+        0, [blocks], [0], max_length=6, new_tokens=6
+    )
+    view.update(key, value, torch.arange(6).unsqueeze(0))
+    actual_key, actual_value, valid = view.materialize()
+    assert valid.all()
+    cosine_key = torch.nn.functional.cosine_similarity(
+        actual_key.flatten(), key.flatten(), dim=0
+    )
+    cosine_value = torch.nn.functional.cosine_similarity(
+        actual_value.flatten(), value.flatten(), dim=0
+    )
+    assert cosine_key.item() > 0.995
+    assert cosine_value.item() > 0.995
+    fp8_bytes = paged_kv_block_bytes(
+        num_layers=1,
+        num_kv_heads=1,
+        block_size=4,
+        head_dim=4,
+        compute_dtype=torch.float32,
+        kv_cache_dtype="fp8",
+    )
+    fp16_bytes = paged_kv_block_bytes(
+        num_layers=1,
+        num_kv_heads=1,
+        block_size=4,
+        head_dim=4,
+        compute_dtype=torch.float16,
+        kv_cache_dtype="fp16",
+    )
+    assert fp8_bytes * 2 == fp16_bytes
+
+
+@pytest.mark.parametrize("kv_cache_dtype", ["fp16", "int8", "fp8"])
+def test_cpu_offload_payload_roundtrip(kv_cache_dtype: str) -> None:
+    manager = PagedKVCacheManager(
+        num_layers=1,
+        num_kv_heads=1,
+        head_dim=4,
+        block_size=4,
+        num_blocks=8,
+        dtype=torch.float32,
+        kv_cache_dtype=kv_cache_dtype,
+        device="cpu",
+    )
+    source_blocks = manager.allocate_tokens(6)
+    target_blocks = manager.allocate_tokens(6)
+    key = torch.randn(1, 1, 6, 4)
+    value = torch.randn(1, 1, 6, 4)
+    manager.write_tokens(0, source_blocks, key, value)
+    payload = manager.offload_blocks(source_blocks)
+    assert payload.num_layers == 1
+    assert payload.num_blocks == len(source_blocks)
+    assert payload.nbytes > 0
+    assert payload.key.device.type == "cpu"
+    assert payload.value.device.type == "cpu"
+    if kv_cache_dtype == "int8":
+        assert payload.key_scales is not None
+        assert payload.value_scales is not None
+    else:
+        assert payload.key_scales is None
+        assert payload.value_scales is None
+
+    manager.reload_blocks(payload, target_blocks)
+    if kv_cache_dtype == "fp8":
+        actual_key = manager.key_pool.view(torch.uint8)[:, target_blocks].cpu()
+        actual_value = manager.value_pool.view(torch.uint8)[:, target_blocks].cpu()
+        expected_key = payload.key.view(torch.uint8)
+        expected_value = payload.value.view(torch.uint8)
+    else:
+        actual_key = manager.key_pool[:, target_blocks].cpu()
+        actual_value = manager.value_pool[:, target_blocks].cpu()
+        expected_key = payload.key
+        expected_value = payload.value
+    assert torch.equal(actual_key, expected_key)
+    assert torch.equal(actual_value, expected_value)
+    if payload.key_scales is not None:
+        assert torch.equal(
+            manager.key_scale_pool[:, target_blocks].cpu(), payload.key_scales
+        )

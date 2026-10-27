@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 import torch
 
+from deepinfer.engine.kv_cache import paged_kv_block_bytes
 from deepinfer.engine.memory_budget import plan_kv_blocks
 
 
@@ -51,3 +52,18 @@ def test_cpu_memory_budget_uses_requested_or_required_blocks() -> None:
             prefix_cache_blocks=0,
             requested_blocks=0,
         )
+
+
+def test_fp8_block_size_is_half_of_fp16_and_smaller_than_int8() -> None:
+    common = {
+        "num_layers": 2,
+        "num_kv_heads": 2,
+        "block_size": 4,
+        "head_dim": 8,
+        "compute_dtype": torch.float16,
+    }
+    fp16 = paged_kv_block_bytes(**common, kv_cache_dtype="fp16")
+    fp8 = paged_kv_block_bytes(**common, kv_cache_dtype="fp8")
+    int8 = paged_kv_block_bytes(**common, kv_cache_dtype="int8")
+    assert fp8 * 2 == fp16
+    assert fp8 < int8 < fp16

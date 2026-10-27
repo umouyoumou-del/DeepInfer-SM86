@@ -67,6 +67,8 @@ def _make_scheduler(
     chunk: int = 64,
     prefix_blocks: int = 8,
     kv_cache_dtype: str = "fp16",
+    cpu_offload: bool = False,
+    max_cpu_offload_mb: int = 64,
 ) -> PagedBatchScheduler:
     return PagedBatchScheduler(
         runtime,
@@ -77,6 +79,8 @@ def _make_scheduler(
         num_gpu_blocks=blocks,
         prefix_cache_blocks=prefix_blocks,
         max_queue_size=8,
+        enable_cpu_offload=cpu_offload,
+        max_cpu_offload_mb=max_cpu_offload_mb,
     )
 
 
@@ -291,5 +295,140 @@ def test_scheduler_with_int8_kv_cache() -> None:
         assert result.completion_tokens == 3
         assert scheduler.status()["kv_cache_dtype"] == "int8"
         assert scheduler.manager.key_pool.dtype == torch.int8
+    finally:
+        scheduler.stop()
+
+
+def test_cpu_offload_swaps_and_resumes_a_decoding_request() -> None:
+    runtime = _Runtime()
+    scheduler = _make_scheduler(
+        runtime,
+        max_num_seqs=2,
+        blocks=3,
+        chunk=2,
+        prefix_blocks=0,
+        cpu_offload=True,
+        max_cpu_offload_mb=64,
+    )
+    try:
+        first = scheduler.submit(
+            [{"role": "user", "content": "8"}],
+            max_new_tokens=4,
+            temperature=0.0,
+            stream=True,
+        )
+        assert first.stream_queue is not None
+        first_delta = first.stream_queue.get(timeout=30)
+        assert first_delta
+        second = scheduler.submit(
+            [{"role": "user", "content": "7"}],
+            max_new_tokens=4,
+            temperature=0.0,
+        )
+        while first.stream_queue.get(timeout=60) is not None:
+            pass
+        first_result = first.future.result(timeout=60)
+        second_result = second.future.result(timeout=60)
+        assert first_result.completion_tokens == 4
+        assert second_result.completion_tokens == 4
+        assert scheduler.metrics.get("requests_swapped_total") >= 1
+        assert scheduler.metrics.get("requests_resumed_total") >= 1
+        assert scheduler.metrics.get("kv_cpu_offload_blocks_total") >= 1
+        assert scheduler.metrics.get("kv_cpu_reload_blocks_total") >= 1
+        status = scheduler.status()
+        assert status["swapped"] == 0
+        assert status["cpu_offload"]["enabled"] is True
+        assert status["cpu_offload"]["payload_bytes"] == 0
+    finally:
+        scheduler.stop()
+
+
+def test_scheduler_with_fp8_kv_cache() -> None:
+    runtime = _Runtime()
+    scheduler = _make_scheduler(
+        runtime,
+        max_num_seqs=1,
+        blocks=16,
+        chunk=2,
+        prefix_blocks=0,
+        kv_cache_dtype="fp8",
+    )
+    try:
+        request = scheduler.submit(
+            [{"role": "user", "content": "9"}],
+            max_new_tokens=3,
+            temperature=0.0,
+        )
+        result = request.future.result(timeout=30)
+        assert result.completion_tokens == 3
+        assert scheduler.status()["kv_cache_dtype"] == "fp8"
+        assert scheduler.manager.key_pool.dtype == torch.float8_e4m3fn
+    finally:
+        scheduler.stop()
+
+
+def test_cpu_offload_handles_a_prefill_request() -> None:
+    runtime = _Runtime()
+    scheduler = _make_scheduler(
+        runtime,
+        max_num_seqs=2,
+        blocks=3,
+        chunk=2,
+        prefix_blocks=0,
+        cpu_offload=True,
+        max_cpu_offload_mb=64,
+    )
+    try:
+        first = scheduler.submit(
+            [{"role": "user", "content": "8"}],
+            max_new_tokens=4,
+            temperature=0.0,
+        )
+        second = scheduler.submit(
+            [{"role": "user", "content": "7"}],
+            max_new_tokens=4,
+            temperature=0.0,
+        )
+        first_result = first.future.result(timeout=60)
+        second_result = second.future.result(timeout=60)
+        assert first_result.completion_tokens == 4
+        assert second_result.completion_tokens == 4
+        assert scheduler.metrics.get("requests_swapped_total") >= 1
+        assert scheduler.metrics.get("requests_resumed_total") >= 1
+    finally:
+        scheduler.stop()
+
+
+def test_cpu_offload_budget_zero_rejects_second_request() -> None:
+    runtime = _Runtime()
+    scheduler = _make_scheduler(
+        runtime,
+        max_num_seqs=2,
+        blocks=3,
+        chunk=2,
+        prefix_blocks=0,
+        cpu_offload=True,
+        max_cpu_offload_mb=0,
+    )
+    try:
+        first = scheduler.submit(
+            [{"role": "user", "content": "8"}],
+            max_new_tokens=4,
+            temperature=0.0,
+            stream=True,
+        )
+        assert first.stream_queue is not None
+        assert first.stream_queue.get(timeout=30)
+        second = scheduler.submit(
+            [{"role": "user", "content": "7"}],
+            max_new_tokens=4,
+            temperature=0.0,
+        )
+        with pytest.raises(CacheOutOfMemoryError):
+            second.future.result(timeout=60)
+        while first.stream_queue.get(timeout=60) is not None:
+            pass
+        assert first.future.result(timeout=60).completion_tokens == 4
+        assert scheduler.metrics.get("kv_cpu_offload_rejected_total") >= 1
     finally:
         scheduler.stop()

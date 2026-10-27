@@ -755,8 +755,16 @@ def main() -> int:
         help="disable the dual-CUDA-stream prefill/decode overlap path",
     )
     parser.add_argument(
-        "--kv-cache-dtype", choices=("fp16", "int8"), default="fp16"
+        "--kv-cache-dtype",
+        choices=("fp16", "int8", "fp8", "fp8_e5m2"),
+        default="fp16",
     )
+    parser.add_argument(
+        "--cpu-offload",
+        action="store_true",
+        help="swap cold paged-KV requests to CPU under GPU block pressure",
+    )
+    parser.add_argument("--max-cpu-offload-mb", type=int, default=2048)
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.80)
     parser.add_argument("--reserve-memory-mb", type=int, default=512)
     parser.add_argument("--kv-budget-mb", type=int, default=None)
@@ -796,6 +804,8 @@ def main() -> int:
             prefill_chunk_tokens=args.prefill_chunk_tokens,
             kv_cache_dtype=args.kv_cache_dtype,
             enable_prefill_decode_overlap=not args.no_prefill_decode_overlap,
+            enable_cpu_offload=args.cpu_offload,
+            max_cpu_offload_mb=args.max_cpu_offload_mb,
             num_gpu_blocks=args.kv_blocks,
             prefix_cache_blocks=args.prefix_cache_blocks,
             gpu_memory_utilization=args.gpu_memory_utilization,
@@ -817,6 +827,7 @@ def main() -> int:
             f"prefill_chunk={args.prefill_chunk_tokens} "
             f"prefill_decode_overlap={not args.no_prefill_decode_overlap} "
             f"kv_dtype={args.kv_cache_dtype} "
+            f"cpu_offload={args.cpu_offload} "
             f"kv_blocks={SCHEDULER.manager.num_blocks} "
             f"kv_bytes={SCHEDULER.memory_budget.kv_budget_bytes}"
         )

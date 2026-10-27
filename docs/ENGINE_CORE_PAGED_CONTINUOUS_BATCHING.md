@@ -42,7 +42,9 @@ HTTP /v1/chat/completions
 PagedBatchScheduler
   ├─ waiting queue（有界）
   ├─ running sequences（可变 batch）
-  ├─ serial prefill（每请求）
+  ├─ chunked prefill（prepare / launch / finish）
+  ├─ dual CUDA stream prefill/decode overlap
+  ├─ CPU cold-request swap（可选）
   ├─ batched decode（当前所有 running）
   ├─ per-request sampling / EOS / cancel
   └─ metrics
@@ -51,11 +53,12 @@ PagedBatchScheduler
 PagedKVCacheManager
   ├─ BlockAllocator（引用计数）
   ├─ PrefixCache（LRU + 共享不可变 block）
-  └─ physical pool [layers, blocks, kv_heads, block, dim]
+  ├─ physical pool [layers, blocks, kv_heads, block, dim] FP16/INT8/FP8
+  └─ CPU pinned payload（swap 时）
           │
           ▼
 Qwen2 generic decoder
-  ├─ native paged GQA decode kernel (FP16/INT8)
+  ├─ native paged GQA decode kernel (FP16/INT8/FP8)
   ├─ SDPA fallback for prefill / external mask
   ├─ sliding-window / alternating SWA masks
   ├─ Gemma/Gemma2 norm、GeGLU、softcap
@@ -203,11 +206,14 @@ while not stopped:
 
 decode 前为每个序列检查下一个 token 所需 block。若池耗尽：
 
-- 该请求以明确的 `KV cache out of memory` 失败并释放自身 block；
-- 其他请求继续 decode；
+- 若启用 `--cpu-offload`，先选最久未活跃的 PREFILL/DECODE 请求，把已使用
+  block 复制到 pinned CPU payload，释放其 GPU block，并标记为 `SWAPPED`；
+- 若仍不够，该请求才以明确的 `KV cache out of memory` 失败并释放自身 block；
+- 其他请求继续 decode；后续 block 足够时自动 reload 并恢复原状态；
 - 不会像固定 slot 一样因为一个超长请求直接污染整个 batch。
 
-当前还没有 CPU swap / recompute preemption。
+当前是整请求 swap，不是按 block 热度的细粒度迁移；没有 recompute preemption。
+CPU payload 预算由 `--max-cpu-offload-mb` 显式限制。
 
 ## 6. Attention 改动
 
@@ -220,7 +226,9 @@ decode 前为每个序列检查下一个 token 所需 block。若池耗尽：
 - sliding-window mask；
 - paged validity mask；
 - 外部 attention mask；
-- Gemma 2 attention-logit softcap（SDPA 无此参数，走显式 eager 参考路径）。
+- Gemma 2 attention-logit softcap（native paged kernel 支持；SDPA fallback
+  走显式 eager 参考路径）；
+- FP16 / INT8 / FP8 paged KV；FP8 支持 E4M3/E5M2。
 
 mask 条件：
 
@@ -344,7 +352,7 @@ decode 最低延迟路径。
 CPU 正确性回归：
 
 ```text
-44 passed, 1 skipped
+53 passed, 6 skipped（GPU-only tests skipped on CPU）
 ```
 
 覆盖：
@@ -356,7 +364,11 @@ CPU 正确性回归：
 - Qwen2 / Llama / Mistral / Gemma / Gemma2 与 HF logits 对齐；
 - Mistral sliding window 和 Gemma2 alternating SWA/softcap；
 - paged scheduler 两请求共享 prefix、同一步 batched decode；
-- Prometheus 文本格式。
+- Prometheus 文本格式；
+- W4/W3 tiled prefill GEMM 与 dequant 参考对齐；
+- W4/W3 batched GEMV 与单行 GEMV 对齐；
+- FP8 paged KV 与 CPU offload payload roundtrip；
+- GPU-only 双 stream overlap、FP8 native attention 和 CPU swap smoke。
 
 GPU 吞吐基准脚本：
 
@@ -370,10 +382,20 @@ python scripts\bench_paged_scheduler.py `
   --output docs\results\paged_concurrency_3b_native_batched_fp16.json
 ```
 
-RTX 3050 Laptop 4 GB 上 native paged + batched W4 的结果是 c1 8.592、
-c4 14.736 tokens/s。长文档插入抖动、INT8 KV 和完整数字见
-`docs/P0_CHUNKED_PREFILL_AND_MEMORY_BUDGET.md` 与
-`docs/ARTICLE_6_NATIVE_PAGED_KERNEL_AND_4GB_BENCH.md`。
+RTX 3050 Laptop 4 GB 上：
+
+```text
+native paged + batched W4, c1/c4: 8.592 / 14.736 tokens/s
+tiled + overlap,          c1/c4: 11.189 / 22.779 tokens/s
+tiled + overlap + FP8,    c1/c4: 11.089 / 22.527 tokens/s
+CPU swap smoke: 10/10 requests complete, swap/resume once per iteration
+```
+
+长文档插入抖动、INT8/FP8 KV、CPU offload 和完整数字见
+`docs/P0_CHUNKED_PREFILL_AND_MEMORY_BUDGET.md`、
+`docs/ARTICLE_6_NATIVE_PAGED_KERNEL_AND_4GB_BENCH.md`、
+`docs/ARTICLE_7_PREFILL_DECODE_OVERLAP_AND_TILED_PREFILL.md` 与
+`docs/ARTICLE_8_KV_FP8_AND_CPU_OFFLOAD.md`。
 
 ## 11. 还没解决的部分
 
@@ -382,9 +404,11 @@ c4 14.736 tokens/s。长文档插入抖动、INT8 KV 和完整数字见
 - native paged GQA 只覆盖 decode `T=1`、`D<=128`、`max_length<=1024`；
   prefill / external mask 仍走 SDPA；
 - 动态 batch 下没有 CUDA Graph；
-- chunked prefill 与 decode 是交替执行，不是同一次 forward 内混合；
+- prefill 与 decode 可以双 CUDA stream 并发，但仍不是同一次 forward 内混合；
 - 长 prefill 插入时，固定 chunk size 无法同时压低 TPOT 中位数和 p95 尖峰；
-- 没有 preemption / CPU KV swap；
+- CPU swap 是整请求粒度，没有 block 级冷热迁移或 recompute preemption；
+- CPU offload 的 swap 等待会拉长被换出请求的 token interval；
+- tiled W4/W3 GEMM 仍是 CUDA core + FP32 累加，没有 Tensor Core / cp.async；
 - 没有 beam search、speculative decoding；
 - 没有 MoE / MLA 执行层；
 - 已支持 GPTQ / AWQ / GGUF 离线转换导入，但没有原格式零拷贝直跑；

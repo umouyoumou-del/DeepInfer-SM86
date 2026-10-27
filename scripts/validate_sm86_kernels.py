@@ -248,6 +248,8 @@ def main() -> int:
         "torch": torch.__version__,
         "paged_attention_fp16": validate_paged_attention("fp16"),
         "paged_attention_int8": validate_paged_attention("int8"),
+        "paged_attention_fp8": validate_paged_attention("fp8"),
+        "paged_attention_fp8_e5m2": validate_paged_attention("fp8_e5m2"),
         "batched_w4": validate_batched_w4(),
     }
     if args.checkpoint is not None:

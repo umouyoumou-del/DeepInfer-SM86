@@ -136,7 +136,14 @@ def main() -> int:
     parser.add_argument("--max-new-tokens", type=int, default=24)
     parser.add_argument("--chunk-sizes", default="8,16,32,64")
     parser.add_argument("--long-repeat", type=int, default=8)
-    parser.add_argument("--kv-cache-dtype", choices=("fp16", "int8"), default="fp16")
+    parser.add_argument(
+        "--kv-cache-dtype",
+        choices=("fp16", "int8", "fp8", "fp8_e5m2"),
+        default="fp16",
+    )
+    parser.add_argument("--cpu-offload", action="store_true")
+    parser.add_argument("--max-cpu-offload-mb", type=int, default=2048)
+    parser.add_argument("--kv-blocks", type=int, default=None)
     parser.add_argument(
         "--no-prefill-decode-overlap",
         action="store_true",
@@ -182,6 +189,9 @@ def main() -> int:
             reserve_memory_mb=384,
             kv_cache_dtype=args.kv_cache_dtype,
             enable_prefill_decode_overlap=not args.no_prefill_decode_overlap,
+            enable_cpu_offload=args.cpu_offload,
+            max_cpu_offload_mb=args.max_cpu_offload_mb,
+            num_gpu_blocks=args.kv_blocks,
         )
         try:
             warmup = scheduler.submit(
@@ -195,6 +205,8 @@ def main() -> int:
                 {
                     "prefill_chunk_tokens": chunk_size,
                     "kv_cache_dtype": args.kv_cache_dtype,
+                    "cpu_offload": args.cpu_offload,
+                    "kv_blocks": args.kv_blocks,
                     "long_prompt_tokens": long_tokens,
                     "prefill_steps_total": int(
                         scheduler.metrics.get("prefill_steps_total")

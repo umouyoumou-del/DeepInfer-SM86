@@ -27,6 +27,7 @@ import torch
 from apps.runtime import QwenSm86Runtime
 from deepinfer.engine.kv_cache import (
     CacheOutOfMemoryError,
+    CpuKVBlockPayload,
     PagedKVCacheManager,
     paged_kv_block_bytes,
 )
@@ -41,6 +42,7 @@ class GenerationCancelledError(RuntimeError):
 class RequestState(str, Enum):
     PREFILL = "prefill"
     DECODE = "decode"
+    SWAPPED = "swapped"
     FINISHED = "finished"
 
 
@@ -91,6 +93,10 @@ class PagedScheduledRequest:
     first_token_time: float | None = None
     completion_time: float | None = None
     token_times: list[float] = field(default_factory=list)
+    last_active_time: float = field(default_factory=time.perf_counter)
+    state_before_swap: RequestState | None = None
+    offload_payload: CpuKVBlockPayload | None = None
+    swap_count: int = 0
 
 
 @dataclass
@@ -130,6 +136,8 @@ class PagedBatchScheduler:
         prefill_chunk_tokens: int = 64,
         kv_cache_dtype: str = "fp16",
         enable_prefill_decode_overlap: bool = True,
+        enable_cpu_offload: bool = False,
+        max_cpu_offload_mb: int = 2048,
         num_gpu_blocks: int | None = None,
         prefix_cache_blocks: int | None = None,
         gpu_memory_utilization: float = 0.80,
@@ -144,6 +152,8 @@ class PagedBatchScheduler:
             raise ValueError("block_size must be >= 1")
         if prefill_chunk_tokens < 1:
             raise ValueError("prefill_chunk_tokens must be >= 1")
+        if max_cpu_offload_mb < 0:
+            raise ValueError("max_cpu_offload_mb must be >= 0")
         self.runtime = runtime
         self.model = runtime.model
         self.tokenizer = runtime.tokenizer
@@ -152,6 +162,11 @@ class PagedBatchScheduler:
         self.prefill_chunk_tokens = int(prefill_chunk_tokens)
         self.kv_cache_dtype = str(kv_cache_dtype)
         self.enable_prefill_decode_overlap = bool(enable_prefill_decode_overlap)
+        self.enable_cpu_offload = bool(enable_cpu_offload)
+        self.max_cpu_offload_bytes = int(max_cpu_offload_mb) * 1024 * 1024
+        self.cpu_offload_bytes = 0
+        self.swapped: list[PagedScheduledRequest] = []
+        self.max_swapped_requests = 0
         self.prefill_stream: torch.cuda.Stream | None = None
         self.decode_stream: torch.cuda.Stream | None = None
         if runtime.device.type == "cuda" and self.enable_prefill_decode_overlap:
@@ -380,6 +395,7 @@ class PagedBatchScheduler:
     ) -> None:
         request.generated_ids.append(token)
         request.token_times.append(time.perf_counter())
+        request.last_active_time = time.perf_counter()
         self.metrics.inc("generated_tokens_total")
         if decode_token:
             self.metrics.inc("decode_tokens_total")
@@ -405,7 +421,168 @@ class PagedBatchScheduler:
                 self.manager.allocator.free(request.block_ids)
             finally:
                 request.block_ids = []
+        self._discard_offload_payload(request)
         self._refresh_gauges()
+
+    def _discard_offload_payload(self, request: PagedScheduledRequest) -> None:
+        payload = request.offload_payload
+        if payload is None:
+            return
+        self.cpu_offload_bytes = max(0, self.cpu_offload_bytes - payload.nbytes)
+        request.offload_payload = None
+
+    def _offload_request(self, request: PagedScheduledRequest) -> int:
+        """Swap one request's used KV blocks to CPU and free its GPU blocks.
+
+        Only complete scheduler-cycle boundaries call this.  There is no
+        in-flight forward for the request, so the GPU blocks can be released
+        immediately after the copy completes.
+        """
+        if not self.enable_cpu_offload:
+            return 0
+        if request.finished or request.offload_payload is not None:
+            return 0
+        if request.state not in (RequestState.PREFILL, RequestState.DECODE):
+            return 0
+        old_state = request.state
+        used_tokens = (
+            request.cached_tokens
+            if old_state == RequestState.DECODE
+            else request.prefill_done
+        )
+        used_blocks = (used_tokens + self.block_size - 1) // self.block_size
+        if used_blocks > len(request.block_ids):
+            self.metrics.inc("kv_cpu_offload_failed_total")
+            return 0
+        started = time.perf_counter()
+        try:
+            payload = self.manager.offload_blocks(
+                request.block_ids[:used_blocks]
+            )
+        except BaseException:  # noqa: BLE001
+            self.metrics.inc("kv_cpu_offload_failed_total")
+            return 0
+        if self.cpu_offload_bytes + payload.nbytes > self.max_cpu_offload_bytes:
+            self.metrics.inc("kv_cpu_offload_rejected_total")
+            return 0
+
+        old_blocks = len(request.block_ids)
+        if request.block_ids:
+            self.manager.allocator.free(request.block_ids)
+        request.block_ids = []
+        request.offload_payload = payload
+        request.state_before_swap = old_state
+        request.state = RequestState.SWAPPED
+        request.shared_block_count = 0
+        if request in self.running:
+            self.running.remove(request)
+        self.swapped.append(request)
+        self.cpu_offload_bytes += payload.nbytes
+        self.max_swapped_requests = max(
+            self.max_swapped_requests, len(self.swapped)
+        )
+        self.metrics.inc("requests_swapped_total")
+        self.metrics.inc("kv_cpu_offload_blocks_total", used_blocks)
+        self.metrics.inc("kv_cpu_offload_bytes_total", payload.nbytes)
+        self.metrics.observe(
+            "cpu_offload_seconds", time.perf_counter() - started
+        )
+        self._refresh_gauges()
+        return old_blocks
+
+    def _make_room_for(self, required_blocks: int) -> int:
+        if not self.enable_cpu_offload or required_blocks <= 0:
+            return 0
+        freed = 0
+        candidates = sorted(
+            self.running, key=lambda request: request.last_active_time
+        )
+        for request in candidates:
+            if request.state not in (RequestState.PREFILL, RequestState.DECODE):
+                continue
+            freed += self._offload_request(request)
+            if freed >= required_blocks:
+                break
+        return freed
+
+    def _resume_swapped_one(self) -> bool:
+        """Bring one swapped request back if its GPU blocks now fit."""
+        if not self.enable_cpu_offload or not self.swapped:
+            return False
+        for index, request in enumerate(list(self.swapped)):
+            if request.finished:
+                self.swapped.pop(index)
+                return True
+            if request.cancelled:
+                self.swapped.pop(index)
+                self._fail(
+                    request, GenerationCancelledError("request cancelled")
+                )
+                return True
+        if len(self.running) >= self.max_num_seqs:
+            return False
+        for index, request in enumerate(list(self.swapped)):
+            resume_state = request.state_before_swap or RequestState.DECODE
+            if resume_state == RequestState.PREFILL:
+                required_tokens = request.prompt_length + request.max_new_tokens
+                used_tokens = request.prefill_done
+            else:
+                remaining_new = max(
+                    0, request.max_new_tokens - len(request.generated_ids)
+                )
+                required_tokens = request.cached_tokens + remaining_new
+                used_tokens = request.cached_tokens
+            required_blocks = (
+                required_tokens + self.block_size - 1
+            ) // self.block_size
+            used_blocks = (used_tokens + self.block_size - 1) // self.block_size
+            if required_blocks > self.manager.allocator.num_blocks:
+                self.swapped.pop(index)
+                self._fail(
+                    request,
+                    RuntimeError(
+                        "swapped request no longer fits the physical KV pool"
+                    ),
+                )
+                return True
+            if required_blocks > self.manager.allocator.available_blocks:
+                continue
+            blocks: list[int] = []
+            try:
+                blocks = self.manager.allocator.allocate(required_blocks)
+                payload = request.offload_payload
+                if used_blocks:
+                    if payload is None:
+                        raise RuntimeError("swapped request is missing CPU payload")
+                    started = time.perf_counter()
+                    self.manager.reload_blocks(payload, blocks[:used_blocks])
+                    self.metrics.observe(
+                        "cpu_reload_seconds", time.perf_counter() - started
+                    )
+                request.block_ids = blocks
+                request.state = resume_state
+                request.state_before_swap = None
+                request.shared_block_count = 0
+                request.last_active_time = time.perf_counter()
+                self.swapped.pop(index)
+                self.running.append(request)
+                if payload is not None:
+                    self.cpu_offload_bytes = max(
+                        0, self.cpu_offload_bytes - payload.nbytes
+                    )
+                request.offload_payload = None
+                request.swap_count += 1
+                self.metrics.inc("requests_resumed_total")
+                self.metrics.inc("kv_cpu_reload_blocks_total", used_blocks)
+                self._refresh_gauges()
+                return True
+            except BaseException as exc:  # noqa: BLE001
+                if blocks:
+                    self.manager.allocator.free(blocks)
+                self.swapped.pop(index)
+                self._fail(request, exc)
+                return True
+        return False
 
     def _finish(self, request: PagedScheduledRequest) -> None:
         if request.finished:
@@ -416,6 +593,8 @@ class PagedBatchScheduler:
         self._release(request)
         if request in self.running:
             self.running.remove(request)
+        if request in self.swapped:
+            self.swapped.remove(request)
         if request.final_text is None:
             text = self.tokenizer.decode(
                 request.generated_ids, skip_special_tokens=True
@@ -481,6 +660,8 @@ class PagedBatchScheduler:
         self._release(request)
         if request in self.running:
             self.running.remove(request)
+        if request in self.swapped:
+            self.swapped.remove(request)
         if isinstance(exc, CacheOutOfMemoryError):
             self.metrics.inc("kv_cache_oom_total")
         elif self._is_oom_exception(exc):
@@ -541,6 +722,10 @@ class PagedBatchScheduler:
             new_block_count = (
                 capacity_tokens + self.block_size - 1
             ) // self.block_size
+            if self.manager.allocator.available_blocks < new_block_count:
+                self._make_room_for(
+                    new_block_count - self.manager.allocator.available_blocks
+                )
             if self.manager.allocator.available_blocks < new_block_count:
                 self.metrics.inc("request_rejected_total")
                 raise CacheOutOfMemoryError(
@@ -940,7 +1125,7 @@ class PagedBatchScheduler:
 
     def _run(self) -> None:
         while not self.stop_event.is_set():
-            did_work = False
+            did_work = self._resume_swapped_one()
             while (
                 len(self.running) < self.max_num_seqs
                 and not self.requests.empty()
@@ -974,7 +1159,18 @@ class PagedBatchScheduler:
             request.state == RequestState.DECODE for request in running_snapshot
         )
         self.metrics.set_gauge("running_requests", len(self.running))
+        self.metrics.set_gauge("swapped_requests", len(self.swapped))
         self.metrics.set_gauge("queued_requests", self.requests.qsize())
+        self.metrics.set_gauge("cpu_offload_bytes", self.cpu_offload_bytes)
+        self.metrics.set_gauge(
+            "cpu_offload_budget_bytes", self.max_cpu_offload_bytes
+        )
+        self.metrics.set_gauge(
+            "cpu_offload_enabled", 1 if self.enable_cpu_offload else 0
+        )
+        self.metrics.set_gauge(
+            "max_swapped_requests", self.max_swapped_requests
+        )
         self.metrics.set_gauge("prefill_requests", prefill_requests)
         self.metrics.set_gauge("decode_requests", decode_requests)
         self.metrics.set_gauge("kv_cache_blocks_used", allocator.used_blocks)
@@ -992,6 +1188,8 @@ class PagedBatchScheduler:
         self.thread.join(timeout=10)
         for request in list(self.running):
             self._fail(request, GenerationCancelledError("engine stopped"))
+        for request in list(self.swapped):
+            self._fail(request, GenerationCancelledError("engine stopped"))
         while True:
             try:
                 request = self.requests.get_nowait()
@@ -1002,6 +1200,8 @@ class PagedBatchScheduler:
     def status(self) -> dict[str, Any]:
         self._refresh_gauges()
         running_snapshot = list(self.running)
+        swapped_snapshot = list(self.swapped)
+        active_snapshot = running_snapshot + swapped_snapshot
         prefill_requests = sum(
             request.state == RequestState.PREFILL for request in running_snapshot
         )
@@ -1018,7 +1218,14 @@ class PagedBatchScheduler:
             "active": len(self.running),
             "prefill": prefill_requests,
             "decode": decode_requests,
+            "swapped": len(swapped_snapshot),
             "queued": self.requests.qsize(),
+            "cpu_offload": {
+                "enabled": self.enable_cpu_offload,
+                "payload_bytes": self.cpu_offload_bytes,
+                "budget_bytes": self.max_cpu_offload_bytes,
+                "max_swapped_requests": self.max_swapped_requests,
+            },
             "chunked_prefill": True,
             "batched_decode": True,
             "paged_kv_cache": True,
@@ -1048,7 +1255,7 @@ class PagedBatchScheduler:
                     "prefix_cached_tokens": request.prefix_cached_tokens,
                     "blocks": len(request.block_ids),
                 }
-                for request in running_snapshot
+                for request in active_snapshot
             ],
         }
 

@@ -31,6 +31,71 @@ from typing import Any
 
 import torch
 
+_FP8_E4M3 = getattr(torch, "float8_e4m3fn", None)
+_FP8_E5M2 = getattr(torch, "float8_e5m2", None)
+
+
+def resolve_kv_cache_dtype(
+    value: str | torch.dtype, compute_dtype: torch.dtype
+) -> torch.dtype:
+    """Resolve a user-facing KV cache dtype without silently aliasing FP8.
+
+    ``fp16`` means "the model compute dtype" for backwards compatibility with
+    CPU tests and non-FP16 backends.  INT8 and FP8 are explicit storage dtypes.
+    """
+    if isinstance(value, torch.dtype):
+        return value
+    name = str(value).lower()
+    if name in ("", "auto", "fp16", "float16", "torch.float16"):
+        return compute_dtype
+    if name in ("int8", "i8", "torch.int8"):
+        return torch.int8
+    if name in ("fp8", "fp8_e4m3", "e4m3", "torch.float8_e4m3fn"):
+        if _FP8_E4M3 is None:
+            raise ValueError("torch.float8_e4m3fn is unavailable in this PyTorch build")
+        return _FP8_E4M3
+    if name in ("fp8_e5m2", "e5m2", "torch.float8_e5m2"):
+        if _FP8_E5M2 is None:
+            raise ValueError("torch.float8_e5m2 is unavailable in this PyTorch build")
+        return _FP8_E5M2
+    raise ValueError(
+        "unsupported kv_cache_dtype "
+        f"{value!r}; choose fp16, int8, fp8 (e4m3), or fp8_e5m2"
+    )
+
+
+def is_fp8_dtype(dtype: torch.dtype) -> bool:
+    return dtype in {value for value in (_FP8_E4M3, _FP8_E5M2) if value is not None}
+
+
+def _storage_view(tensor: torch.Tensor) -> torch.Tensor:
+    """Reinterpret FP8 tensors as uint8 for CPU-safe indexing/copy ops."""
+    if is_fp8_dtype(tensor.dtype):
+        return tensor.view(torch.uint8)
+    return tensor
+
+
+def _restore_storage(tensor: torch.Tensor, dtype: torch.dtype) -> torch.Tensor:
+    return tensor.view(dtype) if is_fp8_dtype(dtype) else tensor
+
+
+def _index_select(
+    tensor: torch.Tensor, index: torch.Tensor, dim: int
+) -> torch.Tensor:
+    selected = _storage_view(tensor).index_select(dim, index)
+    return _restore_storage(selected, tensor.dtype)
+
+
+def _index_copy(
+    destination: torch.Tensor,
+    index: torch.Tensor,
+    source: torch.Tensor,
+    dim: int,
+) -> None:
+    _storage_view(destination).index_copy_(
+        dim, index, _storage_view(source)
+    )
+
 
 def paged_kv_block_bytes(
     *,
@@ -42,8 +107,7 @@ def paged_kv_block_bytes(
     kv_cache_dtype: str | torch.dtype = "fp16",
 ) -> int:
     """Estimate one logical KV block, including INT8 scale sidecars."""
-    name = str(kv_cache_dtype).lower()
-    resolved = torch.int8 if name in ("int8", "i8", "torch.int8") else compute_dtype
+    resolved = resolve_kv_cache_dtype(kv_cache_dtype, compute_dtype)
     data_elements = num_layers * num_kv_heads * block_size * head_dim * 2
     total = data_elements * torch.empty((), dtype=resolved).element_size()
     if resolved == torch.int8:
@@ -354,6 +418,9 @@ class PagedLayerKVCache:
             self.value_scale_pool[
                 scale_block_index, scale_head_index, scale_offset_index
             ] = value_scale.to(self.value_scale_pool.dtype)
+        elif is_fp8_dtype(self.key_pool.dtype):
+            key_values = key_values.to(self.key_pool.dtype)
+            value_values = value_values.to(self.value_pool.dtype)
         self.key_pool[
             block_index, head_index, offset_index, dim_index
         ] = key_values
@@ -376,8 +443,12 @@ class PagedLayerKVCache:
         table = self.block_table[:, :num_blocks].to(torch.long)
         safe_table = table.clamp_min(0)
         # [B, N, H, block, D] -> [B, H, N * block, D]
-        key = self.key_pool[safe_table]
-        value = self.value_pool[safe_table]
+        key = _restore_storage(
+            _storage_view(self.key_pool)[safe_table], self.key_pool.dtype
+        )
+        value = _restore_storage(
+            _storage_view(self.value_pool)[safe_table], self.value_pool.dtype
+        )
         if key.dtype == torch.int8:
             if self.key_scale_pool is None or self.value_scale_pool is None:
                 raise RuntimeError("INT8 KV cache is missing scale pools")
@@ -385,6 +456,10 @@ class PagedLayerKVCache:
             value_scales = self.value_scale_pool[safe_table].float()[..., None]
             key = key.float() * key_scales
             value = value.float() * value_scales
+        elif is_fp8_dtype(key.dtype):
+            target_dtype = self.compute_dtype or torch.float16
+            key = key.to(target_dtype)
+            value = value.to(target_dtype)
         key = key.permute(0, 2, 1, 3, 4).reshape(
             batch,
             self.key_pool.shape[1],
@@ -407,6 +482,28 @@ class PagedLayerKVCache:
         )
         valid = positions.unsqueeze(0) < valid_lengths.unsqueeze(1)
         return key, value, valid
+
+
+@dataclass
+class CpuKVBlockPayload:
+    """CPU copy of one or more full physical KV blocks across all layers."""
+
+    key: torch.Tensor
+    value: torch.Tensor
+    key_scales: torch.Tensor | None
+    value_scales: torch.Tensor | None
+    num_blocks: int
+    num_layers: int
+
+    @property
+    def nbytes(self) -> int:
+        total = self.key.numel() * self.key.element_size()
+        total += self.value.numel() * self.value.element_size()
+        if self.key_scales is not None:
+            total += self.key_scales.numel() * self.key_scales.element_size()
+        if self.value_scales is not None:
+            total += self.value_scales.numel() * self.value_scales.element_size()
+        return int(total)
 
 
 class PagedKVCacheManager:
@@ -435,10 +532,10 @@ class PagedKVCacheManager:
         self.block_size = int(block_size)
         self.num_blocks = int(num_blocks)
         self.dtype = dtype
-        name = str(kv_cache_dtype).lower()
-        self.kv_cache_dtype = (
-            torch.int8 if name in ("int8", "i8", "torch.int8") else dtype
+        self.kv_cache_dtype = resolve_kv_cache_dtype(
+            kv_cache_dtype, compute_dtype=dtype
         )
+        self.kv_cache_dtype_name = str(kv_cache_dtype)
         self.device = torch.device(device)
         self.allocator = BlockAllocator(self.num_blocks)
         self.prefix_cache = PrefixCache(
@@ -503,8 +600,13 @@ class PagedKVCacheManager:
         capacity = len(block_ids) * self.block_size
         if length > capacity:
             raise ValueError(f"prefix length {length} exceeds {capacity} cached tokens")
-        key_blocks = self.key_pool[layer_index, block_ids]
-        value_blocks = self.value_pool[layer_index, block_ids]
+        block_index = torch.tensor(
+            block_ids, dtype=torch.long, device=self.device
+        )
+        key_blocks = _index_select(self.key_pool[layer_index], block_index, 0)
+        value_blocks = _index_select(
+            self.value_pool[layer_index], block_index, 0
+        )
         key = key_blocks.permute(1, 0, 2, 3).reshape(
             self.num_kv_heads, capacity, self.head_dim
         )[:, :length, :]
@@ -575,6 +677,9 @@ class PagedKVCacheManager:
                 self.value_scale_pool[layer_index, block, :, dst] = value_scales.to(
                     self.value_scale_pool.dtype
                 )
+            elif is_fp8_dtype(self.key_pool.dtype):
+                key_segment = key_segment.to(self.key_pool.dtype)
+                value_segment = value_segment.to(self.value_pool.dtype)
             self.key_pool[layer_index, block, :, dst, :] = key_segment
             self.value_pool[layer_index, block, :, dst, :] = value_segment
             written += take
@@ -682,11 +787,128 @@ class PagedKVCacheManager:
             for layer in range(self.num_layers)
         ]
 
+    def offload_blocks(self, block_ids: list[int]) -> CpuKVBlockPayload:
+        """Copy physical blocks from the GPU pool to CPU memory.
+
+        The caller keeps ownership of ``block_ids``.  The allocator is not
+        touched here; the scheduler frees the GPU blocks only after it has
+        accepted the CPU payload.
+        """
+        if not block_ids:
+            empty_key = torch.empty(
+                (self.num_layers, 0, self.num_kv_heads, self.block_size, self.head_dim),
+                dtype=self.key_pool.dtype,
+                device="cpu",
+            )
+            empty_value = torch.empty_like(empty_key)
+            empty_scale = (
+                torch.empty(
+                    (self.num_layers, 0, self.num_kv_heads, self.block_size),
+                    dtype=torch.float16,
+                    device="cpu",
+                )
+                if self.key_scale_pool is not None
+                else None
+            )
+            return CpuKVBlockPayload(
+                key=empty_key,
+                value=empty_value,
+                key_scales=empty_scale,
+                value_scales=empty_scale.clone() if empty_scale is not None else None,
+                num_blocks=0,
+                num_layers=self.num_layers,
+            )
+        index = torch.tensor(block_ids, dtype=torch.long, device=self.device)
+        if int(index.numel()) != len(set(block_ids)):
+            raise ValueError("offload block ids must be unique")
+        key = _index_select(self.key_pool, index, 1).detach().to("cpu", copy=True)
+        value = _index_select(self.value_pool, index, 1).detach().to("cpu", copy=True)
+        key_scales = None
+        value_scales = None
+        if self.key_scale_pool is not None:
+            key_scales = (
+                self.key_scale_pool.index_select(1, index)
+                .detach()
+                .to("cpu", copy=True)
+            )
+        if self.value_scale_pool is not None:
+            value_scales = (
+                self.value_scale_pool.index_select(1, index)
+                .detach()
+                .to("cpu", copy=True)
+            )
+        if self.device.type == "cuda" and torch.cuda.is_available():
+            try:
+                key = key.pin_memory()
+                value = value.pin_memory()
+                if key_scales is not None:
+                    key_scales = key_scales.pin_memory()
+                if value_scales is not None:
+                    value_scales = value_scales.pin_memory()
+            except RuntimeError:
+                # Pinned memory can be unavailable in restricted containers.
+                pass
+        return CpuKVBlockPayload(
+            key=key,
+            value=value,
+            key_scales=key_scales,
+            value_scales=value_scales,
+            num_blocks=len(block_ids),
+            num_layers=self.num_layers,
+        )
+
+    def reload_blocks(
+        self, payload: CpuKVBlockPayload, block_ids: list[int]
+    ) -> None:
+        """Copy a CPU payload into newly allocated GPU physical blocks."""
+        if payload.num_layers != self.num_layers:
+            raise ValueError(
+                f"payload has {payload.num_layers} layers, pool has {self.num_layers}"
+            )
+        if payload.num_blocks != len(block_ids):
+            raise ValueError(
+                f"payload has {payload.num_blocks} blocks, got {len(block_ids)} ids"
+            )
+        if not block_ids:
+            return
+        if int(torch.tensor(block_ids).numel()) != len(set(block_ids)):
+            raise ValueError("reload block ids must be unique")
+        index = torch.tensor(block_ids, dtype=torch.long, device=self.device)
+        key = payload.key.to(
+            device=self.device,
+            dtype=self.key_pool.dtype,
+            non_blocking=payload.key.is_pinned(),
+        )
+        value = payload.value.to(
+            device=self.device,
+            dtype=self.value_pool.dtype,
+            non_blocking=payload.value.is_pinned(),
+        )
+        with torch.no_grad():
+            _index_copy(self.key_pool, index, key, 1)
+            _index_copy(self.value_pool, index, value, 1)
+            if self.key_scale_pool is not None:
+                if payload.key_scales is None or payload.value_scales is None:
+                    raise ValueError("INT8 payload is missing scale tensors")
+                key_scales = payload.key_scales.to(
+                    device=self.device,
+                    dtype=self.key_scale_pool.dtype,
+                    non_blocking=payload.key_scales.is_pinned(),
+                )
+                value_scales = payload.value_scales.to(
+                    device=self.device,
+                    dtype=self.value_scale_pool.dtype,
+                    non_blocking=payload.value_scales.is_pinned(),
+                )
+                self.key_scale_pool.index_copy_(1, index, key_scales)
+                self.value_scale_pool.index_copy_(1, index, value_scales)
+
     def stats(self) -> dict[str, Any]:
         return {
             "block_size": self.block_size,
             "num_blocks": self.num_blocks,
-            "kv_cache_dtype": str(self.kv_cache_dtype),
+            "kv_cache_dtype": self.kv_cache_dtype_name,
+            "resolved_kv_cache_dtype": str(self.kv_cache_dtype),
             "memory_bytes": self.memory_bytes,
             "block_bytes": self.block_bytes,
             "allocator": self.allocator.stats(),
@@ -697,8 +919,11 @@ class PagedKVCacheManager:
 __all__ = [
     "BlockAllocator",
     "CacheOutOfMemoryError",
+    "CpuKVBlockPayload",
     "PagedKVCacheManager",
     "PagedLayerKVCache",
     "PrefixCache",
+    "is_fp8_dtype",
     "paged_kv_block_bytes",
+    "resolve_kv_cache_dtype",
 ]
