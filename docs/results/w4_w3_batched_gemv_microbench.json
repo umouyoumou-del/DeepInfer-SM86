@@ -1,0 +1,38 @@
+{
+  "2": {
+    "w4": {
+      "batch_ms": 0.2876,
+      "single_loop_ms": 0.1977,
+      "speedup": 0.687
+    },
+    "w3": {
+      "batch_ms": 0.2665,
+      "single_loop_ms": 0.2065,
+      "speedup": 0.775
+    }
+  },
+  "4": {
+    "w4": {
+      "batch_ms": 0.3408,
+      "single_loop_ms": 0.3693,
+      "speedup": 1.084
+    },
+    "w3": {
+      "batch_ms": 0.5142,
+      "single_loop_ms": 0.3885,
+      "speedup": 0.755
+    }
+  },
+  "8": {
+    "w4": {
+      "batch_ms": 0.5122,
+      "single_loop_ms": 0.8335,
+      "speedup": 1.627
+    },
+    "w3": {
+      "batch_ms": 0.8205,
+      "single_loop_ms": 0.7977,
+      "speedup": 0.972
+    }
+  }
+}

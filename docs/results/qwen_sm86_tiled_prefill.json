@@ -1,0 +1,57 @@
+{
+  "gpu": "NVIDIA GeForce RTX 3050 Laptop GPU",
+  "torch": "2.5.1+cu121",
+  "cuda": "12.1",
+  "group_size": 128,
+  "iterations": 20,
+  "warmup": 3,
+  "w4a16": [
+    {
+      "bits": 4,
+      "m": 30,
+      "n": 5632,
+      "k": 2048,
+      "tiled_ms": 0.736,
+      "fallback_ms": 2.1086,
+      "speedup": 2.865
+    },
+    {
+      "bits": 4,
+      "m": 30,
+      "n": 2048,
+      "k": 5632,
+      "tiled_ms": 0.8344,
+      "fallback_ms": 1.8842,
+      "speedup": 2.258
+    },
+    {
+      "bits": 4,
+      "m": 30,
+      "n": 3584,
+      "k": 18944,
+      "tiled_ms": 4.6323,
+      "fallback_ms": 10.365,
+      "speedup": 2.238
+    }
+  ],
+  "w3a16": [
+    {
+      "bits": 3,
+      "m": 30,
+      "n": 37888,
+      "k": 3584,
+      "tiled_ms": 6.0808,
+      "fallback_ms": 57.4668,
+      "speedup": 9.451
+    },
+    {
+      "bits": 3,
+      "m": 30,
+      "n": 3584,
+      "k": 18944,
+      "tiled_ms": 3.5525,
+      "fallback_ms": 27.3999,
+      "speedup": 7.713
+    }
+  ]
+}

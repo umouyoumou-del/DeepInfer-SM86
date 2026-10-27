@@ -2,9 +2,11 @@
 
 This module is the first native DeepInfer SM86 execution path for Qwen2:
 dense Qwen2 weights are converted offline/in-memory to grouped symmetric int4
-weights, and single-token decode uses a custom CUDA GEMV kernel compiled with
-CuPy/NVRTC.  Prefill uses a per-layer dequantize + cuBLAS path until a tiled
-W4A16 GEMM kernel is added.
+weights, and single-token / small-batch decode uses custom CUDA GEMV kernels
+compiled with CuPy/NVRTC.  Multi-token prefill uses a tiled W4A16 GEMM that
+dequantizes only one shared-memory weight tile at a time, avoiding the old
+per-output-row dequantize + cuBLAS allocation.  The fallback path remains for
+CPU and non-FP16 execution.
 
 The attention and sampling boundaries are unchanged from
 ``Qwen2ForCausalLM``; this is a model_executor-level backend, not a claim that
@@ -172,6 +174,140 @@ extern "C" __global__ void qwen2_w4a16_batched_gemv(
 }
 """
 
+_SM86_W4A16_TILED_GEMM_KERNEL = r"""
+#include <cuda_fp16.h>
+
+#define QWEN2_GEMM_BM 32
+#define QWEN2_GEMM_BN 64
+#define QWEN2_GEMM_BK 32
+#define QWEN2_GEMM_THREADS 256
+
+__device__ __forceinline__ float qwen2_gemm_int4(unsigned int value) {
+    int v = (int)(value & 0x0f);
+    if (v >= 8) v -= 16;
+    return (float)v;
+}
+
+// C[M, N] = A[M, K] @ dequantize(B[N, K]) with FP32 accumulation.
+//
+// Every CTA owns a 32x64 output tile.  For each K tile it dequantizes the
+// matching packed-weight tile directly into shared memory.  Peak temporary
+// weight storage is O(BK * BN) instead of O(N * K), which is the property the
+// previous per-output-row dequantize + cuBLAS prefill path lacked.
+extern "C" __global__ void qwen2_w4a16_gemm(
+    const __half* __restrict__ a,
+    const unsigned char* __restrict__ packed,
+    const __half* __restrict__ scales,
+    __half* __restrict__ c,
+    int m_size,
+    int n_rows,
+    int k_size,
+    int group_size)
+{
+    __shared__ __half shared_a[QWEN2_GEMM_BM][QWEN2_GEMM_BK];
+    __shared__ __half shared_b[QWEN2_GEMM_BK][QWEN2_GEMM_BN + 1];
+
+    const int tid = threadIdx.x;
+    const int row_in_tile = tid >> 4;
+    const int col_group = tid & 15;
+    const int block_m = blockIdx.y * QWEN2_GEMM_BM;
+    const int block_n = blockIdx.x * QWEN2_GEMM_BN;
+    const int groups_per_row = k_size / group_size;
+
+    float acc[2][4];
+    #pragma unroll
+    for (int r = 0; r < 2; ++r) {
+        #pragma unroll
+        for (int j = 0; j < 4; ++j) acc[r][j] = 0.0f;
+    }
+
+    for (int k0 = 0; k0 < k_size; k0 += QWEN2_GEMM_BK) {
+        #pragma unroll
+        for (int index = tid; index < QWEN2_GEMM_BM * QWEN2_GEMM_BK;
+             index += QWEN2_GEMM_THREADS) {
+            const int local_m = index / QWEN2_GEMM_BK;
+            const int local_k = index % QWEN2_GEMM_BK;
+            const int global_m = block_m + local_m;
+            const int global_k = k0 + local_k;
+            shared_a[local_m][local_k] =
+                (global_m < m_size && global_k < k_size)
+                    ? a[(size_t)global_m * k_size + global_k]
+                    : __float2half_rn(0.0f);
+        }
+
+        // A warp handles two B rows at a time: lane 0..15 cover the 16 packed
+        // bytes (32 K values) of one row.
+        const int lane = tid & 31;
+        const int warp = tid >> 5;
+        #pragma unroll
+        for (int n_base = warp * 2; n_base < QWEN2_GEMM_BN; n_base += 16) {
+            const int local_n = n_base + (lane >> 4);
+            const int byte_in_tile = lane & 15;
+            const int global_n = block_n + local_n;
+            if (global_n < n_rows) {
+                const int local_k = byte_in_tile * 2;
+                const int global_k = k0 + local_k;
+                float v0 = 0.0f;
+                float v1 = 0.0f;
+                if (global_k < k_size) {
+                    const unsigned int byte = packed[
+                        (size_t)global_n * (k_size / 2) + (k0 / 2) + byte_in_tile
+                    ];
+                    const float scale0 = __half2float(
+                        scales[(size_t)global_n * groups_per_row + global_k / group_size]
+                    );
+                    v0 = qwen2_gemm_int4(byte & 0x0f) * scale0;
+                    if (global_k + 1 < k_size) {
+                        const float scale1 = __half2float(
+                            scales[(size_t)global_n * groups_per_row +
+                                   (global_k + 1) / group_size]
+                        );
+                        v1 = qwen2_gemm_int4(byte >> 4) * scale1;
+                    }
+                }
+                shared_b[local_k][local_n] = __float2half_rn(v0);
+                shared_b[local_k + 1][local_n] = __float2half_rn(v1);
+            }
+        }
+        __syncthreads();
+
+        const int local_m0 = row_in_tile * 2;
+        const int local_n0 = col_group * 4;
+        #pragma unroll
+        for (int kk = 0; kk < QWEN2_GEMM_BK; ++kk) {
+            const float a0 = __half2float(shared_a[local_m0][kk]);
+            const float a1 = __half2float(shared_a[local_m0 + 1][kk]);
+            const float b0 = __half2float(shared_b[kk][local_n0 + 0]);
+            const float b1 = __half2float(shared_b[kk][local_n0 + 1]);
+            const float b2 = __half2float(shared_b[kk][local_n0 + 2]);
+            const float b3 = __half2float(shared_b[kk][local_n0 + 3]);
+            acc[0][0] = fmaf(a0, b0, acc[0][0]);
+            acc[0][1] = fmaf(a0, b1, acc[0][1]);
+            acc[0][2] = fmaf(a0, b2, acc[0][2]);
+            acc[0][3] = fmaf(a0, b3, acc[0][3]);
+            acc[1][0] = fmaf(a1, b0, acc[1][0]);
+            acc[1][1] = fmaf(a1, b1, acc[1][1]);
+            acc[1][2] = fmaf(a1, b2, acc[1][2]);
+            acc[1][3] = fmaf(a1, b3, acc[1][3]);
+        }
+        __syncthreads();
+    }
+
+    #pragma unroll
+    for (int r = 0; r < 2; ++r) {
+        const int global_m = block_m + row_in_tile * 2 + r;
+        if (global_m >= m_size) continue;
+        #pragma unroll
+        for (int j = 0; j < 4; ++j) {
+            const int global_n = block_n + col_group * 4 + j;
+            if (global_n < n_rows) {
+                c[(size_t)global_m * n_rows + global_n] = __float2half_rn(acc[r][j]);
+            }
+        }
+    }
+}
+"""
+
 _SM86_GQA_DECODE_KERNEL = r"""
 #include <cuda_fp16.h>
 
@@ -254,6 +390,7 @@ _SM86_GQA_DECODE_KERNEL_256 = _SM86_GQA_DECODE_KERNEL.replace(
 
 _RAW_KERNEL: Any = None
 _BATCHED_RAW_KERNEL: Any = None
+_GEMM_RAW_KERNEL: Any = None
 _BATCHED_BATCH_TILE = 8
 _GQA_KERNEL: Any = None
 _GQA_KERNEL_256: Any = None
@@ -321,6 +458,63 @@ def _batched_raw_kernel() -> Any:
             options=("--std=c++14", "--use_fast_math"),
         )
     return _BATCHED_RAW_KERNEL
+
+
+def _tiled_gemm_kernel() -> Any:
+    global _GEMM_RAW_KERNEL
+    if cp is None:
+        raise RuntimeError("CuPy is required for the SM86 tiled W4A16 GEMM")
+    if _GEMM_RAW_KERNEL is None:
+        _GEMM_RAW_KERNEL = cp.RawKernel(
+            _SM86_W4A16_TILED_GEMM_KERNEL,
+            "qwen2_w4a16_gemm",
+            options=("--std=c++14", "--use_fast_math"),
+        )
+    return _GEMM_RAW_KERNEL
+
+
+def _native_w4a16_tiled_gemm(
+    inputs: torch.Tensor,
+    packed: Any,
+    scales: Any,
+    n_rows: int,
+    k_size: int,
+    group_size: int,
+) -> torch.Tensor:
+    """Native tiled prefill GEMM without materializing a dense weight tile."""
+
+    if cp is None:
+        raise RuntimeError("CuPy is unavailable")
+    if inputs.ndim != 2 or inputs.shape[0] <= 0 or inputs.shape[1] != k_size:
+        raise ValueError(
+            f"tiled W4A16 GEMM expects [M, {k_size}], got {tuple(inputs.shape)}"
+        )
+    if k_size % 32 or k_size % 2:
+        raise ValueError(f"tiled W4A16 GEMM requires K divisible by 32, got {k_size}")
+    flat = inputs.contiguous().to(torch.float16)
+    output = torch.empty(
+        (int(inputs.shape[0]), int(n_rows)),
+        dtype=torch.float16,
+        device=inputs.device,
+    )
+    grid = ((int(n_rows) + 63) // 64, (int(inputs.shape[0]) + 31) // 32)
+    stream = cp.cuda.ExternalStream(torch.cuda.current_stream().cuda_stream)
+    with stream:
+        _tiled_gemm_kernel()(
+            grid,
+            (256,),
+            (
+                _torch_to_cupy(flat),
+                packed,
+                scales,
+                _torch_to_cupy(output),
+                int(inputs.shape[0]),
+                int(n_rows),
+                int(k_size),
+                int(group_size),
+            ),
+        )
+    return output
 
 
 def _gqa_kernel(max_seq: int) -> Any:
@@ -400,7 +594,14 @@ def _native_gqa_decode(
 
 
 class W4A16Linear(nn.Module):
-    """Grouped symmetric int4 weight + FP16 activation linear layer."""
+    """Grouped symmetric int4 weight + FP16 activation linear layer.
+
+    Single/small-batch decode uses GEMV; multi-token prefill uses the native
+    tiled W4A16 GEMM.  CPU and non-FP16 inputs retain the dequantize + cuBLAS
+    fallback.
+    """
+
+    prefill_kernel = "tiled_w4a16_gemm"
 
     def __init__(
         self,
@@ -413,10 +614,13 @@ class W4A16Linear(nn.Module):
         device: torch.device | str | None = None,
         prefill_chunk_rows: int | None = None,
         gemv_block_size: int = 256,
+        gemv_batch_limit: int = 8,
     ) -> None:
         super().__init__()
         self.prefill_chunk_rows = prefill_chunk_rows
         self.gemv_block_size = gemv_block_size
+        self.gemv_batch_limit = gemv_batch_limit
+        self.last_prefill_backend = "dequant_cublas"
         if in_features % group_size:
             raise ValueError(
                 f"in_features={in_features} must be divisible by group_size={group_size}"
@@ -545,6 +749,43 @@ class W4A16Linear(nn.Module):
     def _dequantize(self) -> torch.Tensor:
         return self._dequantize_rows(0, self.out_features)
 
+    def _forward_tiled_gemm(self, inputs: torch.Tensor) -> torch.Tensor:
+        if self._packed_cp is None or self._scales_cp is None:
+            self._bind_cupy()
+        flat = inputs.reshape(-1, self.in_features).contiguous().to(torch.float16)
+        output = _native_w4a16_tiled_gemm(
+            flat,
+            self._packed_cp,
+            self._scales_cp,
+            self.out_features,
+            self.in_features,
+            self.group_size,
+        )
+        if self.bias is not None:
+            output.add_(self.bias)
+        self.last_prefill_backend = "tiled_w4a16_gemm"
+        return output
+
+    def forward_tiled_prefill(self, inputs: torch.Tensor) -> torch.Tensor:
+        """Force the native tiled GEMM; useful for tests and benchmarks."""
+        return self._forward_tiled_gemm(inputs)
+
+    def _forward_dequant_cublas(self, inputs: torch.Tensor) -> torch.Tensor:
+        self.last_prefill_backend = "dequant_cublas"
+        flat = inputs.reshape(-1, self.in_features)
+        chunk_rows = self.prefill_chunk_rows or self.out_features
+        parts: list[torch.Tensor] = []
+        for start in range(0, self.out_features, chunk_rows):
+            end = min(start + chunk_rows, self.out_features)
+            weight = self._dequantize_rows(start, end).to(flat.dtype)
+            parts.append(F.linear(flat, weight, None))
+            del weight
+        output = torch.cat(parts, dim=-1)
+        del parts
+        if self.bias is not None:
+            output = output + self.bias.to(flat.dtype)
+        return output
+
     def _forward_gemv(self, inputs: torch.Tensor) -> torch.Tensor:
         if cp is None:
             raise RuntimeError("CuPy is unavailable")
@@ -620,29 +861,31 @@ class W4A16Linear(nn.Module):
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         original_shape = inputs.shape
         flat = inputs.reshape(-1, self.in_features)
-        if flat.shape[0] <= 32 and flat.is_cuda:
+        can_use_sm86 = (
+            flat.is_cuda
+            and flat.dtype == torch.float16
+            and cp is not None
+            and self.in_features % 32 == 0
+        )
+        if can_use_sm86 and flat.shape[0] == 1:
+            self.last_prefill_backend = "w4a16_gemv"
             output = self._forward_gemv(flat)
+        elif can_use_sm86 and flat.shape[0] <= self.gemv_batch_limit:
+            self.last_prefill_backend = "w4a16_batched_gemv"
+            output = self._forward_gemv(flat)
+        elif can_use_sm86 and flat.shape[0] > 1:
+            output = self._forward_tiled_gemm(flat)
         else:
-            chunk_rows = self.prefill_chunk_rows or self.out_features
-            parts: list[torch.Tensor] = []
-            for start in range(0, self.out_features, chunk_rows):
-                end = min(start + chunk_rows, self.out_features)
-                weight = self._dequantize_rows(start, end).to(flat.dtype)
-                parts.append(F.linear(flat, weight, None))
-                del weight
-            output = torch.cat(parts, dim=-1)
-            del parts
-            if self.bias is not None:
-                output = output + self.bias.to(flat.dtype)
+            output = self._forward_dequant_cublas(flat)
         return output.reshape(*original_shape[:-1], self.out_features)
 
 
 class Qwen2W4A16ForCausalLM(Qwen2ForCausalLM):
     """Qwen2 model_executor model with SM86 W4A16 linears.
 
-    Single-token decode uses the native SM86 W4A16 GEMV and native SM86 GQA
-    kernels.  The model still runs at model_executor level: the DeepSeek
-    CacheEngine/Sampler and complete engine are not wired.
+    Decode uses native GEMV / paged GQA kernels.  Multi-token prefill uses the
+    tiled W4A16 GEMM.  The model still runs at model_executor level: the
+    DeepSeek CacheEngine/Sampler and complete engine are not wired.
     """
 
     source_backend = "qwen2_w4a16_sm86_model_executor"
