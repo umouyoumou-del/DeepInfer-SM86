@@ -59,7 +59,13 @@ engine。当前重点是：
 - 新增 `scripts/bench_paged_scheduler.py`，用于在目标 GPU 上实测串行 vs
   连续批处理吞吐；
 - 新增工程复盘文章 `docs/ARTICLE_4_ENGINE_CORE_POSTMORTEM.md`，记录实现过程和
-  走过的弯路。
+  走过的弯路；
+- 新增量化格式兼容层 `deepinfer/quantization/`：
+  - GPTQ 2/4/8-bit、group quant、`g_idx`/desc_act；
+  - AWQ AutoAWQ GEMM 4-bit 布局；
+  - GGUF 单文件，支持 `gguf` 包可反量化的 ggml 类型（Q4_0、Q4_K 等）；
+  - 统一转换为 SM86 layered W4A16 checkpoint；
+  - 新增 CLI `scripts/import_quantized_checkpoint.py` 和端到端 CPU 测试。
 
 ## 上一轮更新（2026-10-26）
 
@@ -120,6 +126,7 @@ lm_head           : 3-bit, group 128
 - 7B 流式量化、按层 safetensors checkpoint；
 - 3-bit lm_head；
 - 3B/7B 测速 harness 和 CPU 复核工具；
+- GPTQ / AWQ / GGUF 到原生 W4A16 的离线转换导入器；
 - 本地 OpenAI 兼容网关（`/v1/models`、`/v1/chat/completions`、SSE 流式）；
 - 固定槽位静态调度器（W4/W3 batch GEMV + batch CUDA Graph，低延迟回退）；
 - 分页连续批处理调度器（前缀复用、block 回收、动态 batch）；
@@ -141,7 +148,10 @@ lm_head           : 3-bit, group 128
 | continuous batching | ✅ | 可变 batch decode；prefill 仍串行 |
 | Prometheus / health | ✅ | `/metrics`、block/prefix/queue 指标 |
 | MoE / MLA | ❌ | 未实现执行层 |
-| GPTQ / AWQ / GGUF | ❌ | 需转换为本仓库 W4A16 分层格式 |
+| GPTQ | ✅ | 2/4/8-bit、group quant、`g_idx`/desc_act -> W4A16 |
+| AWQ | ✅ | AutoAWQ GEMM 4-bit -> W4A16 |
+| GGUF | ✅ | 单文件 + Q4_0/Q4_K 等类型 -> W4A16 |
+| 社区格式零拷贝直跑 | ❌ | 当前采用离线路由转换 |
 | activation quant / SmoothQuant | ❌ | 仅权重量化 W4A16/W3A16 |
 | tensor / pipeline parallel | ❌ | 单 GPU |
 | 跨厂商后端 | ❌ | 当前 kernel 绑定 NVIDIA SM86 |
@@ -159,6 +169,10 @@ deepinfer/
   hugging_face/config.py                配置分派修改
   model_config_loader.py                允许纯文本 Qwen2/Llama/Mistral/Gemma
   model_spec.py                         ModelSpec 与架构 adapter
+  quantization/formats.py                GPTQ/AWQ/GGUF 格式检测
+  quantization/dequant.py                GPTQ/AWQ int32 解包与反量化
+  quantization/gguf_source.py            GGUF metadata/tensor 映射
+  quantization/convert.py               任意支持格式 -> layered W4A16
   engine/kv_cache.py                    block allocator、paged KV、prefix cache
   engine/metrics.py                     Prometheus 文本指标
   model_executor/models/qwen2.py        通用 decoder、GQA、paged/static cache
@@ -194,7 +208,11 @@ scripts/
   bench_w3a16_sm86.py                   W3A16 微基准
   export_sm86_kernels.py                导出 .cu 源文件
   bench_paged_scheduler.py              串行 vs 分页连续批处理 GPU 基准
+  import_quantized_checkpoint.py        GPTQ/AWQ/GGUF -> W4A16 CLI
 tests/
+  quantization/test_dequant.py          GPTQ/AWQ 解包与反量化
+  quantization/test_convert_hf.py       GPTQ/AWQ 端到端转换
+  quantization/test_convert_gguf.py     GGUF 端到端与 Q4_K block
   engine/test_kv_cache.py               block/prefix/paged cache 正确性
   apps/test_paged_scheduler.py          paged 调度器端到端测试
   models/test_qwen2_source_integration.py
@@ -215,6 +233,7 @@ docs/
   DYNAMIC_BATCHING_SCHEDULER.md                 固定槽位动态批处理
   ENGINE_CORE_PAGED_CONTINUOUS_BATCHING.md      分页 KV、连续批处理与架构扩展
   ARTICLE_4_ENGINE_CORE_POSTMORTEM.md           engine-core 改造复盘与弯路记录
+  QUANTIZATION_FORMAT_COMPATIBILITY.md          量化格式兼容与转换说明
   PERSONAL_PRODUCTIVITY.md                     从网关到桌面快捷操作
   PRODUCTIVITY_BENCHMARK_3B_7B_OLLAMA.md       3B/7B/Ollama 完整基准
   results/                                     选定的可复现结果
@@ -429,6 +448,70 @@ python scripts\export_qwen3b_w4_checkpoint.py `
 
 ---
 
+## 社区量化格式导入
+
+新增统一的离线转换器：
+
+```text
+GPTQ / AWQ / GGUF
+        →  dense/dequantized layer weights
+        →  SM86 symmetric int4 W4A16
+```
+
+安装依赖：
+
+```powershell
+pip install -r requirements-sm86.txt
+```
+
+GPTQ：
+
+```powershell
+python scripts\import_quantized_checkpoint.py `
+  --source F:\models\Qwen2.5-3B-Instruct-GPTQ-Int4 `
+  --output D:\Qwen3B-GPTQ-to-W4A16-SM86 `
+  --format auto `
+  --group-size 128
+```
+
+AWQ：
+
+```powershell
+python scripts\import_quantized_checkpoint.py `
+  --source F:\models\Qwen2.5-3B-Instruct-AWQ `
+  --output D:\Qwen3B-AWQ-to-W4A16-SM86 `
+  --format awq `
+  --group-size 128
+```
+
+GGUF：
+
+```powershell
+python scripts\import_quantized_checkpoint.py `
+  --source F:\models\qwen2.5-3b-instruct-q4_k_m.gguf `
+  --tokenizer F:\models\Qwen2.5-3B-Instruct `
+  --output D:\Qwen3B-GGUF-to-W4A16-SM86 `
+  --format gguf `
+  --group-size 128
+```
+
+支持：
+
+- GPTQ 2/4/8-bit、group quant、`qzeros`、`g_idx`/desc_act；
+- AWQ AutoAWQ GEMM 4-bit 布局；
+- GGUF 单文件，以及 `gguf` 包支持反量化的 Q4_0/Q4_K 等 ggml 类型；
+- fused `attn_qkv` / `ffn_gate_up` 在 GGUF 导入时自动拆分。
+
+限制：
+
+- 这是**转换兼容**，不是社区格式零拷贝直跑；
+- `lm_head` 仍写 FP16 dense；非 tied 的 7B 模型要额外评估显存/磁盘；
+- AWQ GEMV/ExLlama 布局、GGUF split shards、MoE、量化 embedding/norm
+  尚未支持；
+- 完整说明见 `docs/QUANTIZATION_FORMAT_COMPATIBILITY.md`。
+
+---
+
 ## 7B 量化流程
 
 原始 7B BF16 checkpoint 不包含在本仓库中。
@@ -517,7 +600,9 @@ python scripts\export_sm86_kernels.py
 - GPU harness 在 Python 3.10 下验证；Python 3.12 GPU package 验证未完成；
 - 3-bit MLP/lm_head 是有损量化，短输出可读不代表与 BF16 等价；
 - 4 GB 上整体 Q4 只能作为质量/兼容实验，速度约 8 tokens/s；
-- 尚未直接导入 GPTQ / AWQ / GGUF；当前需要转换为本仓库 W4A16 分层格式；
+- GPTQ / AWQ / GGUF 已支持**离线转换**为 W4A16；尚不支持原格式零拷贝直跑；
+- AWQ 仅支持 GEMM 布局；GGUF 暂不支持 split shards；MoE/MLA 仍未实现；
+- 非 tied 的 lm_head 仍以 FP16 dense 保存，7B 转换后体积需要单独评估；
 - 尚未实现 activation quantization、SmoothQuant、MoE 或 MLA 执行层；
 - 没有 tensor/pipeline parallel 或跨厂商后端抽象；
 - 默认 context 上限仍为 256 token；paged scheduler 可提高 `--max-cache`，
@@ -544,6 +629,7 @@ python scripts\export_sm86_kernels.py
 - 分页 KV / 连续批处理 / 架构扩展：
   `docs/ENGINE_CORE_PAGED_CONTINUOUS_BATCHING.md`
 - 工程复盘与弯路记录：`docs/ARTICLE_4_ENGINE_CORE_POSTMORTEM.md`
+- 量化格式兼容与转换：`docs/QUANTIZATION_FORMAT_COMPATIBILITY.md`
 - GPU 吞吐基准脚本：`scripts/bench_paged_scheduler.py`
 - 结构化结果：`docs/results/`
 

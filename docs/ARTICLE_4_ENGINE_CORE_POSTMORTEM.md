@@ -495,7 +495,8 @@ kernel 一样做回归。
 | chunked prefill / prefill-decode overlap | ❌ prefill 仍串行 |
 | preemption / CPU KV swap | ❌ 只做单请求 OOM 隔离 |
 | MoE / MLA 执行层 | ❌ 未实现 |
-| GPTQ / AWQ / GGUF 直接导入 | ❌ 仍需要转成本仓库 W4A16 分层格式 |
+| GPTQ / AWQ / GGUF 离线转换导入 | ✅ 已支持 -> W4A16 layered |
+| GPTQ / AWQ / GGUF 原格式零拷贝直跑 | ❌ 仍需要转换 |
 | activation quant / SmoothQuant | ❌ 只做 W4A16 / W3A16 权重量化 |
 | tensor / pipeline parallel | ❌ 未实现 |
 | AMD / Intel / 跨厂商 kernel | ❌ 当前绑定 NVIDIA SM86 |
@@ -547,9 +548,9 @@ OOM 策略、preemption 和 swap 一起配合。
 
 ### P3：压缩格式和 MoE
 
-GPTQ / AWQ / GGUF 导入和 MoE 支持应该建立在稳定的 cache/scheduler 之上。否则
-每接一种格式，都要同时修改 attention、cache、scheduler 和 kernel，回归成本会
-指数增长。
+GPTQ / AWQ / GGUF 的离线转换导入已经落地，但原格式零拷贝直跑、量化 head 和
+MoE 支持仍应建立在稳定的 cache/scheduler 之上。否则每接一种格式，都要同时
+修改 attention、cache、scheduler 和 kernel，回归成本会指数增长。
 
 ### P4：后端与并行
 
@@ -615,8 +616,8 @@ attention     dense / static / paged 三种 cache 语义
 性能验证      独立 benchmark 脚本
 ```
 
-拆开之后，后面才能真正做 paged native kernel、chunked prefill、量化格式导入和
-并行化，而不至于每加一个功能就破坏已有路径。
+拆开之后，后面才能真正做 paged native kernel、chunked prefill、原格式零拷贝
+加载和并行化，而不至于每加一个功能就破坏已有路径。
 
 一句话总结：
 

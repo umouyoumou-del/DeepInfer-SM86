@@ -687,8 +687,9 @@ class Qwen2W4A16ForCausalLM(Qwen2ForCausalLM):
             )
         for layer in model.model.layers:
             layer.self_attn.native_gqa_decode = _native_gqa_decode
-            layer.self_attn.fused_qkv._bind_cupy()
-            layer.mlp.fused_gate_up._bind_cupy()
+            if layer.self_attn.fused_qkv.packed.is_cuda:
+                layer.self_attn.fused_qkv._bind_cupy()
+                layer.mlp.fused_gate_up._bind_cupy()
         model.eval().requires_grad_(False)
         torch.cuda.empty_cache()
         gc.collect()

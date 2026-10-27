@@ -140,10 +140,15 @@ class QwenSm86Runtime:
                 model_class = llama_w4a16_module.LlamaW4A16ForCausalLM
             else:
                 model_class = w4a16_module.Qwen2W4A16ForCausalLM
+            group_size = 128
+            manifest_path = self.checkpoint / "manifest.json"
+            if manifest_path.is_file():
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                group_size = int(manifest.get("group_size", group_size))
             self.model = model_class.from_checkpoint(
                 self.checkpoint,
                 device=device,
-                group_size=128,
+                group_size=group_size,
             )
         elif backend == "mixed":
             if self.architecture not in ("Qwen2ForCausalLM", ""):

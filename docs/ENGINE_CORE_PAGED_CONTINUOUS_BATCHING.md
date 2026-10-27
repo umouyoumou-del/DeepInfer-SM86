@@ -381,7 +381,7 @@ block 状态。**本仓库当前没有伪造这次 GPU 基准结果**；需要�
 - 没有 preemption / CPU KV swap；
 - 没有 beam search、speculative decoding；
 - 没有 MoE / MLA 执行层；
-- 没有 GPTQ / AWQ / GGUF 直接导入；
+- 已支持 GPTQ / AWQ / GGUF 离线转换导入，但没有原格式零拷贝直跑；
 - 没有 a
 ctivation quantization / SmoothQuant；
 - 没有 tensor/pipeline parallel；
