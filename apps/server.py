@@ -18,12 +18,15 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from apps.paged_scheduler import PagedBatchScheduler
 from apps.runtime import DEFAULT_CHECKPOINT, QwenSm86Runtime
 from apps.scheduler import DynamicBatchScheduler
+from deepinfer.engine.metrics import EngineMetrics
 
 MODEL_ID = "deepinfer-sm86-7b-mixed"
 RUNTIME: QwenSm86Runtime | None = None
-SCHEDULER: DynamicBatchScheduler | None = None
+SCHEDULER: DynamicBatchScheduler | PagedBatchScheduler | None = None
+METRICS = EngineMetrics()
 STARTED = time.time()
 
 
@@ -39,8 +42,23 @@ def _json_response(
     handler.wfile.write(body)
 
 
+def _text_response(
+    handler: BaseHTTPRequestHandler, status: int, body: str, content_type: str
+) -> None:
+    encoded = body.encode("utf-8")
+    handler.send_response(status)
+    handler.send_header("Content-Type", content_type)
+    handler.send_header("Content-Length", str(len(encoded)))
+    handler.send_header("Access-Control-Allow-Origin", "*")
+    handler.end_headers()
+    handler.wfile.write(encoded)
+
+
 def _completion_payload(
-    text: str, prompt_tokens: int, completion_tokens: int
+    text: str,
+    prompt_tokens: int,
+    completion_tokens: int,
+    finish_reason: str = "stop",
 ) -> dict[str, Any]:
     return {
         "id": f"chatcmpl-{uuid.uuid4().hex}",
@@ -51,7 +69,7 @@ def _completion_payload(
             {
                 "index": 0,
                 "message": {"role": "assistant", "content": text},
-                "finish_reason": "stop",
+                "finish_reason": finish_reason,
             }
         ],
         "usage": {
@@ -106,7 +124,17 @@ class Handler(BaseHTTPRequestHandler):
             status["uptime_seconds"] = round(time.time() - STARTED, 1)
             if SCHEDULER is not None:
                 status["scheduler"] = SCHEDULER.status()
+            status["metrics"] = getattr(SCHEDULER, "metrics", METRICS).snapshot()
             _json_response(self, HTTPStatus.OK, status)
+            return
+        if self.path == "/metrics":
+            metrics = getattr(SCHEDULER, "metrics", METRICS)
+            _text_response(
+                self,
+                HTTPStatus.OK,
+                metrics.render(),
+                "text/plain; version=0.0.4; charset=utf-8",
+            )
             return
         if self.path == "/v1/models":
             _json_response(
@@ -209,7 +237,10 @@ class Handler(BaseHTTPRequestHandler):
                 self,
                 HTTPStatus.OK,
                 _completion_payload(
-                    result.text, result.prompt_tokens, result.completion_tokens
+                    result.text,
+                    result.prompt_tokens,
+                    result.completion_tokens,
+                    result.finish_reason,
                 ),
             )
             return
@@ -224,6 +255,7 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         first = True
         assert request.stream_queue is not None
+        completed = False
         try:
             while True:
                 delta = request.stream_queue.get(timeout=600)
@@ -253,14 +285,28 @@ class Handler(BaseHTTPRequestHandler):
                 "object": "chat.completion.chunk",
                 "created": created,
                 "model": MODEL_ID,
-                "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+                "choices": [
+                    {
+                        "index": 0,
+                        "delta": {},
+                        "finish_reason": (
+                            getattr(request, "finish_reason", "") or "stop"
+                        ),
+                    }
+                ],
             }
             self._sse(final)
             self.wfile.write(b"data: [DONE]\n\n")
             self.wfile.flush()
             self.close_connection = True
-        except queue.Empty:
+            completed = True
+        except (queue.Empty, BrokenPipeError, ConnectionResetError):
             return
+        finally:
+            if not completed and not request.finished:
+                cancel = getattr(SCHEDULER, "cancel", None)
+                if cancel is not None:
+                    cancel(request)
 
     def do_POST(self) -> None:
         assert RUNTIME is not None
@@ -323,29 +369,73 @@ def main() -> int:
         "--no-graph", action="store_true", help="disable CUDA Graph (debug/fallback)"
     )
     parser.add_argument(
-        "--scheduler", action="store_true", help="enable dynamic batching"
+        "--scheduler", action="store_true", help="enable continuous batching"
+    )
+    parser.add_argument(
+        "--scheduler-backend",
+        choices=("paged", "static"),
+        default="paged",
+        help="paged/elastic KV cache or the legacy fixed-slot scheduler",
     )
     parser.add_argument("--max-batch-size", type=int, default=2)
+    parser.add_argument("--max-num-seqs", type=int, default=4)
+    parser.add_argument("--block-size", type=int, default=16)
+    parser.add_argument(
+        "--kv-blocks",
+        type=int,
+        default=None,
+        help="physical KV block count; default sizes the pool for max-num-seqs",
+    )
+    parser.add_argument(
+        "--prefix-cache-blocks",
+        type=int,
+        default=None,
+        help="blocks reserved for shared prompt-prefix KV (default: up to 16)",
+    )
+    parser.add_argument("--max-queue-size", type=int, default=64)
     args = parser.parse_args()
 
+    scheduler_enabled = bool(args.scheduler)
     RUNTIME = QwenSm86Runtime(
         args.checkpoint,
         max_cache=args.max_cache,
-        use_graph=not args.no_graph and not args.scheduler,
-        single_request_cache=not args.scheduler,
+        use_graph=not args.no_graph and not scheduler_enabled,
+        single_request_cache=not scheduler_enabled,
         backend=args.backend,
         model_id=args.model_id,
+        allow_extended_context=(
+            scheduler_enabled and args.scheduler_backend == "paged"
+        ),
     )
     MODEL_ID = RUNTIME.model_id
-    if args.scheduler:
+    if scheduler_enabled and args.scheduler_backend == "paged":
+        SCHEDULER = PagedBatchScheduler(
+            RUNTIME,
+            max_num_seqs=args.max_num_seqs,
+            block_size=args.block_size,
+            num_gpu_blocks=args.kv_blocks,
+            prefix_cache_blocks=args.prefix_cache_blocks,
+            max_queue_size=args.max_queue_size,
+            metrics=METRICS,
+        )
+    elif scheduler_enabled:
         SCHEDULER = DynamicBatchScheduler(RUNTIME, max_batch_size=args.max_batch_size)
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     server.daemon_threads = True
     print(f"DeepInfer-SM86 listening on http://{args.host}:{args.port}", flush=True)
+    if SCHEDULER is None:
+        scheduler_summary = "none"
+    elif isinstance(SCHEDULER, PagedBatchScheduler):
+        scheduler_summary = (
+            f"paged max_seqs={args.max_num_seqs} block={args.block_size} "
+            f"kv_blocks={SCHEDULER.manager.num_blocks}"
+        )
+    else:
+        scheduler_summary = f"static max_batch={args.max_batch_size}"
     print(
         f"model={MODEL_ID} checkpoint={args.checkpoint} max_cache={args.max_cache} "
-        f"graph={not args.no_graph and not args.scheduler} scheduler={args.scheduler} "
-        f"max_batch={args.max_batch_size if args.scheduler else 1}",
+        f"graph={not args.no_graph and not scheduler_enabled} "
+        f"scheduler={scheduler_summary}",
         flush=True,
     )
     try:
@@ -354,6 +444,8 @@ def main() -> int:
         pass
     finally:
         server.server_close()
+        if SCHEDULER is not None:
+            SCHEDULER.stop()
     return 0
 
 

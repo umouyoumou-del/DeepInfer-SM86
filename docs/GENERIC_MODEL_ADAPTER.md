@@ -1,5 +1,11 @@
 # DeepInfer SM86 通用模型抽象层
 
+> 2026-10-27 更新：Mistral 的 sliding window 已进入通用 attention mask；
+> Gemma 的 GeGLU / offset RMSNorm / embedding scale，以及 Gemma 2 的
+> sandwich norm、attention/final logit softcap、alternating SWA 也已接入。
+> 详细实现见 `docs/ENGINE_CORE_PAGED_CONTINUOUS_BATCHING.md`。
+
+
 > 系列扩展篇：完整过程见 `docs/ARTICLE_3_DEEPINFER_SM86_GENERIC.md`。
 
 > 方向一：构建模型抽象层，解耦“模型定义”与“执行逻辑”。
@@ -23,7 +29,8 @@ HF config.json
       │
       ▼
 ArchitectureAdapter
-  Qwen2Adapter / LlamaAdapter
+  Qwen2Adapter / LlamaAdapter / MistralAdapter /
+  GemmaAdapter / Gemma2Adapter
       │
       ▼
 ModelSpec  ← 统一字段：层数、头数、KV 头、head_dim、激活、RoPE、norm、tie 等
@@ -95,9 +102,9 @@ Llama 适配差异：
 当前明确拒绝：
 
 - `rope_scaling`；
-- sliding-window attention；
 - MoE / MLA / 多模态；
-- 非 SwiGLU MLP。
+- 非 gated MLP（当前支持 SwiGLU / GeGLU，其他 MLP 变体需要新增 adapter）；
+- 非标准 GQA / MHA 布局。
 
 ## 5. 执行器如何解耦
 
@@ -184,9 +191,10 @@ scripts/export_w4_checkpoint.py
 ## 8. 当前边界
 
 - 这是“模型规格抽象层”的第一步，不是所有模型自动支持；
-- 标准 GQA + RMSNorm + RoPE + SwiGLU 的模型可以较快接入；
+- 标准 GQA + RMSNorm + RoPE + gated MLP（SwiGLU/GeGLU）可以较快接入；
+- Mistral 的 sliding-window、Gemma/Gemma2 的 norm/scale/softcap 已实现；
 - Llama 的 llama3 RoPE scaling 尚未实现；
-- Mistral 的 sliding window 尚未实现；
+- MoE / MLA / 多模态尚未实现；
 - 完整 engine、CacheEngine/Sampler 仍未接入；
 - 4 GB 下仍优先 3B W4A16 / 7B mixed。
 ## 9. 速度回归

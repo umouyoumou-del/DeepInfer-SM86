@@ -16,6 +16,9 @@ _MODELS = {
     "DeepseekV41ForCausalLM": ("deepseek_vl", "DeepseekVLForCausalLM"),
     "Qwen2ForCausalLM": ("qwen2", "Qwen2ForCausalLM"),
     "LlamaForCausalLM": ("llama", "LlamaForCausalLM"),
+    "MistralForCausalLM": ("mistral", "MistralForCausalLM"),
+    "GemmaForCausalLM": ("gemma", "GemmaForCausalLM"),
+    "Gemma2ForCausalLM": ("gemma2", "Gemma2ForCausalLM"),
 }
 
 

@@ -52,9 +52,21 @@ def main() -> int:
         from deepinfer.model_executor.models.llama_w4a16 import (
             LlamaW4A16ForCausalLM as QuantClass,
         )
+    elif architecture == "MistralForCausalLM":
+        from deepinfer.model_executor.models.mistral_w4a16 import (
+            MistralW4A16ForCausalLM as QuantClass,
+        )
     elif architecture == "Qwen2ForCausalLM":
         from deepinfer.model_executor.models.qwen2_w4a16 import (
             Qwen2W4A16ForCausalLM as QuantClass,
+        )
+    elif architecture == "GemmaForCausalLM":
+        from deepinfer.model_executor.models.gemma_w4a16 import (
+            GemmaW4A16ForCausalLM as QuantClass,
+        )
+    elif architecture == "Gemma2ForCausalLM":
+        from deepinfer.model_executor.models.gemma2_w4a16 import (
+            Gemma2W4A16ForCausalLM as QuantClass,
         )
     else:
         raise SystemExit(f"no W4A16 class registered for {architecture}")
@@ -84,6 +96,14 @@ def main() -> int:
         payload["post_attention_layernorm.weight"] = (
             layer.post_attention_layernorm.weight.detach().cpu()
         )
+        for norm_name in (
+            "pre_feedforward_layernorm",
+            "post_feedforward_layernorm",
+        ):
+            if hasattr(layer, norm_name):
+                payload[f"{norm_name}.weight"] = (
+                    getattr(layer, norm_name).weight.detach().cpu()
+                )
         layer_file = f"layer_{index:02d}.safetensors"
         save_file(payload, args.output / layer_file)
         layer_files.append(layer_file)

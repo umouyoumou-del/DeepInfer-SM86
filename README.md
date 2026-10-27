@@ -1,16 +1,17 @@
 # DeepInfer-SM86
 
-在 **RTX 3050 Laptop 4 GB（SM86 / Windows）** 上为 DeepInfer 增加 Qwen2.5 的
-model_executor 级原生推理后端。
+在 **RTX 3050 Laptop 4 GB（SM86 / Windows）** 上为 DeepInfer 增加面向
+Qwen2.5 / Llama / Mistral / Gemma 等 dense decoder 的 model_executor 原生
+推理后端，并在其上提供 paged KV、连续批处理和指标治理等 engine-core 原型。
 
 这是一个**非官方扩展仓库**，不是 DeepInfer 官方发行版，也不是完整 DeepInfer
 engine。当前重点是：
 
-- SM86 / SM86 可运行的 W4A16、W3A16 CUDA GEMV；
-- 原生 GQA decode kernel；
-- 静态 KV cache；
-- CUDA Graph；
+- SM86 可运行的 W4A16、W3A16 CUDA GEMV；
+- 原生 GQA decode kernel 与 dense static-cache CUDA Graph；
+- paged / elastic KV cache、prefix cache、连续批处理调度器；
 - Qwen2.5-3B / 7B 的量化、加载和测速；
+- Qwen2 / Llama / Mistral / Gemma / Gemma2 dense 架构适配；
 - 4 GB 显存下的混合精度（Q4/Q3）与整体 Q4 实验数据。
 
 ---
@@ -28,9 +29,39 @@ engine。当前重点是：
 | Qwen2.5-7B 整体 Q4 | 全 4-bit | 3.92 GiB allocated | 7.942 tokens/s（持续 paging） |
 
 > 这些结果均为 `model_executor` 级；`full_engine=false`、`native_runner_ready=false`。
-> 不能把它们写成“完整 DeepInfer engine 已支持 Qwen2.5”。
+> 不能把它们写成“完整 DeepInfer engine 已支持 Qwen2.5”。当前新增的是
+> engine-core 原型，不是官方 engine 接入。上表是旧有单请求 / 固定槽位路径的
+> 实测；新 paged scheduler 的 GPU 吞吐需用 `scripts/bench_paged_scheduler.py`
+> 在目标机器上重新测量，本仓库不预填未实测数字。
 
-## 本次更新（2026-10-26）
+## 本次更新（2026-10-27）
+
+- 新增 `deepinfer/engine/kv_cache.py`：
+  - 引用计数 block allocator；
+  - paged KV pool / block table / tensor-only validity mask；
+  - 有界 LRU prefix cache，支持完整 prompt block 跨请求复用；
+  - KV OOM 隔离：单个请求失败不会污染其他 batch 成员。
+- 新增 `apps/paged_scheduler.py`：
+  - 可变 batch 连续批处理，`max_num_seqs` 可配置；
+  - 短请求按需分配 block，结束后立即回收；
+  - 单请求 OOM / cancel 隔离；
+  - prefix-cache 命中统计与 Prometheus 指标。
+- 通用 decoder 增加绝对 position 的 causal mask、paged mask 和 sliding-window mask；
+- 新增 Mistral sliding-window 架构；
+- 新增 Gemma / Gemma 2 dense 架构：
+  - GeGLU、offset RMSNorm、embedding scale；
+  - Gemma 2 sandwich norm、attention/final logit softcap、
+    alternating sliding/full attention；
+- W4A16 分层 checkpoint 导出/加载支持 Gemma 2 额外 FFN norms；
+- 网关新增 `GET /metrics`、有界队列、流式请求取消和更完整的 `/health`；
+- 新增 CPU 正确性回归：block/prefix/paged cache、paged batch logits、
+  paged scheduler、Mistral/Gemma/Gemma2 HF logits 对齐；
+- 新增 `scripts/bench_paged_scheduler.py`，用于在目标 GPU 上实测串行 vs
+  连续批处理吞吐；
+- 新增工程复盘文章 `docs/ARTICLE_4_ENGINE_CORE_POSTMORTEM.md`，记录实现过程和
+  走过的弯路。
+
+## 上一轮更新（2026-10-26）
 
 - 新增 3B W4A16 分层 checkpoint 导出与常驻加载：
   - `scripts/export_qwen3b_w4_checkpoint.py`
@@ -72,21 +103,51 @@ lm_head           : 3-bit, group 128
 ## 功能
 
 - 统一 `ModelSpec` 抽象层，执行器不直接依赖 Qwen 字段；
-- 已支持 Qwen2ForCausalLM + LlamaForCausalLM（标准 GQA/SwiGLU/RoPE）；
-- Qwen2/Qwen2.5/Llama HF config、safetensors 分片、tied embedding；
+- 已支持 Qwen2、Llama、Mistral、Gemma、Gemma 2 dense decoder；
+- 支持标准 GQA/SwiGLU/GeGLU、RMSNorm、RoPE、sliding-window attention；
+- Qwen2/Qwen2.5/Llama/Mistral/Gemma HF config、safetensors 分片、tied embedding；
 - PEFT LoRA 合并；
 - W4A16 GEMV（symmetric int4，group 128）；
 - W3A16 GEMV（8 个 signed 3-bit 压进 3 bytes）；
 - GQA decode kernel（支持 16/2、28/4 等 Q/KV head 组合）；
-- 静态 KV cache（固定 slot、外部 mask）；
-- CUDA Graph replay；
+- 静态 dense KV cache（固定 slot、外部 mask）与 CUDA Graph replay；
+- paged/elastic KV cache：按 token 分块分配、引用计数、OOM 隔离；
+- 完整 prompt block 的 prefix cache（LRU、跨请求共享）；
+- 可变 batch 连续批处理调度器（1..max_num_seqs，请求动态加入/退出）；
+- paged attention 参考路径、tensor-only validity mask、sliding-window mask；
+- `/metrics` Prometheus 指标、健康检查、队列上限、流式请求取消；
 - 构造期 fused qkv / fused gate-up，避免加载后替换造成显存碎片；
 - 7B 流式量化、按层 safetensors checkpoint；
 - 3-bit lm_head；
 - 3B/7B 测速 harness 和 CPU 复核工具；
 - 本地 OpenAI 兼容网关（`/v1/models`、`/v1/chat/completions`、SSE 流式）；
-- 固定槽位连续动态批处理调度器（W4/W3 batch GEMV + batch CUDA Graph）；
+- 固定槽位静态调度器（W4/W3 batch GEMV + batch CUDA Graph，低延迟回退）；
+- 分页连续批处理调度器（前缀复用、block 回收、动态 batch）；
 - 桌面剪贴板快捷操作脚本。
+
+---
+
+## 能力矩阵（当前真实状态）
+
+| 能力 | 状态 | 说明 |
+|---|---|---|
+| Qwen2 / Qwen2.5 | ✅ | dense/GQA、W4A16、mixed W4/W3、prefix/paged batch |
+| Llama | ✅ | 标准 GQA/RoPE；RoPE scaling 未实现 |
+| Mistral | ✅ | sliding-window attention 已进入通用 mask |
+| Gemma | ✅ | GeGLU、offset RMSNorm、embedding scale |
+| Gemma 2 | ✅ | sandwich norm、softcap、alternating SWA |
+| paged / elastic KV | ✅ | block table、引用计数、OOM 隔离 |
+| prefix cache | ✅ | 完整 prompt block LRU 共享 |
+| continuous batching | ✅ | 可变 batch decode；prefill 仍串行 |
+| Prometheus / health | ✅ | `/metrics`、block/prefix/queue 指标 |
+| MoE / MLA | ❌ | 未实现执行层 |
+| GPTQ / AWQ / GGUF | ❌ | 需转换为本仓库 W4A16 分层格式 |
+| activation quant / SmoothQuant | ❌ | 仅权重量化 W4A16/W3A16 |
+| tensor / pipeline parallel | ❌ | 单 GPU |
+| 跨厂商后端 | ❌ | 当前 kernel 绑定 NVIDIA SM86 |
+
+> “✅”只表示当前仓库有可运行的 dense/reference 实现或测试覆盖，不代表达到
+> vLLM/TensorRT-LLM 的生产完备度。
 
 ---
 
@@ -96,9 +157,14 @@ lm_head           : 3-bit, group 128
 deepinfer/
   hugging_face/qwen2_config.py          Qwen2 HF config -> DeepInfer AttrDict
   hugging_face/config.py                配置分派修改
-  model_config_loader.py                允许纯文本 Qwen2
-  model_executor/models/qwen2.py        Qwen2 source model、GQA、静态 cache
-  model_executor/models/qwen2_w4a16.py  W4A16 + GQA CUDA 后端与 3B 路径
+  model_config_loader.py                允许纯文本 Qwen2/Llama/Mistral/Gemma
+  model_spec.py                         ModelSpec 与架构 adapter
+  engine/kv_cache.py                    block allocator、paged KV、prefix cache
+  engine/metrics.py                     Prometheus 文本指标
+  model_executor/models/qwen2.py        通用 decoder、GQA、paged/static cache
+  model_executor/models/qwen2_w4a16.py  W4A16 + GQA CUDA 后端与通用分层加载
+  model_executor/models/mistral*.py     Mistral sliding-window adapter
+  model_executor/models/gemma*.py       Gemma/GeGLU/softcap adapter
   model_executor/models/qwen2_mixed_sm86.py
                                         4-bit/3-bit 混合模型、3-bit kernel
 kernels/
@@ -107,8 +173,10 @@ kernels/
   qwen2_gqa_decode.cu
   qwen2_gqa_decode_256.cu
 apps/
-  server.py                             OpenAI 兼容本地网关
-  runtime.py                            常驻模型 + 静态 cache + Graph
+  server.py                             OpenAI 兼容网关、/metrics、健康检查
+  runtime.py                            常驻模型 + dense cache/Graph
+  paged_scheduler.py                    分页连续批处理、prefix cache、取消
+  scheduler.py                          旧固定槽位静态调度器
   ask.py                                CLI 客户端
 desktop/
   quick_ask.ps1                         剪贴板总结/改写/翻译/待办
@@ -125,8 +193,13 @@ scripts/
   bench_w4a16_sm86.py                   W4A16 微基准
   bench_w3a16_sm86.py                   W3A16 微基准
   export_sm86_kernels.py                导出 .cu 源文件
+  bench_paged_scheduler.py              串行 vs 分页连续批处理 GPU 基准
 tests/
+  engine/test_kv_cache.py               block/prefix/paged cache 正确性
+  apps/test_paged_scheduler.py          paged 调度器端到端测试
   models/test_qwen2_source_integration.py
+  models/test_model_spec_mistral.py
+  models/test_model_spec_gemma.py
   models/test_qwen2_w4a16_gpu.py
 docs/
   ARTICLE_1_DEEPINFER_SM86_KERNEL.md          上篇：内核与量化工程
@@ -139,7 +212,9 @@ docs/
   QWEN_7B_4GB_FEASIBILITY.md
   QWEN_NATIVE_MODEL_EXECUTOR.md
   GENERIC_MODEL_ADAPTER.md                     通用模型抽象层
-  DYNAMIC_BATCHING_SCHEDULER.md                 动态批处理与调度器
+  DYNAMIC_BATCHING_SCHEDULER.md                 固定槽位动态批处理
+  ENGINE_CORE_PAGED_CONTINUOUS_BATCHING.md      分页 KV、连续批处理与架构扩展
+  ARTICLE_4_ENGINE_CORE_POSTMORTEM.md           engine-core 改造复盘与弯路记录
   PERSONAL_PRODUCTIVITY.md                     从网关到桌面快捷操作
   PRODUCTIVITY_BENCHMARK_3B_7B_OLLAMA.md       3B/7B/Ollama 完整基准
   results/                                     选定的可复现结果
@@ -244,14 +319,26 @@ python apps\server.py `
   --port 18001
 ```
 
-3B 动态批处理（固定 2 slot）：
+3B 分页连续批处理（推荐）：
 
 ```powershell
 python apps\server.py `
   --checkpoint D:\Qwen3B-W4A16-SM86 `
   --backend w4a16 `
   --max-cache 256 `
-  --scheduler --max-batch-size 2 `
+  --scheduler --scheduler-backend paged `
+  --max-num-seqs 4 --block-size 16 --prefix-cache-blocks 16 `
+  --port 18001
+```
+
+旧固定槽位路径仍可用于低延迟回退：
+
+```powershell
+python apps\server.py `
+  --checkpoint D:\Qwen3B-W4A16-SM86 `
+  --backend w4a16 `
+  --max-cache 256 `
+  --scheduler --scheduler-backend static --max-batch-size 2 `
   --port 18001
 ```
 
@@ -271,6 +358,7 @@ python apps\server.py `
 
 ```text
 GET  http://127.0.0.1:18000/health
+GET  http://127.0.0.1:18000/metrics
 GET  http://127.0.0.1:18000/v1/models
 POST http://127.0.0.1:18000/v1/chat/completions
 ```
@@ -316,10 +404,13 @@ curl.exe -N http://127.0.0.1:18000/v1/chat/completions `
 | 3B prefill | 约 0.46 秒 |
 | 7B 混合 decode | 约 25.8 tokens/s（隔离环境） |
 | 7B prefill | 3.06 秒（隔离）；53 秒以上（paging） |
-| 并发 | 单请求串行 |
+| 无 scheduler | 单请求串行 |
+| `--scheduler-backend static` | 固定槽位 2-way 连续批处理（旧路径） |
+| `--scheduler-backend paged` | 可变 batch、分页 KV、prefix cache |
 
-256 context 适合总结选中段落、改写、翻译、提取待办。长文档需要先分段；
-后续再接入 map-reduce 和本地文件 RAG。
+默认 256 context 适合总结选中段落、改写、翻译、提取待办。分页调度器允许
+`--max-cache > 256`，但 4 GB 显卡仍受物理显存、prefill 激活和模型权重约束；
+长文档还需要配合 map-reduce / RAG。
 
 ---
 
@@ -385,7 +476,8 @@ python scripts\quantize_qwen7b_q4.py `
 - group 128；
 - 每层一个 warp 处理一个输出 row；
 - x 放 shared memory；
-- 适合单 token batch=1 decode。
+- GEMV 支持批量 token（decode batch 可大于 1）；
+- 固定 dense batch 路径可配合 CUDA Graph。
 
 ### W3A16
 
@@ -398,7 +490,7 @@ python scripts\quantize_qwen7b_q4.py `
 ### GQA decode
 
 - 一个 block 处理一个 query head；
-- 最多 128 个静态 cache slot；
+- dense static-cache 路径支持最多 256 个 cache slot；
 - 支持 16 Q / 2 KV 和 28 Q / 4 KV；
 - 与 PyTorch SDPA 对照 cosine 约 1.0；
 - 只用于单 token decode；prefill 仍走 PyTorch。
@@ -415,16 +507,21 @@ python scripts\export_sm86_kernels.py
 
 ## 已知限制
 
-- 这是 **model_executor 级** 后端，不是完整 engine；
-- 没有接入 `worker/cache_engine.py` 的 full-attention block table/slot mapping；
-- 没有接入 DeepInfer 原生 Sampler；
-- 没有完整 scheduler/worker/continuous batching；
-- prefill 仍是分块 dequant + cuBLAS，不是 tiled W4/W3 GEMM；
+- 这是 **model_executor + engine-core 原型**，不是完整 DeepInfer engine；
+- 没有接入官方 `worker/cache_engine.py` 和原生 Sampler；
+- paged attention 当前是 PyTorch SDPA reference path，不是 paged native GQA；
+- 可变 batch 下没有 CUDA Graph；dense static-cache 路径仍支持 Graph；
+- prefill 仍是串行，没有 chunked prefill / prefill-decode 混合流；
+- 没有 preemption、CPU KV swap、beam search 或 speculative decoding；
+- prefill 计算仍是分块 dequant + cuBLAS，不是 tiled W4/W3 GEMM；
 - GPU harness 在 Python 3.10 下验证；Python 3.12 GPU package 验证未完成；
 - 3-bit MLP/lm_head 是有损量化，短输出可读不代表与 BF16 等价；
 - 4 GB 上整体 Q4 只能作为质量/兼容实验，速度约 8 tokens/s；
-- 单请求、短上下文，不是生产吞吐；
-- 网关 context 上限为 256 token，尚未接入长文 map-reduce；
+- 尚未直接导入 GPTQ / AWQ / GGUF；当前需要转换为本仓库 W4A16 分层格式；
+- 尚未实现 activation quantization、SmoothQuant、MoE 或 MLA 执行层；
+- 没有 tensor/pipeline parallel 或跨厂商后端抽象；
+- 默认 context 上限仍为 256 token；paged scheduler 可提高 `--max-cache`，
+  但 4 GB 物理显存和长 prompt prefill 仍是硬约束；
 - 3B 与 7B 网关不能同时常驻 4 GB；
 - 桌面快捷操作依赖 Windows PowerShell 剪贴板和本地 HTTP 网关。
 
@@ -443,7 +540,11 @@ python scripts\export_sm86_kernels.py
 - 个人生产力落地：`docs/PERSONAL_PRODUCTIVITY.md`
 - 3B/7B/Ollama 基准：`docs/PRODUCTIVITY_BENCHMARK_3B_7B_OLLAMA.md`
 - 通用模型抽象层：`docs/GENERIC_MODEL_ADAPTER.md`
-- 动态批处理与调度器：`docs/DYNAMIC_BATCHING_SCHEDULER.md`
+- 固定槽位动态批处理：`docs/DYNAMIC_BATCHING_SCHEDULER.md`
+- 分页 KV / 连续批处理 / 架构扩展：
+  `docs/ENGINE_CORE_PAGED_CONTINUOUS_BATCHING.md`
+- 工程复盘与弯路记录：`docs/ARTICLE_4_ENGINE_CORE_POSTMORTEM.md`
+- GPU 吞吐基准脚本：`scripts/bench_paged_scheduler.py`
 - 结构化结果：`docs/results/`
 
 ---

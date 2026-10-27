@@ -38,6 +38,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from deepinfer import AttrDict
+from deepinfer.engine.kv_cache import PagedLayerKVCache
 from deepinfer.logger import init_logger
 from deepinfer.model_executor.model_output import CausalLMForwardOutput
 
@@ -126,16 +127,29 @@ class Qwen2ModelMetadata:
 
 
 class Qwen2RMSNorm(nn.Module):
-    def __init__(self, hidden_size: int, eps: float) -> None:
+    def __init__(
+        self,
+        hidden_size: int,
+        eps: float,
+        *,
+        weight_offset: float = 0.0,
+    ) -> None:
         super().__init__()
         self.weight = nn.Parameter(torch.ones(hidden_size))
         self.variance_epsilon = eps
+        self.weight_offset = float(weight_offset)
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         input_dtype = hidden_states.dtype
         hidden_states = hidden_states.to(torch.float32)
         variance = hidden_states.pow(2).mean(-1, keepdim=True)
         hidden_states = hidden_states * torch.rsqrt(variance + self.variance_epsilon)
+        if self.weight_offset:
+            # Gemma stores the residual scale as ``1 + weight`` and applies it
+            # in FP32 before casting back to the activation dtype.
+            return (hidden_states * (self.weight.float() + self.weight_offset)).to(
+                input_dtype
+            )
         return self.weight * hidden_states.to(input_dtype)
 
 
@@ -221,10 +235,12 @@ class Qwen2Attention(nn.Module):
         self,
         cfg: AttrDict,
         *,
+        layer_index: int = 0,
         linear_factory: LinearFactory = _default_linear,
         fused_qkv_factory: LinearFactory | None = None,
     ) -> None:
         super().__init__()
+        self.layer_index = int(layer_index)
         self.hidden_size = int(cfg.hidden_size)
         self.num_heads = int(cfg.num_attention_heads)
         self.num_kv_heads = int(cfg.num_key_value_heads)
@@ -234,7 +250,22 @@ class Qwen2Attention(nn.Module):
                 "num_attention_heads must be divisible by num_key_value_heads"
             )
         self.num_key_value_groups = self.num_heads // self.num_kv_heads
-        self.scaling = self.head_dim**-0.5
+        pre_attn_scalar = cfg.get("query_pre_attn_scalar")
+        self.scaling = (
+            float(pre_attn_scalar) ** -0.5
+            if pre_attn_scalar is not None
+            else self.head_dim**-0.5
+        )
+        self.attn_logit_softcapping = cfg.get("attn_logit_softcapping")
+        window = cfg.get("window_size")
+        if isinstance(window, (tuple, list)):
+            window = max(int(value) for value in window)
+        window = int(window or cfg.get("sliding_window") or 0)
+        sliding_pattern = cfg.get("sliding_window_pattern")
+        use_sliding = bool(cfg.get("use_sliding_window", False))
+        if sliding_pattern is not None:
+            use_sliding = bool(sliding_pattern[self.layer_index])
+        self.sliding_window = window if use_sliding and window > 0 else None
 
         qkv_bias = bool(cfg.get("attention_bias", True))
         q_out = self.num_heads * self.head_dim
@@ -261,7 +292,10 @@ class Qwen2Attention(nn.Module):
         cos: torch.Tensor,
         sin: torch.Tensor,
         *,
-        layer_cache: Qwen2LayerKVCache | Qwen2StaticLayerKVCache | None = None,
+        layer_cache: Qwen2LayerKVCache
+        | Qwen2StaticLayerKVCache
+        | PagedLayerKVCache
+        | None = None,
         attention_mask: torch.Tensor | None = None,
         cache_positions: torch.Tensor | None = None,
     ) -> torch.Tensor:
@@ -292,7 +326,13 @@ class Qwen2Attention(nn.Module):
         )
         query, key = _apply_rotary(query, key, cos, sin)
 
-        if isinstance(layer_cache, Qwen2StaticLayerKVCache):
+        paged_valid = None
+        if isinstance(layer_cache, PagedLayerKVCache):
+            if cache_positions is None:
+                raise ValueError("paged KV cache requires cache_positions")
+            layer_cache.update(key, value, cache_positions)
+            key, value, paged_valid = layer_cache.materialize()
+        elif isinstance(layer_cache, Qwen2StaticLayerKVCache):
             if cache_positions is None:
                 raise ValueError("static KV cache requires cache_positions")
             layer_cache.update(key, value, cache_positions)
@@ -309,47 +349,71 @@ class Qwen2Attention(nn.Module):
             key = layer_cache.key
             value = layer_cache.value
 
+        key_length = int(key.shape[2])
+        if cache_positions is not None:
+            query_positions = cache_positions.to(torch.long)
+            if query_positions.ndim == 1:
+                query_positions = query_positions.unsqueeze(1)
+        else:
+            query_positions = (
+                torch.arange(
+                    key_length - sequence,
+                    key_length,
+                    dtype=torch.long,
+                    device=query.device,
+                )
+                .unsqueeze(0)
+                .expand(batch, -1)
+            )
+        if tuple(query_positions.shape) != (batch, sequence):
+            raise ValueError(
+                "cache_positions must match the query shape; "
+                f"got {tuple(query_positions.shape)} for {(batch, sequence)}"
+            )
+
+        key_positions = torch.arange(key_length, dtype=torch.long, device=query.device)
+        causal = key_positions.view(1, 1, key_length) <= query_positions.unsqueeze(-1)
+        if self.sliding_window is not None:
+            causal &= (
+                query_positions.unsqueeze(-1) - key_positions.view(1, 1, key_length)
+            ) < self.sliding_window
+        mask: torch.Tensor | None = causal.unsqueeze(1)
+        if paged_valid is not None:
+            mask &= paged_valid[:, None, None, :]
+        if attention_mask is not None:
+            external = attention_mask.to(torch.bool)
+            if external.shape[0] != batch or external.shape[-1] < key_length:
+                raise ValueError(
+                    "attention_mask must have batch rows and cover every cached "
+                    f"position; got {tuple(external.shape)}, need ({batch}, >= {key_length})"
+                )
+            external = external[:, :key_length]
+            mask &= external[:, None, None, :]
+
         if (
             self.native_gqa_decode is not None
             and isinstance(layer_cache, Qwen2StaticLayerKVCache)
             and sequence == 1
             and query.shape[0] == 1
         ):
-            attention = self.native_gqa_decode(query, key, value, attention_mask)
+            native_mask = None if mask is None else mask[:, 0, 0, :]
+            attention = self.native_gqa_decode(query, key, value, native_mask)
         else:
             key = _repeat_kv(key, self.num_key_value_groups)
             value = _repeat_kv(value, self.num_key_value_groups)
-            key_length = key.shape[2]
-
-            mask: torch.Tensor | None = None
-            if sequence > 1:
-                if isinstance(layer_cache, Qwen2StaticLayerKVCache):
-                    if attention_mask is None:
-                        raise ValueError(
-                            "static KV cache prefill requires an explicit attention mask"
-                        )
-                else:
-                    offset = key_length - sequence
-                    mask = torch.ones(
-                        (sequence, key_length), dtype=torch.bool, device=query.device
-                    ).tril(diagonal=offset)
-                    mask = mask[None, None, :, :]
-            if attention_mask is not None:
-                assert attention_mask.shape == (batch, key_length), (
-                    f"attention_mask shape {attention_mask.shape=} does not match {(batch, key_length)=}"
-                )
-                valid = attention_mask.to(torch.bool)[:, None, None, :]
-                mask = valid if mask is None else mask & valid
-
-            if mask is None:
-                attention = F.scaled_dot_product_attention(
-                    query,
-                    key,
-                    value,
-                    dropout_p=0.0,
-                    scale=self.scaling,
-                    is_causal=False,
-                )
+            if self.attn_logit_softcapping is not None:
+                # Gemma 2 caps attention logits before softmax.  SDPA has no
+                # softcap argument, so use the explicit reference path for
+                # this architecture variant.
+                cap = float(self.attn_logit_softcapping)
+                scores = torch.matmul(query, key.transpose(-2, -1)) * self.scaling
+                scores = torch.tanh(scores / cap) * cap
+                if mask is not None:
+                    scores = scores.masked_fill(
+                        ~mask, torch.finfo(scores.dtype).min
+                    )
+                probs = torch.softmax(scores, dim=-1)
+                attention = torch.matmul(probs, value)
             else:
                 attention = F.scaled_dot_product_attention(
                     query,
@@ -371,7 +435,7 @@ def _activation_fn(name: str):
         return F.silu
     if name == "gelu":
         return F.gelu
-    if name == "gelu_new":
+    if name in ("gelu_new", "gelu_pytorch_tanh", "gelu_tanh"):
         return lambda value: F.gelu(value, approximate="tanh")
     raise ValueError(f"unsupported activation: {name!r}")
 
@@ -414,13 +478,17 @@ class Qwen2DecoderLayer(nn.Module):
         self,
         cfg: AttrDict,
         *,
+        layer_index: int = 0,
         linear_factory: LinearFactory = _default_linear,
         fused_qkv_factory: LinearFactory | None = None,
         fused_gate_up_factory: LinearFactory | None = None,
     ) -> None:
         super().__init__()
+        self.layer_index = int(layer_index)
+        self.sandwich_norm = bool(cfg.get("sandwich_norm", False))
         self.self_attn = Qwen2Attention(
             cfg,
+            layer_index=layer_index,
             linear_factory=linear_factory,
             fused_qkv_factory=fused_qkv_factory,
         )
@@ -429,12 +497,22 @@ class Qwen2DecoderLayer(nn.Module):
             linear_factory=linear_factory,
             fused_gate_up_factory=fused_gate_up_factory,
         )
-        self.input_layernorm = Qwen2RMSNorm(
-            int(cfg.hidden_size), float(cfg.rms_norm_eps)
-        )
+        norm_kwargs = {
+            "weight_offset": float(cfg.get("rms_norm_weight_offset", 0.0))
+        }
+        hidden_size = int(cfg.hidden_size)
+        eps = float(cfg.rms_norm_eps)
+        self.input_layernorm = Qwen2RMSNorm(hidden_size, eps, **norm_kwargs)
         self.post_attention_layernorm = Qwen2RMSNorm(
-            int(cfg.hidden_size), float(cfg.rms_norm_eps)
+            hidden_size, eps, **norm_kwargs
         )
+        if self.sandwich_norm:
+            self.pre_feedforward_layernorm = Qwen2RMSNorm(
+                hidden_size, eps, **norm_kwargs
+            )
+            self.post_feedforward_layernorm = Qwen2RMSNorm(
+                hidden_size, eps, **norm_kwargs
+            )
 
     def forward(
         self,
@@ -442,7 +520,10 @@ class Qwen2DecoderLayer(nn.Module):
         cos: torch.Tensor,
         sin: torch.Tensor,
         *,
-        layer_cache: Qwen2LayerKVCache | Qwen2StaticLayerKVCache | None = None,
+        layer_cache: Qwen2LayerKVCache
+        | Qwen2StaticLayerKVCache
+        | PagedLayerKVCache
+        | None = None,
         attention_mask: torch.Tensor | None = None,
         cache_positions: torch.Tensor | None = None,
     ) -> torch.Tensor:
@@ -456,11 +537,18 @@ class Qwen2DecoderLayer(nn.Module):
             attention_mask=attention_mask,
             cache_positions=cache_positions,
         )
+        if self.sandwich_norm:
+            hidden_states = self.post_attention_layernorm(hidden_states)
         hidden_states = residual + hidden_states
 
         residual = hidden_states
-        hidden_states = self.post_attention_layernorm(hidden_states)
-        hidden_states = self.mlp(hidden_states)
+        if self.sandwich_norm:
+            hidden_states = self.pre_feedforward_layernorm(hidden_states)
+            hidden_states = self.mlp(hidden_states)
+            hidden_states = self.post_feedforward_layernorm(hidden_states)
+        else:
+            hidden_states = self.post_attention_layernorm(hidden_states)
+            hidden_states = self.mlp(hidden_states)
         return residual + hidden_states
 
 
@@ -481,14 +569,20 @@ class Qwen2Model(nn.Module):
             [
                 Qwen2DecoderLayer(
                     cfg,
+                    layer_index=layer_index,
                     linear_factory=linear_factory,
                     fused_qkv_factory=fused_qkv_factory,
                     fused_gate_up_factory=fused_gate_up_factory,
                 )
-                for _ in range(int(cfg.num_hidden_layers))
+                for layer_index in range(int(cfg.num_hidden_layers))
             ]
         )
-        self.norm = Qwen2RMSNorm(int(cfg.hidden_size), float(cfg.rms_norm_eps))
+        self.norm = Qwen2RMSNorm(
+            int(cfg.hidden_size),
+            float(cfg.rms_norm_eps),
+            weight_offset=float(cfg.get("rms_norm_weight_offset", 0.0)),
+        )
+        self.embedding_multiplier = float(cfg.get("embedding_multiplier", 1.0))
         self.rotary_emb = Qwen2RotaryEmbedding(int(cfg.head_dim), float(cfg.rope_theta))
 
     def forward_embeds(
@@ -496,7 +590,9 @@ class Qwen2Model(nn.Module):
         inputs_embeds: torch.Tensor,
         positions: torch.Tensor,
         *,
-        kv_cache: list[Qwen2LayerKVCache | Qwen2StaticLayerKVCache | None]
+        kv_cache: list[
+            Qwen2LayerKVCache | Qwen2StaticLayerKVCache | PagedLayerKVCache | None
+        ]
         | None = None,
         attention_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
@@ -506,6 +602,8 @@ class Qwen2Model(nn.Module):
             )
         cos, sin = self.rotary_emb(positions, inputs_embeds.dtype)
         hidden_states = inputs_embeds
+        if self.embedding_multiplier != 1.0:
+            hidden_states = hidden_states * self.embedding_multiplier
         for layer_index, layer in enumerate(self.layers):
             cache = None if kv_cache is None else kv_cache[layer_index]
             if kv_cache is not None and cache is None:
@@ -601,7 +699,12 @@ class Qwen2ForCausalLM(nn.Module):
             kv_cache=kv_cache,
             attention_mask=attention_mask,
         )
-        return self.lm_head(hidden_states)
+        logits = self.lm_head(hidden_states)
+        final_softcap = self.cfg.get("final_logit_softcapping")
+        if final_softcap is not None:
+            cap = float(final_softcap)
+            logits = torch.tanh(logits / cap) * cap
+        return logits
 
     def forward(
         self,
@@ -869,6 +972,7 @@ def _merge_peft_adapter(model: Qwen2ForCausalLM, adapter_path: Path) -> None:
 
 
 __all__ = [
+    "PagedLayerKVCache",
     "Qwen2ForCausalLM",
     "Qwen2InputMetadata",
     "Qwen2LayerKVCache",

@@ -280,13 +280,13 @@ def load_hf_model_config(path: str | Path) -> AttrDict:
         raise ValueError(
             f"Unsupported HF architecture {architecture!r} in {hf_path}; supported architectures: {supported_architectures}"
         )
-    if hf.get("model_type") in ("qwen2", "llama"):
+    if hf.get("model_type") in ("qwen2", "llama", "mistral", "gemma", "gemma2"):
         from deepinfer.model_spec import build_model_config
 
         return build_model_config(hf, hf_path)
     if hf.get("model_type") != "deepseek_v41":
         raise ValueError(
-            f"Expected a deepseek_v41, qwen2 or llama HF config.json: {hf_path}"
+            f"Expected a deepseek_v41, qwen2, llama, mistral or gemma HF config.json: {hf_path}"
         )
     text = hf["text_config"]
     _assert_supported(hf)

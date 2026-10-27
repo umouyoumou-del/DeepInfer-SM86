@@ -1,7 +1,10 @@
-# DeepInfer SM86 动态批处理和调度器
+# DeepInfer SM86 固定槽位动态批处理调度器
 
 > 系列实现说明：在 ModelSpec 通用化之后，把单请求 SM86 执行器扩展为固定槽位的
-> 连续批处理调度器。
+> 连续批处理调度器。本文描述的是 `--scheduler-backend static` 旧路径。
+>
+> 后续新增的可变 batch、分页 KV cache、prefix cache 见：
+> `docs/ENGINE_CORE_PAGED_CONTINUOUS_BATCHING.md`。
 
 ## 1. 结论
 

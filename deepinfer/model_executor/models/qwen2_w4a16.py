@@ -400,7 +400,7 @@ class W4A16Linear(nn.Module):
                         device=self.bias.device, dtype=self.bias.dtype
                     )
                 )
-            if cp is not None:
+            if cp is not None and self.packed.is_cuda:
                 self._bind_cupy()
             del weight, grouped, scale, quantized, low, high
 
@@ -423,7 +423,7 @@ class W4A16Linear(nn.Module):
             self.scales.copy_(scales.to(device=self.scales.device, dtype=torch.float16))
             if self.bias is not None and bias is not None:
                 self.bias.copy_(bias.to(device=self.bias.device, dtype=self.bias.dtype))
-            if cp is not None:
+            if cp is not None and self.packed.is_cuda:
                 self._bind_cupy()
 
     def _dequantize_rows(self, start: int, end: int) -> torch.Tensor:
@@ -613,6 +613,7 @@ class Qwen2W4A16ForCausalLM(Qwen2ForCausalLM):
                 safe_open(root / layer_file, framework="pt", device="cpu") as tensors,
                 torch.no_grad(),
             ):
+                tensor_names = set(tensors.keys())
                 attention = layer.self_attn
                 qkv = attention.fused_qkv
                 q_rows = attention.num_heads * attention.head_dim
@@ -665,9 +666,20 @@ class Qwen2W4A16ForCausalLM(Qwen2ForCausalLM):
                 layer.input_layernorm.weight.copy_(
                     tensors.get_tensor("input_layernorm.weight")
                 )
-                layer.post_attention_layernorm.weight.copy_(
-                    tensors.get_tensor("post_attention_layernorm.weight")
-                )
+                for norm_name in (
+                    "post_attention_layernorm",
+                    "pre_feedforward_layernorm",
+                    "post_feedforward_layernorm",
+                ):
+                    if not hasattr(layer, norm_name):
+                        continue
+                    key = f"{norm_name}.weight"
+                    if key not in tensor_names:
+                        raise KeyError(
+                            f"layered checkpoint is missing {key} required by "
+                            f"{type(layer).__name__}"
+                        )
+                    getattr(layer, norm_name).weight.copy_(tensors.get_tensor(key))
             torch.cuda.empty_cache()
             print(
                 f"loaded layer {layer_index + 1}/{len(manifest['layer_files'])}",
@@ -724,14 +736,19 @@ class Qwen2W4A16ForCausalLM(Qwen2ForCausalLM):
             )
             for index, layer in enumerate(model.model.layers):
                 source_layer = dense_model.model.layers[index]
-                layer.input_layernorm.weight.copy_(
-                    source_layer.input_layernorm.weight.to(layer.input_layernorm.weight)
-                )
-                layer.post_attention_layernorm.weight.copy_(
-                    source_layer.post_attention_layernorm.weight.to(
-                        layer.post_attention_layernorm.weight
+                for norm_name in (
+                    "input_layernorm",
+                    "post_attention_layernorm",
+                    "pre_feedforward_layernorm",
+                    "post_feedforward_layernorm",
+                ):
+                    if not hasattr(layer, norm_name):
+                        continue
+                    target_norm = getattr(layer, norm_name)
+                    source_norm = getattr(source_layer, norm_name)
+                    target_norm.weight.copy_(
+                        source_norm.weight.to(target_norm.weight)
                     )
-                )
             for name, module in target_modules.items():
                 if isinstance(module, W4A16Linear):
                     module.load_from_linear(source_modules[name])

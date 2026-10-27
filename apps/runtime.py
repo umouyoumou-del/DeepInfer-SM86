@@ -33,7 +33,7 @@ class GenerationStats:
     completion_tokens: int
 
 
-def _load_backend_modules() -> tuple[Any, Any, Any, Any]:
+def _load_backend_modules() -> tuple[Any, ...]:
     _install_deepinfer_import_stubs()
     _load_module("deepinfer.hugging_face.qwen2_config", "hugging_face/qwen2_config.py")
     qwen2_module = _load_module(
@@ -47,11 +47,31 @@ def _load_backend_modules() -> tuple[Any, Any, Any, Any]:
         "deepinfer.model_executor.models.llama_w4a16",
         "model_executor/models/llama_w4a16.py",
     )
+    mistral_w4a16_module = _load_module(
+        "deepinfer.model_executor.models.mistral_w4a16",
+        "model_executor/models/mistral_w4a16.py",
+    )
+    gemma_w4a16_module = _load_module(
+        "deepinfer.model_executor.models.gemma_w4a16",
+        "model_executor/models/gemma_w4a16.py",
+    )
+    gemma2_w4a16_module = _load_module(
+        "deepinfer.model_executor.models.gemma2_w4a16",
+        "model_executor/models/gemma2_w4a16.py",
+    )
     mixed_module = _load_module(
         "deepinfer.model_executor.models.qwen2_mixed_sm86",
         "model_executor/models/qwen2_mixed_sm86.py",
     )
-    return qwen2_module, w4a16_module, llama_w4a16_module, mixed_module
+    return (
+        qwen2_module,
+        w4a16_module,
+        llama_w4a16_module,
+        mistral_w4a16_module,
+        gemma_w4a16_module,
+        gemma2_w4a16_module,
+        mixed_module,
+    )
 
 
 class QwenSm86Runtime:
@@ -67,10 +87,12 @@ class QwenSm86Runtime:
         single_request_cache: bool = True,
         backend: str = "mixed",
         model_id: str | None = None,
+        allow_extended_context: bool = False,
     ) -> None:
-        if max_cache > 256:
+        if max_cache > 256 and not allow_extended_context:
             raise ValueError(
-                "max_cache > 256 is not supported by the current SM86 GQA kernel"
+                "max_cache > 256 requires paged/elastic attention; pass "
+                "allow_extended_context=True or use --scheduler"
             )
         self.checkpoint = Path(checkpoint)
         self.backend = backend
@@ -93,16 +115,28 @@ class QwenSm86Runtime:
             local_files_only=True,
             trust_remote_code=True,
         )
-        qwen2_module, w4a16_module, llama_w4a16_module, mixed_module = (
-            _load_backend_modules()
-        )
+        (
+            qwen2_module,
+            w4a16_module,
+            llama_w4a16_module,
+            mistral_w4a16_module,
+            gemma_w4a16_module,
+            gemma2_w4a16_module,
+            mixed_module,
+        ) = _load_backend_modules()
         self.qwen2_module = qwen2_module
+        self.hf_config = json.loads(
+            (self.checkpoint / "config.json").read_text(encoding="utf-8")
+        )
+        self.architecture = (self.hf_config.get("architectures") or [""])[0]
         if backend == "w4a16":
-            hf = json.loads(
-                (self.checkpoint / "config.json").read_text(encoding="utf-8")
-            )
-            architecture = (hf.get("architectures") or [""])[0]
-            if architecture == "LlamaForCausalLM":
+            if self.architecture == "MistralForCausalLM":
+                model_class = mistral_w4a16_module.MistralW4A16ForCausalLM
+            elif self.architecture == "GemmaForCausalLM":
+                model_class = gemma_w4a16_module.GemmaW4A16ForCausalLM
+            elif self.architecture == "Gemma2ForCausalLM":
+                model_class = gemma2_w4a16_module.Gemma2W4A16ForCausalLM
+            elif self.architecture == "LlamaForCausalLM":
                 model_class = llama_w4a16_module.LlamaW4A16ForCausalLM
             else:
                 model_class = w4a16_module.Qwen2W4A16ForCausalLM
@@ -112,6 +146,11 @@ class QwenSm86Runtime:
                 group_size=128,
             )
         elif backend == "mixed":
+            if self.architecture not in ("Qwen2ForCausalLM", ""):
+                raise ValueError(
+                    "mixed W4/W3 backend currently supports Qwen2-family "
+                    f"checkpoints only; got {self.architecture!r}"
+                )
             self.model = mixed_module.Qwen2MixedForCausalLM.from_checkpoint(
                 self.checkpoint,
                 device=device,
@@ -361,6 +400,7 @@ class QwenSm86Runtime:
             "status": "ok",
             "model_id": self.model_id,
             "backend": self.backend,
+            "architecture": self.architecture,
             "checkpoint": str(self.checkpoint),
             "max_cache": self.max_cache,
             "device": str(self.device),

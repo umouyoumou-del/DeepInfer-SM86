@@ -68,6 +68,13 @@ class ModelSpec:
     bos_token_id: int | None = None
     eos_token_id: int | None = None
     adapter_path: str = ""
+    rms_norm_weight_offset: float = 0.0
+    embedding_multiplier: float = 1.0
+    sandwich_norm: bool = False
+    attn_logit_softcapping: float | None = None
+    final_logit_softcapping: float | None = None
+    query_pre_attn_scalar: float | None = None
+    sliding_window_pattern: tuple[bool, ...] | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -84,12 +91,28 @@ class ModelSpec:
             raise ValueError(
                 "num_attention_heads must be divisible by num_key_value_heads"
             )
-        if self.hidden_act not in ("silu", "gelu", "gelu_new"):
+        if self.hidden_act not in (
+            "silu",
+            "gelu",
+            "gelu_new",
+            "gelu_pytorch_tanh",
+            "gelu_tanh",
+        ):
             raise ValueError(f"unsupported activation: {self.hidden_act!r}")
-        if self.mlp_type not in ("swiglu",):
+        if self.mlp_type not in ("swiglu", "geglu"):
             raise ValueError(f"unsupported MLP type: {self.mlp_type!r}")
-        if self.use_sliding_window:
-            raise NotImplementedError("sliding-window attention is not implemented")
+        if self.use_sliding_window and (
+            self.sliding_window is None or self.sliding_window < 1
+        ):
+            raise ValueError("sliding-window attention requires sliding_window >= 1")
+        if self.sliding_window_pattern is not None and len(
+            self.sliding_window_pattern
+        ) != self.num_hidden_layers:
+            raise ValueError(
+                "sliding_window_pattern must contain one entry per hidden layer"
+            )
+        if self.query_pre_attn_scalar is not None and self.query_pre_attn_scalar <= 0:
+            raise ValueError("query_pre_attn_scalar must be positive")
         if self.rope_scaling:
             raise NotImplementedError(
                 f"rope_scaling is not implemented: {self.rope_scaling!r}"
@@ -118,11 +141,20 @@ class ModelSpec:
             attention_bias=self.attention_bias,
             attention_dropout=self.attention_dropout,
             hidden_act=self.hidden_act,
-            activation_type="swiglu",
-            window_size=(-1, -1),
-            use_sliding_window=False,
+            activation_type=self.mlp_type,
+            window_size=(self.sliding_window or -1, -1)
+            if self.use_sliding_window
+            else (-1, -1),
+            use_sliding_window=self.use_sliding_window,
             sliding_window=self.sliding_window,
+            sliding_window_pattern=self.sliding_window_pattern,
             max_window_layers=self.num_hidden_layers,
+            rms_norm_weight_offset=self.rms_norm_weight_offset,
+            embedding_multiplier=self.embedding_multiplier,
+            sandwich_norm=self.sandwich_norm,
+            attn_logit_softcapping=self.attn_logit_softcapping,
+            final_logit_softcapping=self.final_logit_softcapping,
+            query_pre_attn_scalar=self.query_pre_attn_scalar,
             num_nextn_predict_layers=0,
             moe=None,
             engram=None,
@@ -186,12 +218,34 @@ class ArchitectureAdapter:
         heads = int(hf["num_attention_heads"])
         kv_heads = int(hf.get("num_key_value_heads", heads))
         head_dim = int(hf.get("head_dim") or hidden_size // heads)
-        hidden_act = str(hf.get("hidden_act", "silu"))
-        if hidden_act not in ("silu", "gelu", "gelu_new"):
+        hidden_act = str(
+            hf.get("hidden_activation") or hf.get("hidden_act") or "silu"
+        )
+        if hidden_act not in (
+            "silu",
+            "gelu",
+            "gelu_new",
+            "gelu_pytorch_tanh",
+            "gelu_tanh",
+        ):
             raise ValueError(f"unsupported hidden_act: {hidden_act!r}")
+        if hidden_act in ("gelu", "gelu_new", "gelu_pytorch_tanh", "gelu_tanh"):
+            mlp_type = "geglu"
+        else:
+            mlp_type = "swiglu"
         rope_scaling = hf.get("rope_scaling")
-        use_sliding_window = bool(hf.get("use_sliding_window", False))
         sliding_window = hf.get("sliding_window")
+        use_sliding_window = bool(hf.get("use_sliding_window", False))
+        sliding_window_pattern = None
+        if model_type == "gemma2" and sliding_window:
+            use_sliding_window = True
+            sliding_window_pattern = tuple(
+                layer_index % 2 == 0
+                for layer_index in range(int(hf["num_hidden_layers"]))
+            )
+        is_gemma = model_type in ("gemma", "gemma2", "gemma3")
+        norm_offset = 1.0 if is_gemma else 0.0
+        embedding_multiplier = hidden_size**0.5 if is_gemma else 1.0
         spec = ModelSpec(
             family=self.family,
             architecture=str(architectures[0])
@@ -211,8 +265,10 @@ class ArchitectureAdapter:
             attention_bias=bool(hf.get("attention_bias", self.attention_bias_default)),
             attention_dropout=float(hf.get("attention_dropout", 0.0)),
             hidden_act=hidden_act,
-            mlp_type="swiglu",
-            tie_word_embeddings=bool(hf.get("tie_word_embeddings", False)),
+            mlp_type=mlp_type,
+            tie_word_embeddings=bool(
+                hf.get("tie_word_embeddings", is_gemma)
+            ),
             dtype=_dtype(hf.get("torch_dtype", hf.get("dtype", "bfloat16"))),
             rope_scaling=rope_scaling,
             sliding_window=int(sliding_window) if sliding_window else None,
@@ -220,6 +276,25 @@ class ArchitectureAdapter:
             bos_token_id=hf.get("bos_token_id"),
             eos_token_id=_single_eos(hf.get("eos_token_id")),
             adapter_path=str(hf.get("lora_adapter_path") or ""),
+            rms_norm_weight_offset=norm_offset,
+            embedding_multiplier=embedding_multiplier,
+            sandwich_norm=model_type == "gemma2",
+            attn_logit_softcapping=(
+                float(hf["attn_logit_softcapping"])
+                if hf.get("attn_logit_softcapping") is not None
+                else None
+            ),
+            final_logit_softcapping=(
+                float(hf["final_logit_softcapping"])
+                if hf.get("final_logit_softcapping") is not None
+                else None
+            ),
+            query_pre_attn_scalar=(
+                float(hf["query_pre_attn_scalar"])
+                if hf.get("query_pre_attn_scalar") is not None
+                else None
+            ),
+            sliding_window_pattern=sliding_window_pattern,
         )
         spec.validate()
         return spec
@@ -239,7 +314,50 @@ class LlamaAdapter(ArchitectureAdapter):
     attention_bias_default = False
 
 
-_ADAPTERS = (Qwen2Adapter(), LlamaAdapter())
+class MistralAdapter(ArchitectureAdapter):
+    """Mistral-family dense decoder with sliding-window GQA.
+
+    Mistral's HF config always applies ``sliding_window`` when it is present;
+    unlike Qwen2 there is no separate ``use_sliding_window`` switch.  We map
+    that behavior into the normalized ModelSpec here so the executor needs no
+    model-family branch.
+    """
+
+    family = "mistral"
+    model_types = ("mistral",)
+    architectures = ("MistralForCausalLM",)
+    attention_bias_default = False
+
+    def parse(self, hf: dict[str, Any], hf_path: Path) -> ModelSpec:
+        patched = dict(hf)
+        if patched.get("sliding_window") is not None:
+            patched["use_sliding_window"] = True
+        return self._base_spec(patched, hf_path)
+
+
+class GemmaAdapter(ArchitectureAdapter):
+    family = "gemma"
+    model_types = ("gemma",)
+    architectures = ("GemmaForCausalLM",)
+    attention_bias_default = False
+
+
+class Gemma2Adapter(ArchitectureAdapter):
+    """Gemma 2: GeGLU, offset RMSNorm, sandwich norms, softcaps and SWA."""
+
+    family = "gemma2"
+    model_types = ("gemma2",)
+    architectures = ("Gemma2ForCausalLM",)
+    attention_bias_default = False
+
+
+_ADAPTERS = (
+    Qwen2Adapter(),
+    LlamaAdapter(),
+    MistralAdapter(),
+    GemmaAdapter(),
+    Gemma2Adapter(),
+)
 
 
 def get_adapter(
@@ -274,7 +392,10 @@ def load_model_spec(hf_path: Path | str) -> ModelSpec:
 
 __all__ = [
     "ArchitectureAdapter",
+    "Gemma2Adapter",
+    "GemmaAdapter",
     "LlamaAdapter",
+    "MistralAdapter",
     "ModelSpec",
     "Qwen2Adapter",
     "build_model_config",
