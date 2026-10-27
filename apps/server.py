@@ -21,6 +21,7 @@ if str(ROOT) not in sys.path:
 from apps.paged_scheduler import PagedBatchScheduler
 from apps.runtime import DEFAULT_CHECKPOINT, QwenSm86Runtime
 from apps.scheduler import DynamicBatchScheduler
+from deepinfer.engine.kv_cache import CacheOutOfMemoryError
 from deepinfer.engine.metrics import EngineMetrics
 
 MODEL_ID = "deepinfer-sm86-7b-mixed"
@@ -54,6 +55,14 @@ def _text_response(
     handler.wfile.write(encoded)
 
 
+def _usage(prompt_tokens: int, completion_tokens: int) -> dict[str, int]:
+    return {
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": prompt_tokens + completion_tokens,
+    }
+
+
 def _completion_payload(
     text: str,
     prompt_tokens: int,
@@ -72,12 +81,79 @@ def _completion_payload(
                 "finish_reason": finish_reason,
             }
         ],
-        "usage": {
-            "prompt_tokens": prompt_tokens,
-            "completion_tokens": completion_tokens,
-            "total_tokens": prompt_tokens + completion_tokens,
-        },
+        "usage": _usage(prompt_tokens, completion_tokens),
     }
+
+
+def _text_completion_payload(
+    text: str,
+    prompt_tokens: int,
+    completion_tokens: int,
+    finish_reason: str = "stop",
+) -> dict[str, Any]:
+    return {
+        "id": f"cmpl-{uuid.uuid4().hex}",
+        "object": "text_completion",
+        "created": int(time.time()),
+        "model": MODEL_ID,
+        "choices": [
+            {
+                "index": 0,
+                "text": text,
+                "logprobs": None,
+                "finish_reason": finish_reason,
+            }
+        ],
+        "usage": _usage(prompt_tokens, completion_tokens),
+    }
+
+
+def _parse_stop(body: dict[str, Any]) -> str | list[str] | None:
+    stop = body.get("stop")
+    if stop is None:
+        return None
+    if isinstance(stop, str):
+        return stop
+    if isinstance(stop, list) and all(isinstance(item, str) for item in stop):
+        return stop
+    raise ValueError("stop must be a string or an array of strings")
+
+
+def _stop_values(body: dict[str, Any]) -> list[str]:
+    stop = _parse_stop(body)
+    if stop is None:
+        return []
+    return [stop] if isinstance(stop, str) else list(stop)
+
+
+def _truncate_stop(text: str, stops: list[str]) -> tuple[str, str | None]:
+    hits = [(text.find(stop), stop) for stop in stops if stop in text]
+    if not hits:
+        return text, None
+    index, matched = min(hits, key=lambda item: item[0])
+    return text[:index], matched
+
+
+def _filter_stop_stream(stream: Any, stops: list[str]) -> Any:
+    """Yield stream deltas while withholding a possible stop sequence tail."""
+    buffer = ""
+    emitted = 0
+    holdback = max((len(stop) for stop in stops), default=0)
+    holdback = max(0, holdback - 1)
+    for delta in stream:
+        buffer += delta
+        truncated, matched = _truncate_stop(buffer, stops)
+        if matched is not None:
+            if len(truncated) > emitted:
+                yield truncated[emitted:]
+            return matched
+        visible_end = max(0, len(buffer) - holdback)
+        if visible_end > emitted:
+            yield buffer[emitted:visible_end]
+            emitted = visible_end
+    if len(buffer) > emitted:
+        yield buffer[emitted:]
+    return None
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -90,6 +166,10 @@ class Handler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", "0"))
         payload = self.rfile.read(length)
         return json.loads(payload.decode("utf-8"))
+
+    def _tenant_id(self, body: dict[str, Any]) -> str:
+        header = self.headers.get("X-Tenant-ID", "")
+        return str(header or body.get("user") or "")
 
     def _messages(self, body: dict[str, Any]) -> list[dict[str, str]]:
         messages = body.get("messages")
@@ -113,7 +193,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self) -> None:
         self.send_response(HTTPStatus.NO_CONTENT)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        self.send_header(
+            "Access-Control-Allow-Headers",
+            "Content-Type, Authorization, X-Tenant-ID",
+        )
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.end_headers()
 
@@ -180,8 +263,15 @@ class Handler(BaseHTTPRequestHandler):
             top_k=int(body.get("top_k", 50)),
         )
         first = True
+        filtered = _filter_stop_stream(stream, _stop_values(body))
+        stop_sequence = None
         try:
-            for delta in stream:
+            while True:
+                try:
+                    delta = next(filtered)
+                except StopIteration as done:
+                    stop_sequence = done.value
+                    break
                 chunk = {
                     "id": request_id,
                     "object": "chat.completion.chunk",
@@ -201,14 +291,114 @@ class Handler(BaseHTTPRequestHandler):
                 }
                 first = False
                 self._sse(chunk)
+            finish_reason = "stop"
+            if (
+                stop_sequence is None
+                and RUNTIME.last_stats.completion_tokens >= max_tokens
+            ):
+                finish_reason = "length"
             final = {
                 "id": request_id,
                 "object": "chat.completion.chunk",
                 "created": created,
                 "model": MODEL_ID,
-                "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+                "choices": [
+                    {
+                        "index": 0,
+                        "delta": {},
+                        "finish_reason": finish_reason,
+                    }
+                ],
             }
             self._sse(final)
+            self.wfile.write(b"data: [DONE]\n\n")
+            self.wfile.flush()
+            self.close_connection = True
+        finally:
+            stream.close()
+
+    def _completions_prompt(self, body: dict[str, Any]) -> str:
+        prompt = body.get("prompt")
+        if isinstance(prompt, list):
+            if len(prompt) != 1 or not isinstance(prompt[0], str):
+                raise ValueError(
+                    "only one string prompt is supported per /v1/completions request"
+                )
+            prompt = prompt[0]
+        if not isinstance(prompt, str):
+            raise TypeError("prompt must be a string")
+        return prompt
+
+    def _stream_completion(
+        self,
+        body: dict[str, Any],
+        prompt: str,
+        max_tokens: int,
+    ) -> None:
+        assert RUNTIME is not None
+        request_id = f"cmpl-{uuid.uuid4().hex}"
+        created = int(time.time())
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "close")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        stream = RUNTIME.stream_generate(
+            None,
+            prompt=prompt,
+            max_new_tokens=max_tokens,
+            temperature=float(body.get("temperature", 0.0)),
+            top_p=float(body.get("top_p", 0.95)),
+            top_k=int(body.get("top_k", 50)),
+        )
+        filtered = _filter_stop_stream(stream, _stop_values(body))
+        stop_sequence = None
+        try:
+            while True:
+                try:
+                    delta = next(filtered)
+                except StopIteration as done:
+                    stop_sequence = done.value
+                    break
+                self._sse(
+                    {
+                        "id": request_id,
+                        "object": "text_completion",
+                        "created": created,
+                        "model": MODEL_ID,
+                        "choices": [
+                            {
+                                "index": 0,
+                                "text": delta,
+                                "logprobs": None,
+                                "finish_reason": None,
+                            }
+                        ],
+                    }
+                )
+            finish_reason = "stop"
+            if (
+                stop_sequence is None
+                and RUNTIME.last_stats.completion_tokens >= max_tokens
+            ):
+                finish_reason = "length"
+            self._sse(
+                {
+                    "id": request_id,
+                    "object": "text_completion",
+                    "created": created,
+                    "model": MODEL_ID,
+                    "choices": [
+                        {
+                            "index": 0,
+                            "text": "",
+                            "logprobs": None,
+                            "finish_reason": finish_reason,
+                        }
+                    ],
+                }
+            )
             self.wfile.write(b"data: [DONE]\n\n")
             self.wfile.flush()
             self.close_connection = True
@@ -230,6 +420,8 @@ class Handler(BaseHTTPRequestHandler):
             top_p=float(body.get("top_p", 0.95)),
             top_k=int(body.get("top_k", 50)),
             stream=stream,
+            stop=_parse_stop(body),
+            tenant=self._tenant_id(body),
         )
         if not stream:
             result = request.future.result(timeout=600)
@@ -280,6 +472,12 @@ class Handler(BaseHTTPRequestHandler):
                 }
                 first = False
                 self._sse(chunk)
+            if request.future.done() and not request.future.cancelled():
+                error = request.future.exception()
+                if error is not None:
+                    self._sse_error(request_id, error)
+                    completed = True
+                    return
             final = {
                 "id": request_id,
                 "object": "chat.completion.chunk",
@@ -308,46 +506,216 @@ class Handler(BaseHTTPRequestHandler):
                 if cancel is not None:
                     cancel(request)
 
+    def _scheduled_completion(
+        self,
+        body: dict[str, Any],
+        prompt: str,
+        max_tokens: int,
+        stream: bool,
+    ) -> None:
+        assert SCHEDULER is not None
+        submit_completion = getattr(SCHEDULER, "submit_completion", None)
+        if submit_completion is None:
+            raise ValueError(
+                "/v1/completions requires the paged scheduler; restart with "
+                "--scheduler --scheduler-backend paged"
+            )
+        request = submit_completion(
+            prompt,
+            max_new_tokens=max_tokens,
+            temperature=float(body.get("temperature", 0.0)),
+            top_p=float(body.get("top_p", 0.95)),
+            top_k=int(body.get("top_k", 50)),
+            stream=stream,
+            stop=_parse_stop(body),
+            tenant=self._tenant_id(body),
+        )
+        if not stream:
+            result = request.future.result(timeout=600)
+            _json_response(
+                self,
+                HTTPStatus.OK,
+                _text_completion_payload(
+                    result.text,
+                    result.prompt_tokens,
+                    result.completion_tokens,
+                    result.finish_reason,
+                ),
+            )
+            return
+
+        request_id = f"cmpl-{uuid.uuid4().hex}"
+        created = int(time.time())
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "close")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        assert request.stream_queue is not None
+        completed = False
+        try:
+            while True:
+                delta = request.stream_queue.get(timeout=600)
+                if delta is None:
+                    break
+                self._sse(
+                    {
+                        "id": request_id,
+                        "object": "text_completion",
+                        "created": created,
+                        "model": MODEL_ID,
+                        "choices": [
+                            {
+                                "index": 0,
+                                "text": delta,
+                                "logprobs": None,
+                                "finish_reason": None,
+                            }
+                        ],
+                    }
+                )
+            if request.future.done() and not request.future.cancelled():
+                error = request.future.exception()
+                if error is not None:
+                    self._sse_error(request_id, error)
+                    completed = True
+                    return
+            self._sse(
+                {
+                    "id": request_id,
+                    "object": "text_completion",
+                    "created": created,
+                    "model": MODEL_ID,
+                    "choices": [
+                        {
+                            "index": 0,
+                            "text": "",
+                            "logprobs": None,
+                            "finish_reason": (
+                                getattr(request, "finish_reason", "") or "stop"
+                            ),
+                        }
+                    ],
+                }
+            )
+            self.wfile.write(b"data: [DONE]\n\n")
+
+            self.wfile.flush()
+            self.close_connection = True
+            completed = True
+        except (queue.Empty, BrokenPipeError, ConnectionResetError):
+            return
+        finally:
+            if not completed and not request.finished:
+                cancel = getattr(SCHEDULER, "cancel", None)
+                if cancel is not None:
+                    cancel(request)
+
     def do_POST(self) -> None:
         assert RUNTIME is not None
-        if self.path != "/v1/chat/completions":
+        if self.path not in ("/v1/chat/completions", "/v1/completions"):
             _json_response(self, HTTPStatus.NOT_FOUND, {"error": "not found"})
             return
         try:
             body = self._read_json()
-            messages = self._messages(body)
-            max_tokens = int(body.get("max_tokens") or 256)
+            max_tokens = int(
+                body.get("max_tokens")
+                or body.get("max_completion_tokens")
+                or 256
+            )
             stream = bool(body.get("stream", False))
+            is_chat = self.path == "/v1/chat/completions"
+            messages = self._messages(body) if is_chat else None
+            prompt = None if is_chat else self._completions_prompt(body)
         except Exception as exc:  # noqa: BLE001
             _json_response(self, HTTPStatus.BAD_REQUEST, {"error": str(exc)})
             return
 
         try:
+            if is_chat:
+                assert messages is not None
+                if SCHEDULER is not None:
+                    self._scheduled_chat(body, messages, max_tokens, stream)
+                    return
+                if stream:
+                    self._stream_chat(body, messages, max_tokens)
+                    return
+                text = RUNTIME.generate(
+                    messages,
+                    max_new_tokens=max_tokens,
+                    temperature=float(body.get("temperature", 0.0)),
+                    top_p=float(body.get("top_p", 0.95)),
+                    top_k=int(body.get("top_k", 50)),
+                )
+                stats = RUNTIME.last_stats
+                text, matched_stop = _truncate_stop(text, _stop_values(body))
+                finish_reason = "stop"
+                if matched_stop is None and stats.completion_tokens >= max_tokens:
+                    finish_reason = "length"
+                _json_response(
+                    self,
+                    HTTPStatus.OK,
+                    _completion_payload(
+                        text,
+                        stats.prompt_tokens,
+                        stats.completion_tokens,
+                        finish_reason,
+                    ),
+                )
+                return
+
+            assert prompt is not None
             if SCHEDULER is not None:
-                self._scheduled_chat(body, messages, max_tokens, stream)
+                self._scheduled_completion(body, prompt, max_tokens, stream)
                 return
             if stream:
-                self._stream_chat(body, messages, max_tokens)
+                self._stream_completion(body, prompt, max_tokens)
                 return
             text = RUNTIME.generate(
-                messages,
+                None,
+                prompt=prompt,
                 max_new_tokens=max_tokens,
                 temperature=float(body.get("temperature", 0.0)),
                 top_p=float(body.get("top_p", 0.95)),
                 top_k=int(body.get("top_k", 50)),
             )
             stats = RUNTIME.last_stats
+            text, matched_stop = _truncate_stop(text, _stop_values(body))
+            finish_reason = "stop"
+            if matched_stop is None and stats.completion_tokens >= max_tokens:
+                finish_reason = "length"
             _json_response(
                 self,
                 HTTPStatus.OK,
-                _completion_payload(text, stats.prompt_tokens, stats.completion_tokens),
+                _text_completion_payload(
+                    text,
+                    stats.prompt_tokens,
+                    stats.completion_tokens,
+                    finish_reason,
+                ),
             )
         except (BrokenPipeError, ConnectionResetError):
             return
+        except CacheOutOfMemoryError as exc:
+            _json_response(
+                self,
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                {"error": str(exc), "type": "insufficient_kv_memory"},
+            )
         except Exception as exc:  # noqa: BLE001
             traceback.print_exc()
+            status = (
+                HTTPStatus.SERVICE_UNAVAILABLE
+                if "queue is full" in str(exc)
+                else HTTPStatus.BAD_REQUEST
+            )
             try:
-                _json_response(self, HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+                _json_response(
+                    self,
+                    status,
+                    {"error": str(exc), "type": type(exc).__name__},
+                )
             except Exception as response_exc:  # noqa: BLE001
                 print(
                     f"[http] failed to send error response: {response_exc}", flush=True
@@ -380,6 +748,13 @@ def main() -> int:
     parser.add_argument("--max-batch-size", type=int, default=2)
     parser.add_argument("--max-num-seqs", type=int, default=4)
     parser.add_argument("--block-size", type=int, default=16)
+    parser.add_argument("--prefill-chunk-tokens", type=int, default=64)
+    parser.add_argument(
+        "--kv-cache-dtype", choices=("fp16", "int8"), default="fp16"
+    )
+    parser.add_argument("--gpu-memory-utilization", type=float, default=0.80)
+    parser.add_argument("--reserve-memory-mb", type=int, default=512)
+    parser.add_argument("--kv-budget-mb", type=int, default=None)
     parser.add_argument(
         "--kv-blocks",
         type=int,
@@ -413,8 +788,13 @@ def main() -> int:
             RUNTIME,
             max_num_seqs=args.max_num_seqs,
             block_size=args.block_size,
+            prefill_chunk_tokens=args.prefill_chunk_tokens,
+            kv_cache_dtype=args.kv_cache_dtype,
             num_gpu_blocks=args.kv_blocks,
             prefix_cache_blocks=args.prefix_cache_blocks,
+            gpu_memory_utilization=args.gpu_memory_utilization,
+            reserve_memory_mb=args.reserve_memory_mb,
+            kv_budget_mb=args.kv_budget_mb,
             max_queue_size=args.max_queue_size,
             metrics=METRICS,
         )
@@ -428,7 +808,10 @@ def main() -> int:
     elif isinstance(SCHEDULER, PagedBatchScheduler):
         scheduler_summary = (
             f"paged max_seqs={args.max_num_seqs} block={args.block_size} "
-            f"kv_blocks={SCHEDULER.manager.num_blocks}"
+            f"prefill_chunk={args.prefill_chunk_tokens} "
+            f"kv_dtype={args.kv_cache_dtype} "
+            f"kv_blocks={SCHEDULER.manager.num_blocks} "
+            f"kv_bytes={SCHEDULER.memory_budget.kv_budget_bytes}"
         )
     else:
         scheduler_summary = f"static max_batch={args.max_batch_size}"

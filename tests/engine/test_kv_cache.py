@@ -246,3 +246,148 @@ def test_paged_decode_matches_dynamic_cache_with_gemma2_masks() -> None:
         )[:, -1]
 
     torch.testing.assert_close(actual, reference, atol=2e-5, rtol=2e-4)
+
+
+def test_chunked_paged_prefill_matches_full_prefill_logits() -> None:
+    torch.manual_seed(20261028)
+    model = Qwen2ForCausalLM(_tiny_cfg()).eval().requires_grad_(False)
+    prompt = torch.tensor([[1, 5, 9, 13, 17, 21, 25, 29, 33, 37, 41]])
+    prompt_length = int(prompt.shape[1])
+    manager = PagedKVCacheManager(
+        num_layers=2,
+        num_kv_heads=2,
+        head_dim=8,
+        block_size=4,
+        num_blocks=8,
+        dtype=torch.float32,
+        device="cpu",
+    )
+    blocks = manager.allocate_tokens(prompt_length)
+    paged_logits = None
+    for start in range(0, prompt_length, 4):
+        end = min(prompt_length, start + 4)
+        views = manager.make_views(
+            [blocks],
+            [start],
+            max_length=end,
+            new_tokens=end - start,
+        )
+        with torch.no_grad():
+            paged_logits = model.forward_logits(
+                prompt[:, start:end],
+                torch.arange(start, end).unsqueeze(0),
+                kv_cache=views,
+            )
+    with torch.no_grad():
+        reference = model.forward_logits(
+            prompt, torch.arange(prompt_length).unsqueeze(0)
+        )
+    assert paged_logits is not None
+    torch.testing.assert_close(
+        paged_logits[:, -1], reference[:, -1], atol=2e-5, rtol=2e-4
+    )
+
+
+def test_prefix_hash_namespace_isolates_tenants() -> None:
+    tokens = list(range(12))
+    tenant_a = PrefixCache.block_hashes(tokens, 4, namespace="tenant-a")
+    tenant_b = PrefixCache.block_hashes(tokens, 4, namespace="tenant-b")
+    unshared = PrefixCache.block_hashes(tokens, 4)
+    assert tenant_a != tenant_b
+    assert tenant_a != unshared
+    assert len(tenant_a) == 3
+
+
+def test_int8_paged_cache_roundtrip_and_scale_sidecars() -> None:
+    manager = PagedKVCacheManager(
+        num_layers=1,
+        num_kv_heads=1,
+        head_dim=2,
+        block_size=4,
+        num_blocks=4,
+        dtype=torch.float32,
+        kv_cache_dtype="int8",
+        device="cpu",
+    )
+    assert manager.key_pool.dtype == torch.int8
+    assert manager.key_scale_pool is not None
+    blocks = manager.allocate_tokens(6)
+    key = torch.randn(1, 1, 6, 2)
+    value = torch.randn(1, 1, 6, 2)
+    view = manager.make_layer_view(0, [blocks], [0], max_length=6, new_tokens=6)
+    view.update(key, value, torch.arange(6).unsqueeze(0))
+    actual_key, actual_value, valid = view.materialize()
+    assert valid.all()
+    assert torch.allclose(actual_key, key, atol=0.02, rtol=0.02)
+    assert torch.allclose(actual_value, value, atol=0.02, rtol=0.02)
+    read_key, read_value = manager.read_blocks(0, blocks, 6)
+    assert read_key is not None and read_value is not None
+    assert torch.allclose(read_key, key, atol=0.02, rtol=0.02)
+    assert torch.allclose(read_value, value, atol=0.02, rtol=0.02)
+    assert manager.block_bytes > manager.num_layers * manager.num_kv_heads
+
+
+def test_chunked_paged_prefill_int8_cache_preserves_logits() -> None:
+    torch.manual_seed(20261029)
+    model = Qwen2ForCausalLM(_tiny_cfg()).eval().requires_grad_(False)
+    prompt = torch.tensor([[1, 5, 9, 13, 17, 21, 25, 29, 33, 37, 41]])
+    prompt_length = int(prompt.shape[1])
+    manager = PagedKVCacheManager(
+        num_layers=2,
+        num_kv_heads=2,
+        head_dim=8,
+        block_size=4,
+        num_blocks=8,
+        dtype=torch.float32,
+        kv_cache_dtype="int8",
+        device="cpu",
+    )
+    blocks = manager.allocate_tokens(prompt_length)
+    paged_logits = None
+    for start in range(0, prompt_length, 4):
+        end = min(prompt_length, start + 4)
+        views = manager.make_views(
+            [blocks],
+            [start],
+            max_length=end,
+            new_tokens=end - start,
+        )
+        with torch.no_grad():
+            paged_logits = model.forward_logits(
+                prompt[:, start:end],
+                torch.arange(start, end).unsqueeze(0),
+                kv_cache=views,
+            )
+    with torch.no_grad():
+        reference = model.forward_logits(
+            prompt, torch.arange(prompt_length).unsqueeze(0)
+        )
+    assert paged_logits is not None
+    cosine = torch.nn.functional.cosine_similarity(
+        paged_logits[:, -1].flatten(), reference[:, -1].flatten(), dim=0
+    )
+    assert cosine.item() > 0.999
+    torch.testing.assert_close(
+        paged_logits[:, -1], reference[:, -1], atol=0.05, rtol=0.05
+    )
+
+
+def test_int8_read_blocks_preserves_head_and_block_order() -> None:
+    manager = PagedKVCacheManager(
+        num_layers=1,
+        num_kv_heads=2,
+        head_dim=2,
+        block_size=2,
+        num_blocks=4,
+        dtype=torch.float32,
+        kv_cache_dtype="int8",
+        device="cpu",
+    )
+    blocks = manager.allocate_tokens(4)
+    key = torch.randn(1, 2, 4, 2)
+    value = torch.randn(1, 2, 4, 2)
+    manager.write_tokens(0, blocks, key, value)
+    read_key, read_value = manager.read_blocks(0, blocks, 4)
+    assert read_key is not None and read_value is not None
+    assert torch.allclose(read_key, key, atol=0.02, rtol=0.02)
+    assert torch.allclose(read_value, value, atol=0.02, rtol=0.02)

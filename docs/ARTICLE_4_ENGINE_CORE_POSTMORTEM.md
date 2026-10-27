@@ -5,6 +5,10 @@
 > 定位：`model_executor` 之上的 engine-core 原型，不是完整 DeepInfer engine
 > 本文性质：工程复盘。重点讲清“做了什么”“为什么这样做”“哪些路走错了”，
 > 不是性能榜单。
+>
+> 后续更新：P0 chunked prefill、KV 显存预算、OpenAI completions API 和
+> tenant prefix isolation 已经落地，见
+> `docs/P0_CHUNKED_PREFILL_AND_MEMORY_BUDGET.md`。
 
 ## 1. 结论先行
 
@@ -481,8 +485,9 @@ kernel 一样做回归。
 - 新请求的 prompt 长度差异大，micro-batch 很容易制造峰值；
 - 没有 GPU 环境时无法验证 paged prefill 的显存和吞吐边界。
 
-这是一个明确的性能缺口，不把它伪装成“已完成”。下一步应该在固定 KV pool 和
-观测指标上做 chunked prefill，而不是先写一个没有验证的 overlap 调度器。
+这是一个明确的性能缺口，不把它伪装成“已完成”。后续 P0 已在固定的 KV pool 和
+观测指标上实现了 chunked prefill 与 decode 交替调度，但还没有做单次 forward 内
+真正的 prefill+decode mixed batch。
 
 ## 6. 哪些事情仍然没有做
 
@@ -492,7 +497,8 @@ kernel 一样做回归。
 |---|---|
 | paged native GQA CUDA kernel | ❌ 仍是 SDPA reference path |
 | 动态 batch CUDA Graph | ❌ 可变 shape 下不可用 |
-| chunked prefill / prefill-decode overlap | ❌ prefill 仍串行 |
+| chunked prefill | ✅ 后续 P0 已实现，按 chunk 与 decode 交替 |
+| 单次 forward 内 prefill+decode 混合 | ❌ 仍未实现 |
 | preemption / CPU KV swap | ❌ 只做单请求 OOM 隔离 |
 | MoE / MLA 执行层 | ❌ 未实现 |
 | GPTQ / AWQ / GGUF 离线转换导入 | ✅ 已支持 -> W4A16 layered |

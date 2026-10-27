@@ -142,9 +142,26 @@ class QwenSm86Runtime:
                 model_class = w4a16_module.Qwen2W4A16ForCausalLM
             group_size = 128
             manifest_path = self.checkpoint / "manifest.json"
-            if manifest_path.is_file():
-                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-                group_size = int(manifest.get("group_size", group_size))
+            if not manifest_path.is_file():
+                from deepinfer.quantization.formats import detect_source_format
+
+                try:
+                    info = detect_source_format(self.checkpoint)
+                    detail = (
+                        f"detected {info.format}; convert it first with "
+                        f"scripts/import_quantized_checkpoint.py "
+                        f"--source {self.checkpoint} --output <output>"
+                    )
+                except Exception:  # noqa: BLE001
+                    detail = (
+                        "expected a layered W4A16 directory containing manifest.json"
+                    )
+                raise ValueError(
+                    f"checkpoint {self.checkpoint} is not a native SM86 W4A16 "
+                    f"checkpoint: {detail}"
+                )
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            group_size = int(manifest.get("group_size", group_size))
             self.model = model_class.from_checkpoint(
                 self.checkpoint,
                 device=device,
@@ -282,8 +299,9 @@ class QwenSm86Runtime:
 
     def generate(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, str]] | None = None,
         *,
+        prompt: str | None = None,
         max_new_tokens: int = 256,
         temperature: float = 0.0,
         top_p: float = 0.95,
@@ -291,6 +309,7 @@ class QwenSm86Runtime:
     ) -> str:
         for _ in self.stream_generate(
             messages,
+            prompt=prompt,
             max_new_tokens=max_new_tokens,
             temperature=temperature,
             top_p=top_p,
@@ -301,19 +320,25 @@ class QwenSm86Runtime:
 
     def stream_generate(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, str]] | None = None,
         *,
+        prompt: str | None = None,
         max_new_tokens: int = 256,
         temperature: float = 0.0,
         top_p: float = 0.95,
         top_k: int = 50,
     ) -> Iterator[str]:
         with self.lock:
-            prompt_text = self.tokenizer.apply_chat_template(
-                messages,
-                tokenize=False,
-                add_generation_prompt=True,
-            )
+            if prompt is not None:
+                prompt_text = prompt
+            elif messages is not None:
+                prompt_text = self.tokenizer.apply_chat_template(
+                    messages,
+                    tokenize=False,
+                    add_generation_prompt=True,
+                )
+            else:
+                raise ValueError("either messages or prompt must be provided")
             encoded = self.tokenizer(prompt_text, return_tensors="pt")
             input_ids = encoded["input_ids"].to(self.device)
             prompt_length = int(input_ids.shape[1])

@@ -31,8 +31,8 @@ engine。当前重点是：
 > 这些结果均为 `model_executor` 级；`full_engine=false`、`native_runner_ready=false`。
 > 不能把它们写成“完整 DeepInfer engine 已支持 Qwen2.5”。当前新增的是
 > engine-core 原型，不是官方 engine 接入。上表是旧有单请求 / 固定槽位路径的
-> 实测；新 paged scheduler 的 GPU 吞吐需用 `scripts/bench_paged_scheduler.py`
-> 在目标机器上重新测量，本仓库不预填未实测数字。
+> 实测；新 paged scheduler 的 TTFT/TPOT/并发吞吐需用
+> `scripts/bench_paged_scheduler.py` 在目标机器上重新测量，本仓库不预填未实测数字。
 
 ## 本次更新（2026-10-27）
 
@@ -43,9 +43,19 @@ engine。当前重点是：
   - KV OOM 隔离：单个请求失败不会污染其他 batch 成员。
 - 新增 `apps/paged_scheduler.py`：
   - 可变 batch 连续批处理，`max_num_seqs` 可配置；
+  - chunked prefill：prefill 按 `--prefill-chunk-tokens` 分块，与 decode 交替；
+  - 请求状态机 `PREFILL / DECODE`，多 prefill round-robin 公平调度；
   - 短请求按需分配 block，结束后立即回收；
-  - 单请求 OOM / cancel 隔离；
+  - admission 时预留 prompt + output block，KV OOM 请求级隔离；
+  - runtime OOM / cancel 隔离；
   - prefix-cache 命中统计与 Prometheus 指标。
+- 新增 `deepinfer/engine/memory_budget.py`：
+  - 根据模型权重、CUDA 空闲显存、reserve、utilization 计算 KV block 数；
+  - `/health` 输出 memory_budget / KV usage / prefill / decode / queued 状态。
+- 网关新增 `/v1/completions`、stop 截断、`user` / `X-Tenant-ID` 租户隔离；
+- 新增 `--kv-cache-dtype int8`：paged K/V 用 int8 存储，FP16 scale sidecar；
+- 新增 `scripts/probe_model.py`，自动探测 HF/量化模型目录的支持状态；
+- 新增 `docs/P0_CHUNKED_PREFILL_AND_MEMORY_BUDGET.md`。
 - 通用 decoder 增加绝对 position 的 causal mask、paged mask 和 sliding-window mask；
 - 新增 Mistral sliding-window 架构；
 - 新增 Gemma / Gemma 2 dense 架构：
@@ -56,8 +66,8 @@ engine。当前重点是：
 - 网关新增 `GET /metrics`、有界队列、流式请求取消和更完整的 `/health`；
 - 新增 CPU 正确性回归：block/prefix/paged cache、paged batch logits、
   paged scheduler、Mistral/Gemma/Gemma2 HF logits 对齐；
-- 新增 `scripts/bench_paged_scheduler.py`，用于在目标 GPU 上实测串行 vs
-  连续批处理吞吐；
+- 新增 `scripts/bench_paged_scheduler.py`，用于在目标 GPU 上做
+  1/2/4/8 并发 sweep，记录 TTFT/TPOT/吞吐/OOM/prefix 命中；
 - 新增工程复盘文章 `docs/ARTICLE_4_ENGINE_CORE_POSTMORTEM.md`，记录实现过程和
   走过的弯路；
 - 新增量化格式兼容层 `deepinfer/quantization/`：
@@ -121,8 +131,15 @@ lm_head           : 3-bit, group 128
 - paged/elastic KV cache：按 token 分块分配、引用计数、OOM 隔离；
 - 完整 prompt block 的 prefix cache（LRU、跨请求共享）；
 - 可变 batch 连续批处理调度器（1..max_num_seqs，请求动态加入/退出）；
-- paged attention 参考路径、tensor-only validity mask、sliding-window mask；
-- `/metrics` Prometheus 指标、健康检查、队列上限、流式请求取消；
+- chunked prefill：长 prompt 按 token 块处理，decode 与 prefill 交替调度；
+- paged attention 参考路径、T>1 paged prefill、tensor-only validity mask、
+  sliding-window mask；
+- 启动时 KV block 显存预算、请求级 block 预留、admission/runtime OOM 隔离；
+- 可选 `--kv-cache-dtype int8` 的 paged KV 存储（FP16 scale sidecar）；
+- TTFT / TPOT / prefill step / decode batch / KV OOM Prometheus 指标；
+- prefix cache 按 tenant hash 隔离（`user` / `X-Tenant-ID`）；
+- OpenAI `/v1/chat/completions`、`/v1/completions`、SSE、stop、流式取消；
+- `scripts/probe_model.py` 模型目录支持探测；
 - 构造期 fused qkv / fused gate-up，避免加载后替换造成显存碎片；
 - 7B 流式量化、按层 safetensors checkpoint；
 - 3-bit lm_head；
@@ -146,8 +163,16 @@ lm_head           : 3-bit, group 128
 | Gemma 2 | ✅ | sandwich norm、softcap、alternating SWA |
 | paged / elastic KV | ✅ | block table、引用计数、OOM 隔离 |
 | prefix cache | ✅ | 完整 prompt block LRU 共享 |
-| continuous batching | ✅ | 可变 batch decode；prefill 仍串行 |
-| Prometheus / health | ✅ | `/metrics`、block/prefix/queue 指标 |
+| continuous batching | ✅ | 可变 batch decode + chunked prefill 交替 |
+| KV memory budget | ✅ | 启动预算、block 预留、admission/runtime OOM 隔离 |
+| OpenAI `/v1/completions` | ✅ | prompt、stream、stop、cancel、tenant |
+| TTFT / TPOT metrics | ✅ | mean/p50/p95 benchmark，Prometheus summary |
+| model directory probe | ✅ | supported / runtime_ready / 明确拒绝原因 |
+| tenant prefix isolation | ✅ | `user` / `X-Tenant-ID` 命名空间 |
+| native paged GQA kernel | ❌ | 当前 paged attention 仍是 SDPA reference |
+| KV INT8 paged cache | ✅ | 参考路径，带 FP16 K/V scales |
+| KV FP8 / CPU cold-block offload | ❌ | 尚未实现 |
+| Prometheus / health | ✅ | block/prefix/queue/prefill/decode 指标 |
 | MoE / MLA | ❌ | 未实现执行层 |
 | GPTQ | ✅ | 2/4/8-bit、group quant、`g_idx`/desc_act -> W4A16 |
 | AWQ | ✅ | AutoAWQ GEMM 4-bit -> W4A16 |
@@ -175,7 +200,9 @@ deepinfer/
   quantization/gguf_source.py            GGUF metadata/tensor 映射
   quantization/convert.py               任意支持格式 -> layered W4A16
   engine/kv_cache.py                    block allocator、paged KV、prefix cache
-  engine/metrics.py                     Prometheus 文本指标
+  engine/memory_budget.py               启动显存预算与 KV block 规划
+  engine/metrics.py                     TTFT/TPOT/OOM/queue Prometheus 指标
+  model_probe.py                        HF/量化目录能力探测
   model_executor/models/qwen2.py        通用 decoder、GQA、paged/static cache
   model_executor/models/qwen2_w4a16.py  W4A16 + GQA CUDA 后端与通用分层加载
   model_executor/models/mistral*.py     Mistral sliding-window adapter
@@ -210,12 +237,16 @@ scripts/
   export_sm86_kernels.py                导出 .cu 源文件
   bench_paged_scheduler.py              串行 vs 分页连续批处理 GPU 基准
   import_quantized_checkpoint.py        GPTQ/AWQ/GGUF -> W4A16 CLI
+  probe_model.py                        模型目录支持状态探测
 tests/
   quantization/test_dequant.py          GPTQ/AWQ 解包与反量化
   quantization/test_convert_hf.py       GPTQ/AWQ 端到端转换
   quantization/test_convert_gguf.py     GGUF 端到端与 Q4_K block
   engine/test_kv_cache.py               block/prefix/paged cache 正确性
-  apps/test_paged_scheduler.py          paged 调度器端到端测试
+  apps/test_paged_scheduler.py          chunked prefill / decode / OOM 测试
+  apps/test_server_api.py               OpenAI chat/completions API 测试
+  engine/test_memory_budget.py          KV 显存预算测试
+  models/test_model_probe.py            模型目录探测测试
   models/test_qwen2_source_integration.py
   models/test_model_spec_mistral.py
   models/test_model_spec_gemma.py
@@ -236,6 +267,7 @@ docs/
   ARTICLE_4_ENGINE_CORE_POSTMORTEM.md           engine-core 改造复盘与弯路记录
   QUANTIZATION_FORMAT_COMPATIBILITY.md          量化格式兼容与转换说明
   ARTICLE_5_QUANTIZATION_FORMAT_COMPATIBILITY.md 量化格式改造复盘与弯路
+  P0_CHUNKED_PREFILL_AND_MEMORY_BUDGET.md       P0 低延迟与显存预算说明
   PERSONAL_PRODUCTIVITY.md                     从网关到桌面快捷操作
   PRODUCTIVITY_BENCHMARK_3B_7B_OLLAMA.md       3B/7B/Ollama 完整基准
   results/                                     选定的可复现结果
@@ -349,6 +381,8 @@ python apps\server.py `
   --max-cache 256 `
   --scheduler --scheduler-backend paged `
   --max-num-seqs 4 --block-size 16 --prefix-cache-blocks 16 `
+  --prefill-chunk-tokens 64 --kv-cache-dtype fp16 `
+  --gpu-memory-utilization 0.80 --reserve-memory-mb 512 `
   --port 18001
 ```
 
@@ -382,6 +416,7 @@ GET  http://127.0.0.1:18000/health
 GET  http://127.0.0.1:18000/metrics
 GET  http://127.0.0.1:18000/v1/models
 POST http://127.0.0.1:18000/v1/chat/completions
+POST http://127.0.0.1:18000/v1/completions
 ```
 
 OpenAI 客户端把 Base URL 设为：
@@ -402,6 +437,29 @@ python apps\ask.py --server http://127.0.0.1:18000 "用一句话解释 CUDA Grap
 curl.exe -N http://127.0.0.1:18000/v1/chat/completions `
   -H "Content-Type: application/json" `
   -d "{\"model\":\"deepinfer-sm86-7b-mixed\",\"messages\":[{\"role\":\"user\",\"content\":\"写三句话解释 CUDA Graph\"}],\"max_tokens\":64,\"stream\":true}"
+```
+
+Completion API（`/v1/completions`）：
+
+```powershell
+curl.exe http://127.0.0.1:18000/v1/completions `
+  -H "Content-Type: application/json" `
+  -d "{\"model\":\"deepinfer-sm86-7b-mixed\",\"prompt\":\"用一句话解释 PagedAttention\",\"max_tokens\":32,\"stop\":[\"\n\n\"]}"
+```
+
+按租户隔离 prefix cache：
+
+```powershell
+curl.exe http://127.0.0.1:18000/v1/chat/completions `
+  -H "Content-Type: application/json" `
+  -H "X-Tenant-ID: user-123" `
+  -d "{\"model\":\"deepinfer-sm86-7b-mixed\",\"messages\":[{\"role\":\"user\",\"content\":\"你好\"}]}"
+```
+
+模型目录能力探测：
+
+```powershell
+python scripts\probe_model.py D:\Qwen3B-W4A16-SM86
 ```
 
 桌面剪贴板动作：
@@ -427,7 +485,9 @@ curl.exe -N http://127.0.0.1:18000/v1/chat/completions `
 | 7B prefill | 3.06 秒（隔离）；53 秒以上（paging） |
 | 无 scheduler | 单请求串行 |
 | `--scheduler-backend static` | 固定槽位 2-way 连续批处理（旧路径） |
-| `--scheduler-backend paged` | 可变 batch、分页 KV、prefix cache |
+| `--scheduler-backend paged` | 可变 batch、chunked prefill、分页 KV、prefix cache |
+| `--prefill-chunk-tokens` | 控制长 prompt 对 decode TPOT 的干扰 |
+| `/v1/completions` | prompt / stream / stop / cancel / tenant |
 
 默认 256 context 适合总结选中段落、改写、翻译、提取待办。分页调度器允许
 `--max-cache > 256`，但 4 GB 显卡仍受物理显存、prefill 激活和模型权重约束；
@@ -596,8 +656,10 @@ python scripts\export_sm86_kernels.py
 - 没有接入官方 `worker/cache_engine.py` 和原生 Sampler；
 - paged attention 当前是 PyTorch SDPA reference path，不是 paged native GQA；
 - 可变 batch 下没有 CUDA Graph；dense static-cache 路径仍支持 Graph；
-- prefill 仍是串行，没有 chunked prefill / prefill-decode 混合流；
-- 没有 preemption、CPU KV swap、beam search 或 speculative decoding；
+- chunked prefill 与 decode 是交替执行，不是同一次 forward 内真正混合；
+- 每个 scheduling iteration 只推进一个 prefill chunk；
+- 没有 preemption、CPU KV swap、KV FP8、beam search 或 speculative decoding；
+- KV INT8 是 paged 参考路径的存储优化，未融合进 native attention kernel；
 - prefill 计算仍是分块 dequant + cuBLAS，不是 tiled W4/W3 GEMM；
 - GPU harness 在 Python 3.10 下验证；Python 3.12 GPU package 验证未完成；
 - 3-bit MLP/lm_head 是有损量化，短输出可读不代表与 BF16 等价；
@@ -608,7 +670,8 @@ python scripts\export_sm86_kernels.py
 - 尚未实现 activation quantization、SmoothQuant、MoE 或 MLA 执行层；
 - 没有 tensor/pipeline parallel 或跨厂商后端抽象；
 - 默认 context 上限仍为 256 token；paged scheduler 可提高 `--max-cache`，
-  但 4 GB 物理显存和长 prompt prefill 仍是硬约束；
+  但 4 GB 物理显存、长 prompt prefill 和 chunk size 仍是硬约束；
+- tenant 前缀隔离是 hash namespace 隔离，不是进程级/加密级隐私隔离；
 - 3B 与 7B 网关不能同时常驻 4 GB；
 - 桌面快捷操作依赖 Windows PowerShell 剪贴板和本地 HTTP 网关。
 
@@ -633,7 +696,10 @@ python scripts\export_sm86_kernels.py
 - 工程复盘与弯路记录：`docs/ARTICLE_4_ENGINE_CORE_POSTMORTEM.md`
 - 量化格式兼容与转换：`docs/QUANTIZATION_FORMAT_COMPATIBILITY.md`
 - 量化格式改造复盘：`docs/ARTICLE_5_QUANTIZATION_FORMAT_COMPATIBILITY.md`
-- GPU 吞吐基准脚本：`scripts/bench_paged_scheduler.py`
+- P0 低延迟/显存预算说明：
+  `docs/P0_CHUNKED_PREFILL_AND_MEMORY_BUDGET.md`
+- GPU TTFT/TPOT/并发 benchmarks：`scripts/bench_paged_scheduler.py`
+- 模型目录探测：`scripts/probe_model.py`
 - 结构化结果：`docs/results/`
 
 ---

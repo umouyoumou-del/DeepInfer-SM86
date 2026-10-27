@@ -185,16 +185,18 @@ while not stopped:
 | 长上下文 | 受 GQA kernel 256 限制 | paged 路径可超过 256 |
 | 指标/取消 | 基础 | Prometheus + stream cancel |
 
-### 5.1 prefill 仍是串行
+### 5.1 Chunked prefill（后续 P0 已补）
 
-当前为了保证 4 GB 上峰值可预测，每个新请求先单独 prefill，然后加入 decode
-batch。也就是说：
+后续 P0 改造已把 prefill 改成固定 token chunk，并在 scheduler loop 中与 decode
+交替执行：
 
-- decode 已经连续批处理；
-- prefill 还没有 chunked prefill / prefill-decode 混合；
-- 最坏情况下长 prompt prefill 会阻塞已有 decode 请求。
+- 每个请求有 `PREFILL` / `DECODE` 状态；
+- prefill 直接写入 paged block，不再保留整段 dense prefill cache；
+- 多个 prefill 请求 round-robin；
+- 每个 loop 先执行 batched decode，再推进一个 prefill chunk；
+- 详细说明见 `docs/P0_CHUNKED_PREFILL_AND_MEMORY_BUDGET.md`。
 
-这是下一阶段最值得做的性能工作之一。
+剩余缺口是：prefill 与 decode 还没有在**同一次 forward** 内真正混合。
 
 ### 5.2 显存不足策略
 
@@ -377,13 +379,12 @@ block 状态。**本仓库当前没有伪造这次 GPU 基准结果**；需要�
 - paged attention 目前是 PyTorch SDPA reference path，不是 paged native GQA
   CUDA kernel；
 - 动态 batch 下没有 CUDA Graph；
-- prefill 串行，没有 chunked prefill；
+- chunked prefill 与 decode 是交替执行，不是同一次 forward 内混合；
 - 没有 preemption / CPU KV swap；
 - 没有 beam search、speculative decoding；
 - 没有 MoE / MLA 执行层；
 - 已支持 GPTQ / AWQ / GGUF 离线转换导入，但没有原格式零拷贝直跑；
-- 没有 a
-ctivation quantization / SmoothQuant；
+- 没有 activation quantization / SmoothQuant；
 - 没有 tensor/pipeline parallel；
 - 不是 DeepInfer 官方 `worker/cache_engine.py` / Sampler 的完整接入；
 - 4 GB 上长上下文和 batch 大小仍然受物理显存硬约束。

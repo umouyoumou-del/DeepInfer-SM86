@@ -24,12 +24,27 @@ _HELP = {
     "prefill_seconds_sum": "Cumulative prefill latency in seconds.",
     "decode_step_seconds_sum": "Cumulative decode-step latency in seconds.",
     "decode_steps_total": "Number of batched decode steps.",
+    "prefill_steps_total": "Number of chunked prefill steps.",
+    "prefill_chunk_tokens_total": "Prompt tokens processed by chunked prefill.",
+    "decode_tokens_total": "Tokens emitted by the batched decode loop.",
+    "kv_cache_oom_total": "Requests rejected because KV blocks were exhausted.",
+    "runtime_oom_total": "Requests failed by a CUDA/runtime out-of-memory error.",
+    "request_rejected_total": "Requests rejected by admission control.",
+    "stop_sequence_total": "Generations stopped by a configured stop string.",
+    "ttft_seconds": "Time to first generated token in seconds.",
+    "tpot_seconds": "Time per output token after the first token, in seconds.",
+    "prefill_chunk_seconds": "Latency of one chunked prefill step, in seconds.",
+    "prefill_decode_overlap_steps": "Decode steps executed while another request was prefilling.",
     "up": "Whether the engine process is running.",
     "running_requests": "Requests currently in the decode loop.",
     "queued_requests": "Requests waiting for admission.",
     "kv_cache_blocks_used": "KV cache blocks referenced by requests or prefixes.",
     "kv_cache_blocks_free": "KV cache blocks available for allocation.",
     "kv_cache_blocks_total": "Total physical KV cache blocks.",
+    "kv_cache_usage_ratio": "Fraction of physical KV blocks currently referenced.",
+    "prefill_requests": "Requests currently in the prefill state.",
+    "decode_requests": "Requests currently in the decode state.",
+    "max_decode_batch_size": "Largest batched decode width observed.",
 }
 
 
@@ -81,6 +96,10 @@ class EngineMetrics:
             failed = counters.get("requests_failed_total", 0.0)
             generated = counters.get("generated_tokens_total", 0.0)
             decode_time = summaries.get("decode_step_seconds", {}).get("sum", 0.0)
+            ttft = summaries.get("ttft_seconds", {}).get("avg", 0.0)
+            tpot = summaries.get("tpot_seconds", {}).get("avg", 0.0)
+            kv_used = gauges.get("kv_cache_blocks_used", 0.0)
+            kv_total = gauges.get("kv_cache_blocks_total", 0.0)
             return {
                 "uptime_seconds": round(time.time() - self.started_at, 3),
                 "counters": counters,
@@ -91,6 +110,11 @@ class EngineMetrics:
                 "generated_tokens": generated,
                 "decode_tokens_per_second": (
                     round(generated / decode_time, 3) if decode_time > 0 else 0.0
+                ),
+                "avg_ttft_seconds": round(ttft, 6),
+                "avg_tpot_seconds": round(tpot, 6),
+                "kv_cache_usage_ratio": (
+                    round(kv_used / kv_total, 6) if kv_total > 0 else 0.0
                 ),
             }
 

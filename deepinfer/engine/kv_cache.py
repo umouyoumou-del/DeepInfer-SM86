@@ -32,6 +32,27 @@ from typing import Any
 import torch
 
 
+def paged_kv_block_bytes(
+    *,
+    num_layers: int,
+    num_kv_heads: int,
+    block_size: int,
+    head_dim: int,
+    compute_dtype: torch.dtype,
+    kv_cache_dtype: str | torch.dtype = "fp16",
+) -> int:
+    """Estimate one logical KV block, including INT8 scale sidecars."""
+    name = str(kv_cache_dtype).lower()
+    resolved = torch.int8 if name in ("int8", "i8", "torch.int8") else compute_dtype
+    data_elements = num_layers * num_kv_heads * block_size * head_dim * 2
+    total = data_elements * torch.empty((), dtype=resolved).element_size()
+    if resolved == torch.int8:
+        # FP16 K and V scales for every head/token in the block.
+        scale_elements = num_layers * num_kv_heads * block_size * 2
+        total += scale_elements * 2
+    return int(total)
+
+
 class CacheOutOfMemoryError(RuntimeError):
     """Raised when a sequence cannot obtain the KV blocks it needs."""
 
@@ -147,11 +168,26 @@ class PrefixCache:
         self.evictions = 0
 
     @staticmethod
-    def block_hashes(token_ids: list[int] | tuple[int, ...], block_size: int) -> list[bytes]:
-        """Return one cumulative hash per *complete* token block."""
+    def block_hashes(
+        token_ids: list[int] | tuple[int, ...],
+        block_size: int,
+        *,
+        namespace: str = "",
+    ) -> list[bytes]:
+        """Return one cumulative hash per complete token block.
+
+        ``namespace`` is mixed into the initial hasher state.  The gateway uses
+        the OpenAI ``user`` field as a tenant namespace, preventing one tenant
+        from probing or reusing another tenant's cached prompt blocks.
+        """
         if block_size < 1:
             raise ValueError("block_size must be >= 1")
         hasher = hashlib.blake2b(digest_size=16)
+        if namespace:
+            encoded = namespace.encode("utf-8")
+            hasher.update(b"dp-sm86-prefix-v1\x00")
+            hasher.update(len(encoded).to_bytes(8, "little"))
+            hasher.update(encoded)
         hashes: list[bytes] = []
         for start in range(0, len(token_ids) - block_size + 1, block_size):
             for token in token_ids[start : start + block_size]:
@@ -243,6 +279,10 @@ class PagedLayerKVCache:
     block_size: int
     max_length: int
     layer_index: int = -1
+    new_tokens: int = 1
+    key_scale_pool: torch.Tensor | None = None
+    value_scale_pool: torch.Tensor | None = None
+    compute_dtype: torch.dtype | None = None
 
     @property
     def is_paged(self) -> bool:
@@ -254,27 +294,73 @@ class PagedLayerKVCache:
         value: torch.Tensor,
         cache_positions: torch.Tensor,
     ) -> None:
-        batch = int(key.shape[0])
-        if key.shape[2] != 1 or value.shape[2] != 1:
-            raise NotImplementedError(
-                "the paged attention backend currently writes one decode token "
-                f"per call, got query length {key.shape[2]}"
+        batch, _, token_count, _ = key.shape
+        if value.shape != key.shape:
+            raise ValueError(
+                f"key/value shape mismatch: {tuple(key.shape)} vs {tuple(value.shape)}"
             )
-        positions = cache_positions.reshape(-1)[:batch].to(
+        positions = cache_positions.to(
             device=self.key_pool.device, dtype=torch.long
         )
-        if positions.numel() != batch:
-            raise ValueError("cache_positions must provide one position per batch row")
-        batch_indices = torch.arange(batch, device=self.key_pool.device)
+        if positions.ndim == 1:
+            positions = positions.unsqueeze(1)
+        if positions.numel() == batch and token_count == 1:
+            positions = positions.reshape(batch, 1)
+        if tuple(positions.shape) != (batch, token_count):
+            raise ValueError(
+                "cache_positions must have one position per batch row and query "
+                f"token; got {tuple(positions.shape)} for batch={batch}, "
+                f"tokens={token_count}"
+            )
+        batch_indices = torch.arange(batch, device=self.key_pool.device).unsqueeze(1)
         block_indices = positions // self.block_size
         block_ids = self.block_table[batch_indices, block_indices]
         offsets = positions % self.block_size
-        # Trust the scheduler invariant: decode blocks are allocated before
-        # building the view.  Checking ``(block_ids < 0).any()`` here would
-        # force a GPU->CPU sync once per layer and erase the benefit of a
-        # tensor-only cache path.
-        self.key_pool[block_ids, :, offsets, :] = key[:, :, 0, :]
-        self.value_pool[block_ids, :, offsets, :] = value[:, :, 0, :]
+        # Trust the scheduler invariant: blocks are allocated before building
+        # the view.  A negative-id check here would force a GPU->CPU sync once
+        # per layer.
+        heads = self.key_pool.shape[1]
+        head_index = torch.arange(
+            heads, device=self.key_pool.device
+        ).view(1, 1, heads, 1)
+        dim_index = torch.arange(
+            self.key_pool.shape[3], device=self.key_pool.device
+        ).view(1, 1, 1, -1)
+        block_index = block_ids[:, :, None, None]
+        offset_index = offsets[:, :, None, None]
+        key_values = key.permute(0, 2, 1, 3).contiguous()
+        value_values = value.permute(0, 2, 1, 3).contiguous()
+        if self.key_pool.dtype == torch.int8:
+            if self.key_scale_pool is None or self.value_scale_pool is None:
+                raise RuntimeError("INT8 KV cache is missing scale pools")
+            key_float = key_values.float()
+            value_float = value_values.float()
+            key_scale = (key_float.abs().amax(dim=-1) / 127.0).clamp_min(1e-8)
+            value_scale = (value_float.abs().amax(dim=-1) / 127.0).clamp_min(1e-8)
+            key_values = torch.round(key_float / key_scale[..., None]).clamp(
+                -127, 127
+            ).to(torch.int8)
+            value_values = torch.round(value_float / value_scale[..., None]).clamp(
+                -127, 127
+            ).to(torch.int8)
+            scale_head_index = torch.arange(
+                heads, device=self.key_pool.device
+            ).view(1, 1, heads)
+            scale_block_index = block_ids[:, :, None]
+            scale_offset_index = offsets[:, :, None]
+            self.key_scale_pool[
+                scale_block_index, scale_head_index, scale_offset_index
+            ] = key_scale.to(self.key_scale_pool.dtype)
+            self.value_scale_pool[
+                scale_block_index, scale_head_index, scale_offset_index
+            ] = value_scale.to(self.value_scale_pool.dtype)
+        self.key_pool[
+            block_index, head_index, offset_index, dim_index
+        ] = key_values
+        self.value_pool[
+            block_index, head_index, offset_index, dim_index
+        ] = value_values
+        self.new_tokens = int(token_count)
 
     def materialize(self) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Gather blocks into dense K/V plus a validity mask.
@@ -292,6 +378,13 @@ class PagedLayerKVCache:
         # [B, N, H, block, D] -> [B, H, N * block, D]
         key = self.key_pool[safe_table]
         value = self.value_pool[safe_table]
+        if key.dtype == torch.int8:
+            if self.key_scale_pool is None or self.value_scale_pool is None:
+                raise RuntimeError("INT8 KV cache is missing scale pools")
+            key_scales = self.key_scale_pool[safe_table].float()[..., None]
+            value_scales = self.value_scale_pool[safe_table].float()[..., None]
+            key = key.float() * key_scales
+            value = value.float() * value_scales
         key = key.permute(0, 2, 1, 3, 4).reshape(
             batch,
             self.key_pool.shape[1],
@@ -304,9 +397,14 @@ class PagedLayerKVCache:
             num_blocks * self.block_size,
             self.value_pool.shape[3],
         )[:, :, :max_length, :]
+        if self.compute_dtype is not None:
+            key = key.to(self.compute_dtype)
+            value = value.to(self.compute_dtype)
 
         positions = torch.arange(max_length, device=self.seq_lens.device)
-        valid_lengths = (self.seq_lens + 1).clamp(max=max_length)
+        valid_lengths = (self.seq_lens + int(self.new_tokens)).clamp(
+            max=max_length
+        )
         valid = positions.unsqueeze(0) < valid_lengths.unsqueeze(1)
         return key, value, valid
 
@@ -323,6 +421,7 @@ class PagedKVCacheManager:
         block_size: int,
         num_blocks: int,
         dtype: torch.dtype = torch.float16,
+        kv_cache_dtype: str | torch.dtype = "fp16",
         device: str | torch.device = "cuda",
         prefix_cache_blocks: int = 0,
     ) -> None:
@@ -336,6 +435,10 @@ class PagedKVCacheManager:
         self.block_size = int(block_size)
         self.num_blocks = int(num_blocks)
         self.dtype = dtype
+        name = str(kv_cache_dtype).lower()
+        self.kv_cache_dtype = (
+            torch.int8 if name in ("int8", "i8", "torch.int8") else dtype
+        )
         self.device = torch.device(device)
         self.allocator = BlockAllocator(self.num_blocks)
         self.prefix_cache = PrefixCache(
@@ -348,18 +451,35 @@ class PagedKVCacheManager:
             self.block_size,
             self.head_dim,
         )
-        self.key_pool = torch.zeros(shape, dtype=dtype, device=self.device)
+        self.key_pool = torch.zeros(
+            shape, dtype=self.kv_cache_dtype, device=self.device
+        )
         self.value_pool = torch.zeros_like(self.key_pool)
+        if self.kv_cache_dtype == torch.int8:
+            scale_shape = (
+                self.num_layers,
+                self.num_blocks,
+                self.num_kv_heads,
+                self.block_size,
+            )
+            self.key_scale_pool = torch.ones(
+                scale_shape, dtype=torch.float16, device=self.device
+            )
+            self.value_scale_pool = torch.ones_like(self.key_scale_pool)
+        else:
+            self.key_scale_pool = None
+            self.value_scale_pool = None
 
     @property
     def block_bytes(self) -> int:
-        elements = (
-            self.num_layers
-            * self.num_kv_heads
-            * self.block_size
-            * self.head_dim
+        return paged_kv_block_bytes(
+            num_layers=self.num_layers,
+            num_kv_heads=self.num_kv_heads,
+            block_size=self.block_size,
+            head_dim=self.head_dim,
+            compute_dtype=self.dtype,
+            kv_cache_dtype=self.kv_cache_dtype,
         )
-        return elements * self.key_pool.element_size() * 2
 
     @property
     def memory_bytes(self) -> int:
@@ -383,13 +503,26 @@ class PagedKVCacheManager:
         capacity = len(block_ids) * self.block_size
         if length > capacity:
             raise ValueError(f"prefix length {length} exceeds {capacity} cached tokens")
-        key = self.key_pool[layer_index, block_ids].reshape(
+        key_blocks = self.key_pool[layer_index, block_ids]
+        value_blocks = self.value_pool[layer_index, block_ids]
+        key = key_blocks.permute(1, 0, 2, 3).reshape(
             self.num_kv_heads, capacity, self.head_dim
-        )[:, :length, :].unsqueeze(0)
-        value = self.value_pool[layer_index, block_ids].reshape(
+        )[:, :length, :]
+        value = value_blocks.permute(1, 0, 2, 3).reshape(
             self.num_kv_heads, capacity, self.head_dim
-        )[:, :length, :].unsqueeze(0)
-        return key, value
+        )[:, :length, :]
+        if key.dtype == torch.int8:
+            assert self.key_scale_pool is not None
+            assert self.value_scale_pool is not None
+            key_scales = self.key_scale_pool[layer_index, block_ids].permute(
+                1, 0, 2
+            ).reshape(self.num_kv_heads, capacity)[:, :length]
+            value_scales = self.value_scale_pool[layer_index, block_ids].permute(
+                1, 0, 2
+            ).reshape(self.num_kv_heads, capacity)[:, :length]
+            key = key.float() * key_scales.float()[..., None]
+            value = value.float() * value_scales.float()[..., None]
+        return key.to(self.dtype).unsqueeze(0), value.to(self.dtype).unsqueeze(0)
 
     def write_tokens(
         self,
@@ -419,8 +552,31 @@ class PagedKVCacheManager:
             take = min(self.block_size - offset, total - written)
             src = slice(source_start + written, source_start + written + take)
             dst = slice(offset, offset + take)
-            self.key_pool[layer_index, block, :, dst, :] = key[0, :, src, :]
-            self.value_pool[layer_index, block, :, dst, :] = value[0, :, src, :]
+            key_segment = key[0, :, src, :]
+            value_segment = value[0, :, src, :]
+            if self.key_pool.dtype == torch.int8:
+                if self.key_scale_pool is None or self.value_scale_pool is None:
+                    raise RuntimeError("INT8 KV cache is missing scale pools")
+                key_scales = (key_segment.float().abs().amax(dim=-1) / 127.0).clamp_min(
+                    1e-8
+                )
+                value_scales = (
+                    value_segment.float().abs().amax(dim=-1) / 127.0
+                ).clamp_min(1e-8)
+                key_segment = torch.round(
+                    key_segment.float() / key_scales[..., None]
+                ).clamp(-127, 127).to(torch.int8)
+                value_segment = torch.round(
+                    value_segment.float() / value_scales[..., None]
+                ).clamp(-127, 127).to(torch.int8)
+                self.key_scale_pool[layer_index, block, :, dst] = key_scales.to(
+                    self.key_scale_pool.dtype
+                )
+                self.value_scale_pool[layer_index, block, :, dst] = value_scales.to(
+                    self.value_scale_pool.dtype
+                )
+            self.key_pool[layer_index, block, :, dst, :] = key_segment
+            self.value_pool[layer_index, block, :, dst, :] = value_segment
             written += take
             destination_offset += take
 
@@ -431,10 +587,13 @@ class PagedKVCacheManager:
         seq_lens: list[int],
         *,
         max_length: int,
+        new_tokens: int = 1,
     ) -> PagedLayerKVCache:
         batch = len(block_ids)
         if len(seq_lens) != batch:
             raise ValueError("block_ids and seq_lens must have the same batch size")
+        if new_tokens < 1:
+            raise ValueError("new_tokens must be >= 1")
         max_blocks = max(1, (int(max_length) + self.block_size - 1) // self.block_size)
         table = torch.full(
             (batch, max_blocks), -1, dtype=torch.long, device=self.device
@@ -442,12 +601,8 @@ class PagedKVCacheManager:
         for row, blocks in enumerate(block_ids):
             if not blocks:
                 continue
-            if len(blocks) > max_blocks:
-                raise ValueError(
-                    f"row {row} has {len(blocks)} blocks, max_length only needs {max_blocks}"
-                )
-            table[row, : len(blocks)] = torch.tensor(
-                blocks, dtype=torch.long, device=self.device
+            table[row, : min(len(blocks), max_blocks)] = torch.tensor(
+                blocks[:max_blocks], dtype=torch.long, device=self.device
             )
         lengths = torch.tensor(seq_lens, dtype=torch.long, device=self.device)
         return PagedLayerKVCache(
@@ -458,6 +613,18 @@ class PagedKVCacheManager:
             block_size=self.block_size,
             max_length=int(max_length),
             layer_index=layer_index,
+            new_tokens=int(new_tokens),
+            key_scale_pool=(
+                self.key_scale_pool[layer_index]
+                if self.key_scale_pool is not None
+                else None
+            ),
+            value_scale_pool=(
+                self.value_scale_pool[layer_index]
+                if self.value_scale_pool is not None
+                else None
+            ),
+            compute_dtype=self.dtype,
         )
 
     def make_views(
@@ -466,6 +633,7 @@ class PagedKVCacheManager:
         seq_lens: list[int],
         *,
         max_length: int,
+        new_tokens: int = 1,
     ) -> list[PagedLayerKVCache]:
         """Create one view per layer while sharing block-table tensors.
 
@@ -480,15 +648,13 @@ class PagedKVCacheManager:
         table = torch.full(
             (batch, max_blocks), -1, dtype=torch.long, device=self.device
         )
+        if new_tokens < 1:
+            raise ValueError("new_tokens must be >= 1")
         for row, blocks in enumerate(block_ids):
             if not blocks:
                 continue
-            if len(blocks) > max_blocks:
-                raise ValueError(
-                    f"row {row} has {len(blocks)} blocks, max_length only needs {max_blocks}"
-                )
-            table[row, : len(blocks)] = torch.tensor(
-                blocks, dtype=torch.long, device=self.device
+            table[row, : min(len(blocks), max_blocks)] = torch.tensor(
+                blocks[:max_blocks], dtype=torch.long, device=self.device
             )
         lengths = torch.tensor(seq_lens, dtype=torch.long, device=self.device)
         return [
@@ -500,6 +666,18 @@ class PagedKVCacheManager:
                 block_size=self.block_size,
                 max_length=int(max_length),
                 layer_index=layer,
+                new_tokens=int(new_tokens),
+                key_scale_pool=(
+                    self.key_scale_pool[layer]
+                    if self.key_scale_pool is not None
+                    else None
+                ),
+                value_scale_pool=(
+                    self.value_scale_pool[layer]
+                    if self.value_scale_pool is not None
+                    else None
+                ),
+                compute_dtype=self.dtype,
             )
             for layer in range(self.num_layers)
         ]
@@ -508,6 +686,7 @@ class PagedKVCacheManager:
         return {
             "block_size": self.block_size,
             "num_blocks": self.num_blocks,
+            "kv_cache_dtype": str(self.kv_cache_dtype),
             "memory_bytes": self.memory_bytes,
             "block_bytes": self.block_bytes,
             "allocator": self.allocator.stats(),
@@ -521,4 +700,5 @@ __all__ = [
     "PagedKVCacheManager",
     "PagedLayerKVCache",
     "PrefixCache",
+    "paged_kv_block_bytes",
 ]
