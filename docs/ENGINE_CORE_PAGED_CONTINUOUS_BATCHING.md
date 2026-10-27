@@ -1,7 +1,7 @@
 # Engine Core：分页 KV Cache、连续批处理与架构扩展
 
-> 时间：2026-10-27  
-> 目标硬件：RTX 3050 Laptop 4 GB / SM86 / Windows  
+> 时间：2026-10-27
+> 目标硬件：RTX 3050 Laptop 4 GB / SM86 / Windows
 > 定位：`model_executor` 之上的 engine-core 原型，不是完整 DeepInfer engine
 
 ## 1. 这次补了什么
@@ -241,13 +241,13 @@ valid(b, q, k) =
 
 ### 7.1 Mistral
 
-差异：所有层使用 sliding-window attention。  
+差异：所有层使用 sliding-window attention。
 实现：`ModelSpec.use_sliding_window=True` + 通用 attention window mask。
 
 ### 7.2 Gemma
 
 差异：GeGLU、RMSNorm 的 `1 + weight`、embedding 乘以
-`sqrt(hidden_size)`。  
+`sqrt(hidden_size)`。
 实现：归一化字段进入 ModelSpec，通用 decoder 按配置选择。
 
 ### 7.3 Gemma 2

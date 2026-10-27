@@ -1,8 +1,8 @@
 # 从固定槽位到分页连续批处理：DeepInfer-SM86 engine-core 改造复盘
 
-> 日期：2026-10-27  
-> 目标硬件：RTX 3050 Laptop 4 GB / SM86 / Windows  
-> 定位：`model_executor` 之上的 engine-core 原型，不是完整 DeepInfer engine  
+> 日期：2026-10-27
+> 目标硬件：RTX 3050 Laptop 4 GB / SM86 / Windows
+> 定位：`model_executor` 之上的 engine-core 原型，不是完整 DeepInfer engine
 > 本文性质：工程复盘。重点讲清“做了什么”“为什么这样做”“哪些路走错了”，
 > 不是性能榜单。
 
