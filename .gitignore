@@ -19,3 +19,6 @@ debug_runtime*
 *.log
 
 *.egg-info/
+
+.pypi_token
+.pypi_token.*
