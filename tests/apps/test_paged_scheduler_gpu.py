@@ -110,3 +110,14 @@ def test_prefill_decode_stream_overlap_runs_both_forwards() -> None:
         assert short_result.tpot_seconds >= 0.0
     finally:
         scheduler.stop()
+
+
+def test_cupy_external_stream_matches_torch_stream() -> None:
+    cp = pytest.importorskip("cupy")
+    from apps.paged_scheduler import _cupy_stream_context
+
+    stream = torch.cuda.Stream()
+    with torch.cuda.stream(stream):
+        with _cupy_stream_context(stream):
+            current = cp.cuda.get_current_stream()
+            assert int(current.ptr) == int(stream.cuda_stream)

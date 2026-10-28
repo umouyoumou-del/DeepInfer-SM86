@@ -1,0 +1,59 @@
+{
+  "model": "DeepSeek-V2-Lite-Chat Q4_K_M",
+  "config": {
+    "max_num_seqs": 2,
+    "block_size": 16,
+    "prefill_chunk_tokens": 8,
+    "max_cache": 128,
+    "prefix_cache_blocks": 4
+  },
+  "short_8_tokens": {
+    "serial": {
+      "elapsed_seconds": 10.073992900026496,
+      "overlap_steps": 0,
+      "token_ids_equal": true,
+      "text_equal": true,
+      "prefix_reuse_equal": true,
+      "elapsed_by_request": [
+        " 5-2=3",
+        " 中国的首都是北京。"
+      ]
+    },
+    "overlap": {
+      "elapsed_seconds": 9.729296699981205,
+      "overlap_steps": 1,
+      "token_ids_equal": true,
+      "text_equal": true,
+      "prefix_reuse_equal": true,
+      "elapsed_by_request": [
+        " 5-2=3",
+        " 中国的首都是北京。"
+      ]
+    }
+  },
+  "longer_24_tokens": {
+    "serial": {
+      "elapsed_seconds": 9.66376919997856,
+      "overlap_steps": 0,
+      "token_ids_equal": true,
+      "text_equal": true,
+      "prefix_reuse_equal": true,
+      "elapsed_by_request": [
+        " 5-2=3",
+        " 中国的首都是北京。"
+      ]
+    },
+    "overlap": {
+      "elapsed_seconds": 9.954716499953065,
+      "overlap_steps": 1,
+      "token_ids_equal": true,
+      "text_equal": true,
+      "prefix_reuse_equal": true,
+      "elapsed_by_request": [
+        " 5-2=3",
+        " 中国的首都是北京。"
+      ]
+    }
+  },
+  "conclusion": "CuPy kernels now run on the torch prefill/decode stream; overlap is token-correct. The tiny two-request workload has one overlap step and timing is within noise, so it validates correctness/stream wiring rather than claiming a throughput win."
+}

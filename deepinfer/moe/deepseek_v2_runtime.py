@@ -1103,10 +1103,12 @@ class DeepSeekV2LiteGGUFRuntime:
         self.requested_fused_moe = bool(fused_moe)
         self.dense_mlp_device = dense_mlp_device
         self.verbose = verbose
-        # Expert staging shares pinned buffers and a copy stream; two
-        # concurrent forwards (e.g. prefill/decode stream overlap) are not
-        # safe.  The paged scheduler serializes them for this runtime.
-        self.supports_prefill_decode_overlap = False
+        # Expert staging keeps per-slot events and double buffers; the
+        # scheduler's two CUDA streams can overlap prefill and decode.  The
+        # only shared mutable state is telemetry, guarded by the Python GIL.
+        self.supports_prefill_decode_overlap = (
+            os.environ.get("DEEPINFER_DISABLE_PREFILL_DECODE_OVERLAP") != "1"
+        )
         self.native_paged_attention_enabled = True
         self._closed = False
 
@@ -2312,8 +2314,9 @@ class DeepSeekV2LiteGGUFRuntime:
     @torch.inference_mode()
     def generate(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, str]] | None = None,
         *,
+        prompt: str | None = None,
         max_new_tokens: int = 24,
         temperature: float = 0.0,
         top_p: float = 1.0,
@@ -2322,11 +2325,16 @@ class DeepSeekV2LiteGGUFRuntime:
     ) -> GenerationResult:
         if max_new_tokens < 1:
             raise ValueError("max_new_tokens must be >= 1")
-        prompt_text = self.tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True,
-        )
+        if prompt is not None:
+            prompt_text = str(prompt)
+        elif messages is not None:
+            prompt_text = self.tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True,
+            )
+        else:
+            raise ValueError("either messages or prompt must be provided")
         encoded = self.tokenizer(
             prompt_text,
             return_tensors="pt",

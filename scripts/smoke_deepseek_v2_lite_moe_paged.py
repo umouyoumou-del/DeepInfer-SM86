@@ -36,7 +36,7 @@ def main() -> int:
     parser.add_argument(
         "--enable-prefill-decode-overlap",
         action="store_true",
-        help="request scheduler stream overlap; DeepSeek disables it internally",
+        help="request scheduler prefill/decode CUDA stream overlap",
     )
     parser.add_argument(
         "--prefix-reuse",

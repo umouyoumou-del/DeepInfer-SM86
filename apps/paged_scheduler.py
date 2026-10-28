@@ -18,6 +18,7 @@ import queue
 import threading
 import time
 from concurrent.futures import Future
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -33,6 +34,18 @@ from deepinfer.engine.kv_cache import (
 )
 from deepinfer.engine.memory_budget import plan_kv_blocks
 from deepinfer.engine.metrics import EngineMetrics
+
+try:  # CuPy kernels need the same external stream as the torch forward.
+    import cupy as cp
+except Exception:  # pragma: no cover - CPU-only hosts
+    cp = None
+
+
+def _cupy_stream_context(stream: torch.cuda.Stream):
+    if cp is None:
+        return nullcontext()
+    # CuPy 14 still provides ExternalStream for a raw driver stream handle.
+    return cp.cuda.ExternalStream(stream.cuda_stream)
 
 
 class GenerationCancelledError(RuntimeError):
@@ -879,11 +892,12 @@ class PagedBatchScheduler:
             assert work.started_event is not None and work.finished_event is not None
             work.started_event.record()
             with torch.inference_mode():
-                logits = self._forward_logits(
-                    work.input_ids,
-                    work.positions,
-                    work.views,
-                )
+                with _cupy_stream_context(stream):
+                    logits = self._forward_logits(
+                        work.input_ids,
+                        work.positions,
+                        work.views,
+                    )
             work.finished_event.record()
         return logits
 
@@ -1030,11 +1044,12 @@ class PagedBatchScheduler:
             assert work.started_event is not None and work.finished_event is not None
             work.started_event.record()
             with torch.inference_mode():
-                logits = self._forward_logits(
-                    work.input_ids,
-                    work.positions,
-                    work.views,
-                )
+                with _cupy_stream_context(stream):
+                    logits = self._forward_logits(
+                        work.input_ids,
+                        work.positions,
+                        work.views,
+                    )
             work.finished_event.record()
         return logits
 
