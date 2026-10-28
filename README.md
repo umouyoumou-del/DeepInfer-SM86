@@ -490,13 +490,26 @@ pypi/deepinfer-sm86/dist/deepinfer_sm86-0.1.0.tar.gz
 pypi/deepinfer-sm86/dist/SHA256SUMS
 ```
 
-安装：
+安装方式：
 
 ```powershell
-pip install deepinfer_sm86-0.1.0-py3-none-any.whl
+# 推荐：PyPI
+pip install deepinfer-sm86==0.1.0
 # GPU kernels:
-pip install "deepinfer-sm86[cuda]"
+pip install "deepinfer-sm86[cuda]==0.1.0"
+
+# GitHub 直接安装库（不走 PyPI）
+pip install "git+https://github.com/umouyoumou-del/DeepInfer-SM86.git@main#subdirectory=pypi/deepinfer-sm86"
+
+# 或 clone 后 editable
+git clone https://github.com/umouyoumou-del/DeepInfer-SM86.git
+pip install -e .\DeepInfer-SM86\pypi\deepinfer-sm86
 ```
+
+注意：仓库根目录仍是 application/benchmark workspace，没有根级
+`pyproject.toml`，因此 `pip install git+https://.../DeepInfer-SM86.git`
+（不带 `subdirectory`）**不是**库安装方式；必须使用上面的
+`#subdirectory=pypi/deepinfer-sm86`，或者直接安装 PyPI 包。
 
 Wheel 已在隔离 target 中验证：
 
