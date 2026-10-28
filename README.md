@@ -439,6 +439,22 @@ F:/QwenQLoRA/venv/Scripts/python.exe ^
   --output docs/results/deepseek_v2_lite_q4km_moe_full_quality.json
 ```
 
+官方全量 split 的 builder 开关已经提供，但本轮没有跑：
+
+```powershell
+python scripts/build_deepseek_full_quality_suite.py ^
+  --mmlu-all --gsm8k-all --long-chain-count 512 --ppl-tokens 2048 ^
+  --output docs/quality/deepseek_v2_lite_full_quality_suite.all.json
+```
+
+按本机 2.7 tok/s 估算，14k MMLU + 1.3k GSM8K 需要数小时到十几小时；这是
+测试预算问题，不是 harness 缺失。当前发布门槛仍是固定预算的 full-category
+suite。
+
+CUDA Graph 仍不接入 DeepSeek decode：top-k 路由会改变 expert 集合、packed
+buffer 地址和 chunk 数，当前不是可安全 capture 的静态图。代码和 server 都
+明确 `use_graph=False`；如果要做，只能限定在固定 routing/buffer 的静态子图。
+
 ### 7. Paged scheduler 接入
 
 DeepSeek-V2-Lite 已接到现有 `apps/paged_scheduler.py`：
@@ -1442,8 +1458,9 @@ python scripts\export_sm86_kernels.py
 - GPTQ / AWQ 走**离线转换**为 W4A16；DeepSeek-V2-Lite Q4_K_M GGUF 可直接流式执行；
 - AWQ 仅支持 GEMM 布局；GGUF 暂不支持 split shards；
 - DeepSeek-V2-Lite MoE 已接入 paged scheduler 的 chunked prefill / batched
-  decode / block KV 预算；但 stream overlap 关闭，prefill 仍会扫描大量专家，
-  冷启动明显慢于稳态 decode；
+  decode / block KV 预算和 prefill/decode stream overlap；CuPy kernels 跟随
+  torch stream，短 smoke 已验证 token parity，但 4 GB 带宽下 overlap 收益
+  仍按场景测量；
 - CPU MoE layer offload 已实现，1 层整层 offload 约 1.86 t/s；
 - cold-expert split 已实现；推荐 2 层 × 1 cold expert，约 2.50 t/s，
   CPU 路径已有 fused AVX2 packed gate/up/down，oneDNN 作为 fallback；
@@ -1455,8 +1472,8 @@ python scripts\export_sm86_kernels.py
   做端到端质量基准；dense-only 模型超出显存时会回退 CPU FP32，速度会很慢；
 - DeepSeek MLA paged 模式通过 `DeepSeekPagedCache`/paged forward 直接按
   block 读取 K/V 并 online softmax；FP16 使用 fused scalar-register CUDA
-  kernel，非 FP16 回退 PyTorch block loop/dense materialize；当前 smoke 中
-  fused 11.43 s 略快于 materialize 11.89 s，但仍不是 FlashMLA 级优化；
+  kernel，INT8/FP8 E4M3/E5M2 使用 native quant paged MLA，不再回退 dense
+  materialize；但整体仍不是 FlashMLA 级优化；
 - MoE 默认为 grouped fused GEMV/GEMM，`--no-fused-moe` 可回退到 dequant +
   grouped GEMM；block-per-row 通用实现尚未做 Tensor Core tile；
 - 非 tied 的 lm_head 仍以 FP16 dense 保存，7B 转换后体积需要单独评估；

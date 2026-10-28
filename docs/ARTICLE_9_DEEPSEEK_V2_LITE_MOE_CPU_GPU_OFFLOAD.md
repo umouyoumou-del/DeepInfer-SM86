@@ -809,20 +809,20 @@ tests/moe/test_dense_support.py
 
 ### 当前限制
 
-- 已接入 paged scheduler 的 chunked prefill / batched decode / KV 预算；
-  DeepSeek 由于 expert staging 共享 pinned buffer/copy stream，暂不支持
-  prefill/decode stream overlap；
+- 已接入 paged scheduler 的 chunked prefill / batched decode / KV 预算和
+  prefill/decode stream overlap；CuPy kernels 已通过 ExternalStream 跟随
+  torch stream，短 smoke token parity 通过；
 - grouped GEMV/GEMM 已把 decode launch 降到 52/token；pinned double-buffer
   已实现，显著改善 prefill，但还没有跨层预测 prefetch；
 - packed expert cache 已实现但默认关闭：512 MB 时约 11% hit，CPU cache copy
   和 eviction 开销反而使长生成降到 1.61 t/s；要进一步做 GPU cache；
 - prefill 会扫描大量专家，短 prompt prefill 约 2.1–2.5 s；
-- MLA 已有 blockwise paged attention：直接按 block table 读 K/V + online
-  softmax，不 materialize dense K/V；但它还是 PyTorch block loop，不是 fused
-  CUDA/FlashMLA kernel，当前比 materialize 基线约慢 16%；
+- MLA 已有 fused paged attention：FP16 走 scalar/CTA/half2 CUDA kernel，
+  INT8/FP8 E4M3/E5M2 走 native quant kernel；不再回退 dense materialize，
+  但仍不是 FlashMLA 级优化；
 - Q4_K_M 是唯一验证过的 DeepSeek-V2-Lite GGUF 量化档；
 - 已做 full-category 固定预算质量回归；官方完整 MMLU/GSM8K split 和
-  长上下文仍未跑；
+  长上下文仍未跑；builder 已提供 `--mmlu-all --gsm8k-all` 开关；
 - CPU MoE layer offload 仍是 PyTorch CPU FP32/oneDNN；1 个整层 CPU 约
   1.86 t/s；
 - cold-expert split 已实现；推荐 2 层 × 1 cold expert，约 2.50 t/s；
@@ -830,22 +830,20 @@ tests/moe/test_dense_support.py
 - prefill copy-stream pipeline 已实现但默认关闭；本机 WDDM 上 prefill 慢约
   6%；prefill/decode background prefetch 默认开启，prefill 3.43→2.03 s、
   decode 2.52→2.70 t/s；预测式 next-layer prefetch 默认关闭，路由重叠不足
-  导致 2.70→2.21 t/s；CUDA Graph 受动态 MoE 路由限制；
+  导致 2.70→2.21 t/s；CUDA Graph 仍因动态 MoE 路由不可安全 capture；
 - 只验证 Windows + Python 3.10 + torch 2.5.1+cu121。
 
 ### 下一步优先级
 
-1. **继续调优 fused AVX2 cold-expert 路径**：增加块内 K tile、减少重复
-   block-table/权重读取，或按 hot/cold 比例自动选层；
-2. **CUDA Graph / prefill chunk pipeline**：降低 Python/launch 开销，保持确定性；
-3. **更大显存/CPU offload 组合**：GPU cache 已验证可行但 1 GiB 只带来约 2.3%
-   提升；若要继续，需要把 shared/lm_head 移到 CPU 腾出 1.5–2 GiB VRAM；
-4. **完整 MMLU/GSM8K split / 更大样本**：当前 full-category 固定预算已落地，
-   官方完整数据集需要
-   更长上下文和数小时评测预算；
-5. **继续优化 fused paged MLA kernel**：FP16 scalar/CTA/half2 三个映射已落地，
-   scalar 在 smoke 中略快于 materialize；下一步是大 tile/多 query 复用、
-   减少 block table 访存和 CTA 调度开销，朝 FlashMLA 级别靠近。
+1. **完整 MMLU/GSM8K split**：builder 已支持 `--mmlu-all --gsm8k-all`，
+   需要数小时到十几小时评测预算；当前 fixed-budget suite 仍是发布门槛；
+2. **受限 static CUDA Graph**：只对固定 routing/buffer 的 decode 子图做
+   capture；完整 DeepSeek decode 因 top-k 动态路由仍不可安全 graph；
+3. **更大显存/CPU offload 组合**：GPU cache 已验证但 1 GiB 只带来约 2.3%
+   提升；继续需要把 shared/lm_head 移到 CPU 腾出 VRAM；
+4. **fused paged MLA 继续优化**：大 tile/多 query 复用、减少 block-table
+   访存，朝 FlashMLA 级靠近；
+5. **多请求/长上下文压测**：4+ 请求、256/512/1024 context、取消和 OOM 组合。
 
 ---
 

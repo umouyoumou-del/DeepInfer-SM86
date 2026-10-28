@@ -32,7 +32,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--meta-dir", type=Path, default=DEFAULT_META)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--mmlu-per-subject", type=int, default=1)
+    parser.add_argument(
+        "--mmlu-all",
+        action="store_true",
+        help="include the entire MMLU test split (large, hours to evaluate)",
+    )
     parser.add_argument("--gsm8k-limit", type=int, default=32)
+    parser.add_argument(
+        "--gsm8k-all",
+        action="store_true",
+        help="include the entire GSM8K test split (large, hours to evaluate)",
+    )
     parser.add_argument("--long-chain-count", type=int, default=32)
     parser.add_argument("--ppl-tokens", type=int, default=512)
     parser.add_argument("--seed", type=int, default=20261028)
