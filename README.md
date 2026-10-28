@@ -162,7 +162,85 @@ overlap 开关对照（均启用 tiled prefill）：
 
 详见 `docs/ARTICLE_8_KV_FP8_AND_CPU_OFFLOAD.md`。
 
-## 本次更新（2026-10-27）
+## 本次更新（2026-10-28）
+
+今天新增 **DeepSeek-V2-Lite Q4_K_M 的原生 MoE/MLA 执行层**，并把 DeepSeek-V2
+的 dense / hybrid 层布局补齐。
+
+### 1. 原生 MoE 流式执行
+
+- 新增 `deepinfer/moe/gguf_index.py`：
+  - GGUF v2/v3 header/metadata/tensor 目录解析；
+  - 加载前校验 tensor data 是否完整，拒绝半截文件；
+  - 按 expert 读取 3D expert tensor 的 packed slice。
+- 新增 `deepinfer/moe/gpu_quant.py`：
+  - SM86 上的 Q4_K、Q5_0、Q8_0 GPU 反量化；
+  - 与 `gguf.dequantize` 的 CPU 结果逐元素对照通过；
+  - 同一 packed 输入重复调用 bitwise 一致。
+- 新增 `deepinfer/moe/deepseek_v2_runtime.py`：
+  - DeepSeek-V2-Lite Q4_K_M GGUF 直接加载；
+  - routed experts 按 chunk 流式读取，GPU 不同时 materialize 64 个专家；
+  - 并行 expert slice 读取 + pinned staging + 独立 copy stream；
+  - CUDA Event 防止 pinned buffer 复用 race；
+  - grouped bmm 替代逐 expert 小 GEMM；
+  - deterministic assignment scatter + FP32 top-k 求和；
+  - attention / router / dense MLP / shared experts / lm_head 自动放置；
+  - embedding 留在 CPU，DynamicCache + MLA reference 生成循环。
+- 新增 `scripts/smoke_deepseek_v2_lite_moe.py`：
+  - 质量/吞吐 CLI；
+  - 自动 warmup；
+  - 输出结构化 JSON，包含 prefill/decode 时间、峰值显存、token IDs、
+    expert read/H2D/dequant 累计时间和层布局。
+
+### 2. Dense / Hybrid 层支持
+
+- 新增 `deepinfer/moe/layout.py`：
+  - 镜像官方 `DeepseekV2DecoderLayer` 的 MoE 判定；
+  - 支持 `first_k_dense_replace`、`moe_layer_freq`；
+  - 支持 `n_routed_experts=None/0` 的 dense-only 配置。
+- `DeepSeekV2LiteGGUFRuntime` 现在会：
+  - 对 dense 层加载 `blk.{i}.ffn_gate/up/down.weight`；
+  - 只为真实 MoE 层创建 expert store/router/shared experts；
+  - dense MLP 默认按显存 `auto` 放置：GPU 放得下用 FP16，否则回退 CPU
+    FP32，并在回退前检查 host RAM 余量；
+  - CLI 新增 `--dense-mlp-device auto|cuda|cpu`；
+  - 结果 JSON 记录 `dense_layer_indices`、`moe_layer_indices`、
+    `dense_mlp_devices`。
+
+### 3. 实测结果
+
+RTX 3050 Laptop 4 GB + 16 GB RAM，DeepSeek-V2-Lite Q4_K_M：
+
+| 指标 | 结果 |
+|---|---:|
+| 模型加载 | 17.3 s |
+| prefill（短 prompt） | 2.22–2.77 s |
+| decode 稳态 | **2.40–2.70 tokens/s** |
+| peak GPU allocated / reserved | **2.41 GiB / 2.43 GiB** |
+| 加载后 GPU 空闲 | 约 1.0 GiB |
+| 质量抽检 | MoE 解释、首都、翻译、`5-2=3`、`9.9 > 9.11` 均正确 |
+
+同一份 Q4_K_M 的 llama.cpp CPU 基线约 9–13 tokens/s；本实现的重点是 native
+MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比绝对速度。
+
+### 4. 测试与文档
+
+- `tests/moe/` 新增 GGUF 索引、截断拒绝、expert slice、Q4_K/Q5_0/Q8_0
+  GPU 反量化、dense/MoE 层布局和 CPU MLP fallback 测试；
+- 全套测试：**70 passed**；
+- 新增文章：
+  `docs/ARTICLE_9_DEEPSEEK_V2_LITE_MOE_CPU_GPU_OFFLOAD.md`；
+- 结构化结果：
+  `docs/results/deepseek_v2_lite_q4km_moe_sm86.json`；
+- 已知边界：
+  - 单请求，未接入 paged scheduler / continuous batching；
+  - MLA 是 eager/reference attention，不是 FlashMLA；
+  - MoE 目前是 GPU 反量化 + grouped bmm，不是 fused packed MoE kernel；
+  - dense/hybrid 路径有单元测试，但本机没有 dense-only DeepSeek GGUF 做
+    端到端 benchmark；
+  - Q4_K_M 有损，不能宣传成 BF16 等价。
+
+## 上一轮更新（2026-10-27）
 
 - 新增 `deepinfer/engine/kv_cache.py`：
   - 引用计数 block allocator；
@@ -222,7 +300,7 @@ overlap 开关对照（均启用 tiled prefill）：
   - 新增 CLI `scripts/import_quantized_checkpoint.py` 和端到端 CPU 测试；
   - 新增复盘文章 `docs/ARTICLE_5_QUANTIZATION_FORMAT_COMPATIBILITY.md`。
 
-## 上一轮更新（2026-10-26）
+## 更早更新（2026-10-26）
 
 - 新增 3B W4A16 分层 checkpoint 导出与常驻加载：
   - `scripts/export_qwen3b_w4_checkpoint.py`
