@@ -746,6 +746,10 @@ deepinfer/moe/paged_adapter.py
   - DeepSeekPagedCache：MLA K/V -> 通用 paged pool
   - 适配 K head_dim 与 V head_dim 不同的 MLA cache
 
+deepinfer/moe/paged_mla_kernel.py
+  - fused FP16 CUDA paged MLA attention
+  - one warp per (batch, head, query-token)
+
 deepinfer/moe/deepseek_v2_runtime.py
   - GGUFExpertStore：并行读取、pinned staging、copy stream、Event
   - DeepSeekV2LiteGGUFRuntime：meta 加载、权重放置、streaming MoE、生成
@@ -800,8 +804,9 @@ tests/moe/test_dense_support.py
    提升；若要继续，需要把 shared/lm_head 移到 CPU 腾出 1.5–2 GiB VRAM；
 4. **完整 MMLU/GSM8K**：当前 mini suite 已作为 release gate，完整数据集需要
    更长上下文和数小时评测预算；
-5. **fused CUDA paged MLA kernel**：当前 blockwise attention 已是原生 paged
-   算法，但 PyTorch 小 kernel 有约 16% 开销，下一步需要写 fused CUDA kernel。
+5. **继续优化 fused paged MLA kernel**：FP16 fused kernel 已落地，但仍比
+   dense materialize 慢约 10%；下一步是 tile/多 query 复用、减少 block table
+   访存和 CTA 调度开销。
 
 ---
 
@@ -991,7 +996,7 @@ fused 之后 decode 的瓶颈更偏向 packed expert 读取和 H2D，而不是 G
   - 5 个质量 prompt 的 token IDs 完全一致；
   - 64-token 长故事生成 token IDs 完全一致；
   - `--no-fused-moe` 可随时回退到旧路径。
-- 全套测试：**81 passed**。
+- 全套测试：**82 passed**。
 
 ### 11.4 Grouped multi-expert kernel
 
@@ -1098,7 +1103,7 @@ opt-in 实验项保留，默认关闭。
 
 - double-buffer 路径与 grouped、per-expert、dequant+bmm 的 token IDs 一致；
 - 512 MB cache 路径 token IDs 也一致；
-- 全套测试：**81 passed**。
+- 全套测试：**82 passed**。
 
 ## 13. GPU packed cache + pointer-array grouped kernel
 
@@ -1141,7 +1146,7 @@ H2D 进来。
 
 - pointer-array gate/up 和 down 都有独立 GPU 单测；
 - GPU cache 路径与无 cache 路径 token IDs 完全一致；
-- 全套测试：**81 passed**。
+- 全套测试：**82 passed**。
 
 ## 14. 质量回归（mini suite）
 
@@ -1201,6 +1206,9 @@ K/V 维度不同（K = qk_nope + qk_rope = 192，V = v_head_dim = 128），而�
 - `write()` 把当前 MLA K/V padding 到统一 head_dim，写入通用 paged pool；
 - `attend()` 直接按 block table 逐块读取 K/V，用 online softmax 累积，不再
   materialize 当前 batch 的 dense K/V；
+- FP16 路径新增 `deepinfer/moe/paged_mla_kernel.py`：一个 warp 负责一个
+  `(batch, head, query-token)`，在 fused CUDA kernel 里完成 Q.K、online
+  softmax 和 V 累加；
 - `install_native_paged_attention()` 在每个 DeepSeek attention 上安装 paged
   forward，q_len=1 和 chunk prefill 都走 blockwise attention；
 - run-time `forward_logits(input_ids, positions, kv_cache=...)` 暴露给 scheduler；
@@ -1208,10 +1216,17 @@ K/V 维度不同（K = qk_nope + qk_rope = 192，V = v_head_dim = 128），而�
   `head_dim=max(192,128)=192`，并继续使用 block allocator、prefix cache 和
   KV 预算。
 
-这不是 fused CUDA/FlashMLA kernel，而是 PyTorch block loop 的原生 paged
-attention。它去掉了 dense K/V materialize，但 Python 逐 block 计算有开销：
-同一组 2 请求 + prefix cache smoke 为 13.25 s，materialize 基线为 11.43 s，
-约慢 16%。两组的 token IDs 都完全一致。
+当前是 fused FP16 CUDA paged MLA kernel，不是 FlashMLA：
+
+| 路径 | 2 请求 + prefix 耗时 |
+|---|---:|
+| dense materialize | 11.43 s |
+| PyTorch block loop | 13.25 s |
+| fused FP16 CUDA paged MLA | **12.61 s** |
+
+fused kernel 比 PyTorch loop 快约 5%，但仍比 dense materialize 慢约 10%；
+三条路径 token IDs 完全一致。省掉的是 dense K/V materialize，代价是逐 block
+attention kernel 还没有做到 FlashMLA 级别的访存/并行优化。
 
 实测（`max_cache=128`、`block_size=16`、`prefill_chunk_tokens=8`）：
 
@@ -1223,8 +1238,8 @@ attention。它去掉了 dense K/V materialize，但 Python 逐 block 计算有�
 | prefix cache 复用 | **16 token** |
 | prefix 后 token IDs | **完全一致** |
 | KV pool | 20 blocks / 约 106 MB |
-| native paged attention | **开启（27 层）** |
-| 2 请求 + prefix 总耗时 | 13.25 s（materialize 基线 11.43 s） |
+| native paged attention | **开启（27 层 + fused CUDA）** |
+| 2 请求 + prefix 总耗时 | **12.61 s**（PyTorch loop 13.25 s；materialize 11.43 s） |
 | prefill/decode stream overlap | 关闭 |
 
 为什么关闭 overlap：DeepSeek expert staging 共用 pinned buffer 和 copy

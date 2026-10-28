@@ -309,7 +309,7 @@ MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比�
 - `tests/moe/` 新增 GGUF 索引、截断拒绝、expert slice、Q4_K/Q5_0/Q8_0
   GPU 反量化、dense/MoE 层布局、CPU MLP fallback、per-expert fused 和
   grouped MoE kernel 对照测试；
-- 全套测试：**81 passed**；
+- 全套测试：**82 passed**；
 - 新增文章：
   `docs/ARTICLE_9_DEEPSEEK_V2_LITE_MOE_CPU_GPU_OFFLOAD.md`；
 - 结构化结果：
@@ -387,12 +387,23 @@ DeepSeek-V2-Lite 已接到现有 `apps/paged_scheduler.py`：
 - `attend()` 直接按 block table 逐块读取 K/V，用 online softmax 累积；
 - 不再 materialize 当前 batch 的 dense K/V；
 - 官方 DeepSeek attention 已换成 paged forward：q_len=1 和 chunk prefill
-  都走 blockwise attention。
+  都走 blockwise attention；
+- FP16 路径新增 `deepinfer/moe/paged_mla_kernel.py`：一个 warp 负责一个
+  `(batch, head, query-token)`，直接在 CUDA 里读 block table + online
+  softmax，不再经过 Python block loop；
+- 非 FP16/不支持形状回退 PyTorch block loop 或 dense materialize。
 
-这不是 fused CUDA/FlashMLA kernel，而是 PyTorch block loop 的原生 paged
-attention。优点是去掉 dense K/V materialize；代价是 Python/小 kernel 开销：
-同一组 2 请求 + prefix cache smoke 为 13.25 s，materialize 基线为 11.43 s，
-约慢 16%。两组 token IDs 都完全一致。
+同一组 2 请求 + prefix cache smoke：
+
+| 路径 | 耗时 |
+|---|---:|
+| dense materialize | 11.43 s |
+| PyTorch block loop | 13.25 s |
+| fused FP16 CUDA paged MLA | **12.61 s** |
+
+fused kernel 比 PyTorch loop 快约 5%，但仍比 dense materialize 慢约 10%；
+token IDs 在三条路径上完全一致。省掉的是 dense K/V materialize，代价是
+逐 block 的 attention kernel 还没有做到 FlashMLA 级别的访存/并行优化。
 
 实测（2 请求、chunked prefill 8、prefix cache）：
 
@@ -404,7 +415,7 @@ attention。优点是去掉 dense K/V materialize；代价是 Python/小 kernel 
 | prefix 后 token IDs | **完全一致** |
 | KV pool | 20 blocks，约 106 MB |
 | native paged attention | **开启（27 层）** |
-| 2 请求 + prefix 总耗时 | 13.25 s（materialize 基线 11.43 s） |
+| 2 请求 + prefix 总耗时 | **12.61 s**（PyTorch loop 13.25 s；materialize 11.43 s） |
 | prefill/decode stream overlap | 关闭 |
 
 DeepSeek 的 expert staging 共用 pinned buffer/copy stream，两个 forward 在
@@ -621,6 +632,7 @@ deepinfer/
   moe/grouped_moe.py                    grouped multi-expert fused GEMV/GEMM
   moe/ptr_grouped_moe.py                pointer-array grouped GEMV/GEMM
   moe/paged_adapter.py                  MLA K/V -> generic paged KV pool adapter
+  moe/paged_mla_kernel.py               fused FP16 paged MLA attention kernel
   moe/layout.py                         dense / MoE / hybrid 层布局判定
   moe/deepseek_v2_runtime.py            DeepSeek-V2-Lite MoE/MLA 流式执行与 offload
   engine/kv_cache.py                    block allocator、paged FP16/INT8/FP8、CPU payload
@@ -1148,8 +1160,9 @@ python scripts\export_sm86_kernels.py
 - dense/hybrid 层布局已实现并有单元测试，但本机没有 dense DeepSeek-V2 GGUF
   做端到端质量基准；dense-only 模型超出显存时会回退 CPU FP32，速度会很慢；
 - DeepSeek MLA paged 模式通过 `DeepSeekPagedCache`/paged forward 直接按
-  block 读取 K/V 并 online softmax，不 materialize dense K/V；但它是 PyTorch
-  block loop，不是 fused CUDA/FlashMLA kernel，当前比 materialize 约慢 16%；
+  block 读取 K/V 并 online softmax；FP16 有 fused CUDA kernel，非 FP16 回退
+  PyTorch block loop/dense materialize；fused kernel 当前仍比 materialize
+  约慢 10%，还没做到 FlashMLA 级别；
 - MoE 默认为 grouped fused GEMV/GEMM，`--no-fused-moe` 可回退到 dequant +
   grouped GEMM；block-per-row 通用实现尚未做 Tensor Core tile；
 - 非 tied 的 lm_head 仍以 FP16 dense 保存，7B 转换后体积需要单独评估；

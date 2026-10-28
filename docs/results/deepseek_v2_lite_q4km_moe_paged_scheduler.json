@@ -1,5 +1,5 @@
 {
-  "elapsed_seconds": 13.250750400009565,
+  "elapsed_seconds": 12.60516540001845,
   "baseline": [
     {
       "text": " 5-2=3",
@@ -102,7 +102,7 @@
     "prefix_cached_tokens": 16
   },
   "metrics": {
-    "uptime_seconds": 15.955,
+    "uptime_seconds": 16.538,
     "counters": {
       "requests_total": 3.0,
       "prefill_steps_total": 7.0,
@@ -134,32 +134,32 @@
     },
     "summaries": {
       "prefill_chunk_seconds": {
-        "sum": 9.191005100030452,
+        "sum": 8.79208320012549,
         "count": 7,
-        "avg": 1.3130007285757788
+        "avg": 1.2560118857322127
       },
       "ttft_seconds": {
-        "sum": 17.965939299960155,
+        "sum": 17.74327010003617,
         "count": 3,
-        "avg": 5.988646433320052
+        "avg": 5.914423366678723
       },
       "decode_step_seconds": {
-        "sum": 7.248645900108386,
+        "sum": 6.407227399933618,
         "count": 13,
-        "avg": 0.5575881461621836
+        "avg": 0.4928636461487398
       },
       "tpot_seconds": {
-        "sum": 10.816751500009559,
+        "sum": 9.53270069998689,
         "count": 18,
-        "avg": 0.60093063888942
+        "avg": 0.529594483332605
       }
     },
     "requests_finished": 3.0,
     "requests_failed": 0.0,
     "generated_tokens": 21.0,
-    "decode_tokens_per_second": 2.897,
-    "avg_ttft_seconds": 5.988646,
-    "avg_tpot_seconds": 0.600931,
+    "decode_tokens_per_second": 3.278,
+    "avg_ttft_seconds": 5.914423,
+    "avg_tpot_seconds": 0.529594,
     "kv_cache_usage_ratio": 0.1
   },
   "status": {
@@ -247,14 +247,16 @@
     "num_gpu_blocks": 20,
     "prefix_cache_blocks": 4,
     "kv_cache_dtype": "fp16",
-    "attention": "native blockwise paged MLA attention with online softmax; no dense K/V materialization",
-    "prefill_decode_overlap": "disabled because expert staging shares pinned buffers/copy streams"
+    "attention": "fused FP16 CUDA paged MLA kernel: one warp per (batch, query-head, query-token), block-table K/V reads, online softmax",
+    "prefill_decode_overlap": "disabled because expert staging shares pinned buffers/copy streams",
+    "fallback": "PyTorch block loop for non-FP16/unsupported shapes; original dense materialize path for non-native caches"
   },
-  "materialize_baseline": {
-    "elapsed_seconds": 11.432300099986605,
-    "token_ids_equal": true,
-    "prefix_reuse_tokens": 16,
-    "native_paged_attention": false
+  "comparison": {
+    "materialize_elapsed_seconds": 11.432300099986605,
+    "pytorch_block_loop_elapsed_seconds": 13.250750400009565,
+    "fused_cuda_kernel_elapsed_seconds": 12.60516540001845,
+    "token_ids_equal_materialize": true,
+    "token_ids_equal_pytorch_block_loop": true
   },
   "summary": {
     "two_request_token_ids_equal_baseline": true,
@@ -265,7 +267,8 @@
     "kv_pool_bytes": 106168320,
     "kv_blocks": 20,
     "native_paged_attention": true,
-    "elapsed_seconds": 13.250750400009565,
+    "fused_cuda_kernel_elapsed_seconds": 12.60516540001845,
+    "pytorch_block_loop_elapsed_seconds": 13.250750400009565,
     "materialize_elapsed_seconds": 11.432300099986605
   }
 }

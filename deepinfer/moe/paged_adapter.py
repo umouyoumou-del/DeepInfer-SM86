@@ -15,6 +15,7 @@ official attention math/eager path.
 
 from __future__ import annotations
 
+import os
 from types import MethodType
 from typing import Any
 
@@ -120,10 +121,32 @@ class DeepSeekPagedCache(Cache):
             raise ValueError(
                 f"query head dim {q_dim} does not match key dim {self.key_dim}"
             )
+        valid_lengths = view.seq_lens + int(view.new_tokens)
+        if self.native_attention and os.environ.get(
+            "DEEPINFER_DISABLE_CUDA_PAGED_MLA"
+        ) != "1":
+            from deepinfer.moe.paged_mla_kernel import (
+                cuda_paged_mla_supported,
+                paged_mla_attend,
+            )
+
+            if cuda_paged_mla_supported(
+                query_states, view.key_pool, view.value_pool
+            ):
+                return paged_mla_attend(
+                    query_states,
+                    view.key_pool,
+                    view.value_pool,
+                    view.block_table,
+                    valid_lengths,
+                    positions,
+                    block_size=int(view.block_size),
+                    max_blocks=int(view.block_table.shape[1]),
+                    scale=float(scale),
+                )
         block_size = int(view.block_size)
         max_length = int(view.max_length)
         max_blocks = (max_length + block_size - 1) // block_size
-        valid_lengths = view.seq_lens + int(view.new_tokens)
         query_positions = positions.to(query_states.device, dtype=torch.long)
         output = torch.zeros(
             (batch, heads, query_length, self.value_dim),
