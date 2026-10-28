@@ -19,12 +19,13 @@ DeepSeek-V2-Lite 的 MoE 路由、专家计算、MLA attention 和自回归 deco
 
 | 指标 | 实测 |
 |---|---:|
-| 模型加载 | 17–19 s |
-| 冷启动 warmup（4 token） | 3.4–16 s，取决于 OS page cache |
-| prefill（短 prompt） | 2.20–2.88 s |
-| decode 稳态 | **2.53–2.95 tokens/s**（64-token 长生成 2.64） |
+| 模型加载 | 17.6 s |
+| 冷启动 warmup（4 token） | 3.6–16 s，取决于 OS page cache |
+| prefill（短 prompt） | 1.95–2.44 s |
+| decode 稳态 | **2.64–3.01 tokens/s**（64-token 长生成 2.63） |
 | peak GPU allocated | **2.23 GiB** |
 | peak GPU reserved | **2.31 GiB** |
+| 对照 grouped 无 double buffer | decode 2.53–2.95；prefill 2.20–2.88 |
 | 对照 per-expert fused | decode 2.56–3.05；64-token 2.63 |
 | 对照 dequant+bmm | decode 2.43–2.77；64-token 2.43 |
 | GPU 加载后空闲 | 约 1.0 GiB |
@@ -568,15 +569,15 @@ F:\QwenQLoRA\venv\Scripts\python.exe `
 
 | prompt | prefill | decode token 数 | decode t/s | peak GPU |
 |---|---:|---:|---:|---:|
-| MoE 解释 | 2.618 s | 23 | **2.526** | 2278.5 MiB |
-| 首都 | 2.882 s | 6 | **2.946** | 2278.4 MiB |
-| 翻译 | 2.213 s | 6 | **2.929** | 2278.1 MiB |
-| 5-2 | 2.195 s | 6 | **2.948** | 2277.5 MiB |
-| 9.11 vs 9.9 | 2.723 s | 6 | **2.900** | 2281.3 MiB |
+| MoE 解释 | 1.996 s | 23 | **2.644** | 2278.6 MiB |
+| 首都 | 2.259 s | 6 | **2.931** | 2278.6 MiB |
+| 翻译 | 1.991 s | 6 | **2.916** | 2278.2 MiB |
+| 5-2 | 1.945 s | 6 | **3.007** | 2277.7 MiB |
+| 9.11 vs 9.9 | 2.439 s | 6 | **2.967** | 2281.5 MiB |
 
-上表是当前默认 grouped fused 路径。相同 prompt 用 per-expert fused 路径时
-decode 为 2.56–3.05 tokens/s，用 `--no-fused-moe` 的 dequant+bmm 回退路径时
-为 2.43–2.77；三条路径的 token IDs 完全一致（见第 11 节）。
+上表是默认 grouped + double-buffer 路径。grouped 无 double buffer 时 decode 为
+2.53–2.95、prefill 2.20–2.88；per-expert fused 时 decode 2.56–3.05；
+`--no-fused-moe` 的 dequant+bmm 回退路径为 2.43–2.77。所有路径 token IDs 一致。
 
 峰值：
 
@@ -586,7 +587,7 @@ peak reserved  ≈ 2.31 GiB
 加载后空闲     ≈ 1.0 GiB
 ```
 
-模型加载 17–19 s。第一次进程内的冷启动 warmup 可能很慢（曾观察 16 s），
+模型加载 17.6 s。第一次进程内的冷启动 warmup 可能很慢（曾观察 16 s），
 因为 Q4_K_M 的 expert 页还没有进入 OS page cache；后续 prefill/decode 会稳定。
 
 ### 5.2 为什么比 llama.cpp CPU 慢
@@ -620,7 +621,8 @@ llama.cpp 有成熟的 AVX2/AVX512 CPU 量化 GEMV、mmap 权重和专门的 MoE
 | 修复 race 前的“2.7” | 不可复现，不能作为结果 |
 | 修复 race 后的 dequant+bmm 版本 | **2.40–2.70 t/s，可复现** |
 | per-expert fused GEMV/GEMM | **2.56–3.05 t/s；64-token 2.63；可复现** |
-| grouped fused GEMV/GEMM | **2.53–2.95 t/s；64-token 2.64；可复现** |
+| grouped fused GEMV/GEMM | 2.53–2.95 t/s；64-token 2.64；可复现 |
+| grouped + double-buffer | **2.64–3.01 t/s；64-token 2.63；prefill 1.95–2.44 s** |
 
 ---
 
@@ -754,8 +756,10 @@ tests/moe/test_dense_support.py
 ### 当前限制
 
 - 单请求；没有接入 paged scheduler / continuous batching；
-- grouped GEMV/GEMM 已把 decode launch 降到 52/token，但 block-per-row
-  实现还没有 Tensor Core tile、cp.async 或跨层专家预取；
+- grouped GEMV/GEMM 已把 decode launch 降到 52/token；pinned double-buffer
+  已实现，显著改善 prefill，但还没有跨层预测 prefetch；
+- packed expert cache 已实现但默认关闭：512 MB 时约 11% hit，CPU cache copy
+  和 eviction 开销反而使长生成降到 1.61 t/s；要进一步做 GPU cache；
 - prefill 会扫描大量专家，短 prompt prefill 约 2.1–2.5 s；
 - pinned staging 单缓冲，依赖 Event 串行复用；还没有双缓冲/多缓冲预取；
 - MLA 是官方 eager/reference attention，不是 FlashMLA；
@@ -765,15 +769,14 @@ tests/moe/test_dense_support.py
 
 ### 下一步优先级
 
-1. **pinned double-buffer + 多 copy stream**：在 fused kernel 计算当前
-   chunk 时预取下一 chunk/下一层可预测专家；
-2. **专家缓存**：按层缓存热门 expert 的 packed 权重；
-3. **接入 paged scheduler**：把 MoE 层接入已有 continuous batching / KV 预算；
-4. **量化质量回归**：perplexity、MMLU、GSM8K、长链推理，与 llama.cpp 同
+1. **接入 paged scheduler**：把 MoE 层接入已有 continuous batching / KV 预算；
+2. **量化质量回归**：perplexity、MMLU、GSM8K、长链推理，与 llama.cpp 同
    prompt / 同采样设置对照；
-5. **更激进的 CPU/GPU 切分**：把部分层或部分 expert 放在 CPU AVX2 kernel，
+3. **更激进的 CPU/GPU 切分**：把部分层或部分 expert 放在 CPU AVX2 kernel，
    GPU 只算 attention + 热门 expert；
-6. **CUDA Graph / prefill chunk pipeline**：降低 Python/launch 开销，保持确定性。
+4. **CUDA Graph / prefill chunk pipeline**：降低 Python/launch 开销，保持确定性；
+5. **GPU packed expert cache / pointer-array grouped kernel**：CPU cache 已证明
+   受 memcpy 限制，下一步应把 cache 放到 GPU 并让 kernel 直接使用指针数组。
 
 ---
 
@@ -1002,11 +1005,81 @@ grouped 版本为下一阶段的 double-buffer/多 copy stream 提供了更干�
 - 仍然只验证了 DeepSeek-V2-Lite Q4_K_M 的 tensor 形状（K=2048/1408，
   intermediate=1408，hidden=2048）。
 
-## 12. 一句话结论
+## 12. Double-buffer 与 packed expert cache
+
+### 12.1 双 pinned slot
+
+原实现对每个 projection 只有一块 pinned staging buffer。prefill 有多個 expert
+chunk，CPU 进入下一 chunk 前必须等待上一 chunk 的 pinned buffer 不再被 H2D
+读取；这会让 prefill 的读取和 GPU 计算之间出现不必要的串行化。
+
+改成：
+
+- 每个 projection 维护两个 pinned slot；
+- 每次 `_stage_experts()` 轮换 slot；
+- 每个 slot 的 gate/up/down 事件单独记录；
+- 复用 slot 前只等待它自己的旧事件；
+- gate/up 保持在 compute stream，down 使用 per-slot copy stream；
+- grouped kernel 使用 `wait_for_gate_up()` / `wait_for_down()` 只在需要时
+  等待跨 stream 事件。
+
+结果：
+
+| 指标 | grouped 无 double buffer | grouped + double buffer |
+|---|---:|---:|
+| 5-prompt prefill | 2.20–2.88 s | **1.95–2.44 s** |
+| 5-prompt decode | 2.53–2.95 t/s | **2.64–3.01 t/s** |
+| 64-token decode | 2.64 t/s | 2.63 t/s |
+| token IDs | 基准 | **完全一致** |
+
+decode 没有明显变化是合理的：decode 每层只有一个 expert chunk，主要受
+下一层 attention/router 依赖限制；double-buffer 的收益主要在 prefill 的
+多 chunk 读取。
+
+### 12.2 packed expert cache：实现了，但默认关闭
+
+实现了一个 per-layer LRU：
+
+- key 为 `(tensor_name, expert_id)`，存 packed uint8 bytes；
+- 第一次访问只计数，第二次访问才 admission，避免一次性 expert 污染缓存；
+- `--expert-cache-mb` 控制大小，默认 **0**；
+- 统计 `expert_cache_hits/misses/bytes/evictions`。
+
+512 MB 实测（64-token 长生成）：
+
+```text
+cache hits       = 4056
+cache misses     = 32700
+hit rate         ≈ 11%
+cache bytes      ≈ 515 MB
+evictions        = 27595
+decode           = 1.61 t/s
+no-cache decode  = 2.63 t/s
+```
+
+根因不是命中率单独决定的：命中的 packed bytes 需要从页缓存/普通 CPU cache
+再 memcpy 到 pinned staging；当前 Python/NumPy 路径的 copy 吞吐明显低于
+NVMe 直接 read，且 admission/eviction 还有额外开销。因此 cache 目前只作为
+opt-in 实验项保留，默认关闭。
+
+如果下一步认真做 cache，应该：
+
+1. 把 packed expert cache 放到 **GPU**，命中时直接给 grouped kernel 用；
+2. grouped kernel 改为接受 **expert pointer array**，避免把 cached/missed
+   expert 重新拼成连续 buffer；
+3. 按实际路由统计做分层容量，而不是平均分配。
+
+### 12.3 验证
+
+- double-buffer 路径与 grouped、per-expert、dequant+bmm 的 token IDs 一致；
+- 512 MB cache 路径 token IDs 也一致；
+- 全套测试：**77 passed**。
+
+## 13. 一句话结论
 
 这次最重要的不是“4 GB 跑 15.7B”这个标题，而是把 **MoE 的路由、专家流式读取、
 GPU 反量化、pinned H2D、确定性 scatter、MLA attention 和生成循环** 真正接进了
-DeepInfer 的执行层，并在 4 GB RTX 3050 上用 Q4_K_M 跑出了 **2.53–2.95 tokens/s**
-（64-token 长生成 2.64 tokens/s）
+DeepInfer 的执行层，并在 4 GB RTX 3050 上用 Q4_K_M 跑出了 **2.64–3.01 tokens/s**
+（64-token 长生成 2.63 tokens/s）
 的可复现结果；速度还不是 llama.cpp CPU 的对手，但它是 native 的、可控的、
 可以继续往下做 fused kernel 和调度的基线。
