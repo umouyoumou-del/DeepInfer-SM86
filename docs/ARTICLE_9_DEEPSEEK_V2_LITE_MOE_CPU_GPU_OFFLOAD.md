@@ -34,6 +34,7 @@ DeepSeek-V2-Lite 的 MoE 路由、专家计算、MLA attention 和自回归 deco
 | prefill pipeline | 可选；本机实测 prefill 慢约 6%，默认关闭 |
 | prefill background prefetch | 默认开启；prefill 3.43→2.03 s，token IDs 一致 |
 | decode background prefetch | 默认开启；decode 2.52→2.70 t/s，token IDs 一致 |
+| predictive next-layer prefetch | 可选；实测 decode 2.70→2.21 t/s，默认关闭 |
 | 对照 per-expert fused | decode 2.56–3.05；64-token 2.63 |
 | 对照 dequant+bmm | decode 2.43–2.77；64-token 2.43 |
 | GPU 加载后空闲 | 约 1.0 GiB |
@@ -812,7 +813,8 @@ tests/moe/test_dense_support.py
   CPU 路径已有 fused AVX2 packed gate/up/down，oneDNN 仅作 fallback；
 - prefill copy-stream pipeline 已实现但默认关闭；本机 WDDM 上 prefill 慢约
   6%；prefill/decode background prefetch 默认开启，prefill 3.43→2.03 s、
-  decode 2.52→2.70 t/s；CUDA Graph 受动态 MoE 路由限制；
+  decode 2.52→2.70 t/s；预测式 next-layer prefetch 默认关闭，路由重叠不足
+  导致 2.70→2.21 t/s；CUDA Graph 受动态 MoE 路由限制；
 - 只验证 Windows + Python 3.10 + torch 2.5.1+cu121。
 
 ### 下一步优先级
@@ -1420,6 +1422,29 @@ decode 无法预知下一层路由，但可以在 **router 产出当前层 exper
 paged scheduler 2 请求 + prefix cache smoke 也从 11.07 s 降到 9.70 s，token
 IDs 一致。该路径默认开启，`--no-decode-prefetch` 可关闭。结果文件：
 `docs/results/deepseek_v2_lite_q4km_moe_decode_prefetch.json`。
+
+### 19.2 Predictive next-layer prefetch（实验，默认关闭）
+
+实现了用上一 token 路由预热下一层：
+
+- 在层 L 记录当前 top-6 路由；
+- 处理下一层时，用上一 token 在下一层的 top-6 路由后台预读 packed
+  gate/up/down；
+- 预读与当前层计算重叠，进入下一层后命中部分 expert 复用 256 MB
+  predictive cache；
+- cache key 带 layer/projection/expert，避免跨层串数据。
+
+但路由集合不稳定：16-token probe 相邻 token top-6 重叠约 12%–45%，exact
+match 几乎为 0。实测：
+
+| 配置 | decode | predictive hits | prefetch reads |
+|---|---:|---:|---:|
+| predictive off | **2.70 t/s** | — | — |
+| predictive on | 2.21 t/s | 8,822 | 14,850 |
+
+浪费的预测读取和 partial pinned copy 抵消了命中收益，所以该路径只是
+`--predictive-prefetch` 实验开关，默认关闭；token IDs/text 仍完全一致。
+结果文件：`docs/results/deepseek_v2_lite_q4km_moe_decode_predictive.json`。
 
 ## 20. 一句话结论
 

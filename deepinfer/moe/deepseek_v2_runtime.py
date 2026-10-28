@@ -110,7 +110,8 @@ class PointerExpertBatch:
 @dataclass(slots=True)
 class ExpertPrefetch:
     layer_idx: int
-    expert_ids: tuple[int, ...]
+    target_ids: tuple[int, ...]
+    source_ids: tuple[int, ...]
     slot: int
     buffers: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     futures: list[Any]
@@ -212,6 +213,7 @@ class GGUFExpertStore:
         parallel_read_workers: int = 8,
         expert_cache_mb: int = 0,
         gpu_expert_cache_mb: int = 0,
+        predictive_cache_mb: int = 256,
     ) -> None:
         self.index = index
         self.device = device
@@ -221,7 +223,7 @@ class GGUFExpertStore:
         self._cache_limit_bytes = max(0, int(expert_cache_mb)) * _MIB
         self._layer_count = max(1, len(set(layer_indices)))
         self._cache_limit_per_layer = self._cache_limit_bytes // self._layer_count
-        self._packed_cache: dict[int, OrderedDict[tuple[str, int], torch.Tensor]] = {}
+        self._packed_cache: dict[int, OrderedDict[tuple[int, str, int], torch.Tensor]] = {}
         self._packed_cache_bytes = 0
         self._packed_cache_bytes_by_layer: dict[int, int] = {}
         self._expert_access_counts: dict[tuple[str, int], int] = {}
@@ -263,6 +265,13 @@ class GGUFExpertStore:
         self._prefetch_slot = 0
         self._prefetch_buffers: dict[tuple[str, int], torch.Tensor] = {}
         self._prefetch_events: dict[tuple[str, int], torch.cuda.Event] = {}
+        self._predictive_cache_limit = max(
+            0, int(predictive_cache_mb)
+        ) * _MIB
+        self._predictive_cache: OrderedDict[tuple[int, str, int], torch.Tensor] = OrderedDict()
+        self._predictive_cache_bytes = 0
+        self._predictive_pending: set[tuple[int, str, int]] = set()
+        self._predictive_lock = threading.RLock()
         self._overlap_down_copy = (
             bool(self._copy_streams)
             and os.environ.get("DEEPINFER_DISABLE_EXPERT_COPY_STREAM") != "1"
@@ -280,6 +289,9 @@ class GGUFExpertStore:
             "gpu_cache_misses": 0.0,
             "gpu_cache_bytes": 0.0,
             "gpu_cache_evictions": 0.0,
+            "predictive_cache_hits": 0.0,
+            "predictive_cache_misses": 0.0,
+            "predictive_prefetch_reads": 0.0,
         }
 
     def supports_fused_moe(self) -> bool:
@@ -497,6 +509,80 @@ class GGUFExpertStore:
         )
         self.timings["expert_cache_bytes"] = float(self._packed_cache_bytes)
 
+    def _predictive_cache_get(
+        self, key: tuple[int, str, int]
+    ) -> torch.Tensor | None:
+        with self._predictive_lock:
+            value = self._predictive_cache.get(key)
+            if value is None:
+                return None
+            self._predictive_cache.move_to_end(key)
+            self.timings["predictive_cache_hits"] += 1.0
+            return value
+
+    def _predictive_cache_put(
+        self, key: tuple[int, str, int], value: torch.Tensor
+    ) -> None:
+        with self._predictive_lock:
+            self._predictive_pending.discard(key)
+            if self._predictive_cache_limit <= 0:
+                return
+            size = value.numel()
+            old = self._predictive_cache.pop(key, None)
+            if old is not None:
+                self._predictive_cache_bytes -= old.numel()
+            while (
+                self._predictive_cache
+                and self._predictive_cache_bytes + size
+                > self._predictive_cache_limit
+            ):
+                _, evicted = self._predictive_cache.popitem(last=False)
+                self._predictive_cache_bytes -= evicted.numel()
+            if size > self._predictive_cache_limit:
+                return
+            self._predictive_cache[key] = value
+            self._predictive_cache_bytes += size
+
+    def prefetch_predictive(
+        self, layer_idx: int, expert_ids: Sequence[int]
+    ) -> None:
+        """Warm packed bytes for predicted next-layer experts in background."""
+
+        if self._predictive_cache_limit <= 0 or not expert_ids:
+            return
+        for projection in ("gate", "up", "down"):
+            spec = self._specs[(layer_idx, projection)]
+            for expert_id in expert_ids:
+                key = (int(layer_idx), spec.name, int(expert_id))
+                with self._predictive_lock:
+                    if (
+                        key in self._predictive_cache
+                        or key in self._predictive_pending
+                    ):
+                        continue
+                    self._predictive_pending.add(key)
+                data = torch.empty(
+                    spec.bytes_per_expert, dtype=torch.uint8
+                )
+                future = self._read_executor.submit(
+                    self._read_expert_slice,
+                    spec,
+                    int(expert_id),
+                    memoryview(data.numpy()),
+                )
+
+                def done(completed, cache_key=key, tensor=data) -> None:
+                    try:
+                        completed.result()
+                    except Exception:
+                        with self._predictive_lock:
+                            self._predictive_pending.discard(cache_key)
+                        return
+                    self.timings["predictive_prefetch_reads"] += 1.0
+                    self._predictive_cache_put(cache_key, tensor)
+
+                future.add_done_callback(done)
+
     def _cache_candidate(self, key: tuple[str, int]) -> bool:
         if self._cache_limit_per_layer <= 0:
             return False
@@ -526,21 +612,41 @@ class GGUFExpertStore:
         self,
         layer_idx: int,
         expert_ids: Sequence[int],
+        *,
+        skip_cached: bool = False,
     ) -> ExpertPrefetch:
-        """Start background reads for one expert chunk into pinned buffers."""
+        """Start background reads for one expert chunk into pinned buffers.
+
+        ``skip_cached`` leaves experts whose three projections are already in
+        the predictive cache out of the read set; the consumer combines the
+        remaining prefetched projections with that cache.
+        """
 
         if not expert_ids:
             raise ValueError("at least one expert must be selected")
-        expert_ids = tuple(int(expert_id) for expert_id in expert_ids)
+        target_ids = tuple(int(expert_id) for expert_id in expert_ids)
         projections = ("gate", "up", "down")
         specs = tuple(
             self._specs[(layer_idx, projection)] for projection in projections
         )
+        source_ids = target_ids
+        if skip_cached:
+            source_ids = tuple(
+                expert_id
+                for expert_id in target_ids
+                if not all(
+                    self._predictive_cache_get(
+                        (int(layer_idx), spec.name, expert_id)
+                    )
+                    is not None
+                    for spec in specs
+                )
+            )
         slot = self._prefetch_slot % self._prefetch_slot_count
         self._prefetch_slot += 1
         buffers: list[torch.Tensor] = []
         for projection, spec in zip(projections, specs, strict=True):
-            total_bytes = spec.bytes_per_expert * len(expert_ids)
+            total_bytes = spec.bytes_per_expert * len(source_ids)
             key = (projection, slot)
             previous_copy = self._prefetch_events.get(key)
             if previous_copy is not None:
@@ -559,7 +665,7 @@ class GGUFExpertStore:
         for spec, buffer in zip(specs, buffers, strict=True):
             view = memoryview(buffer.numpy())
             size = spec.bytes_per_expert
-            for position, expert_id in enumerate(expert_ids):
+            for position, expert_id in enumerate(source_ids):
                 destination = view[position * size : (position + 1) * size]
                 futures.append(
                     self._read_executor.submit(
@@ -574,7 +680,8 @@ class GGUFExpertStore:
         )
         return ExpertPrefetch(
             layer_idx=int(layer_idx),
-            expert_ids=expert_ids,
+            target_ids=target_ids,
+            source_ids=source_ids,
             slot=slot,
             buffers=(buffers[0], buffers[1], buffers[2]),
             futures=futures,
@@ -607,12 +714,95 @@ class GGUFExpertStore:
         )
         use_cuda = target_device.type == "cuda"
         if prefetched is not None:
-            if prefetched.layer_idx != layer_idx or prefetched.expert_ids != expert_id_tuple:
-                raise ValueError("prefetched expert chunk does not match request")
-            slot = prefetched.slot
-            packed_cpu_tensors = list(prefetched.buffers)
+            if (
+                prefetched.layer_idx != layer_idx
+                or prefetched.target_ids != expert_id_tuple
+            ):
+                raise ValueError(
+                    "prefetched expert chunk does not match request"
+                )
             started = time.perf_counter()
             prefetched.wait()
+            if prefetched.source_ids == expert_id_tuple:
+                slot = prefetched.slot
+                packed_cpu_tensors = list(prefetched.buffers)
+            else:
+                # Predictive mode can cover only a subset.  Build an actual-
+                # order pinned staging buffer from prefetched/cache bytes and
+                # read only the remaining experts.
+                slot = self._pinned_slot % self._pinned_slot_count
+                self._pinned_slot += 1
+                packed_cpu_tensors = []
+                source_positions = {
+                    expert_id: position
+                    for position, expert_id in enumerate(prefetched.source_ids)
+                }
+                read_futures = []
+                cache_misses: list[tuple[tuple[str, int], memoryview]] = []
+                for projection_index, (projection, spec) in enumerate(
+                    zip(projections, specs, strict=True)
+                ):
+                    total_bytes = spec.bytes_per_expert * expert_count
+                    key = (projection, slot)
+                    previous_copy = self._pinned_copy_events.get(key)
+                    if previous_copy is not None:
+                        previous_copy.synchronize()
+                    buffer = self._pinned_buffers.get(key)
+                    if buffer is None or buffer.numel() < total_bytes:
+                        buffer = torch.empty(
+                            total_bytes,
+                            dtype=torch.uint8,
+                            pin_memory=use_cuda,
+                        )
+                        self._pinned_buffers[key] = buffer
+                    destination_all = buffer[:total_bytes]
+                    packed_cpu_tensors.append(destination_all)
+                    view = memoryview(destination_all.numpy())
+                    size = spec.bytes_per_expert
+                    source_view = memoryview(
+                        prefetched.buffers[projection_index].numpy()
+                    )
+                    for position, expert_id in enumerate(expert_id_tuple):
+                        destination = view[
+                            position * size : (position + 1) * size
+                        ]
+                        source_position = source_positions.get(expert_id)
+                        if source_position is not None:
+                            destination[:] = source_view[
+                                source_position * size :
+                                (source_position + 1) * size
+                            ]
+                            continue
+                        cache_key = (spec.name, expert_id)
+                        cached = self._cache_get(layer_idx, cache_key)
+                        if cached is not None:
+                            destination[:] = memoryview(cached.numpy())
+                            continue
+                        cached = self._predictive_cache_get(
+                            (layer_idx, spec.name, expert_id)
+                        )
+                        if cached is not None:
+                            destination[:] = memoryview(cached.numpy())
+                            continue
+                        self.timings["expert_cache_misses"] += 1.0
+                        cache_misses.append((cache_key, destination))
+                        read_futures.append(
+                            self._read_executor.submit(
+                                self._read_expert_slice,
+                                spec,
+                                expert_id,
+                                destination,
+                            )
+                        )
+                for future in read_futures:
+                    future.result()
+                for cache_key, destination in cache_misses:
+                    if not self._cache_candidate(cache_key):
+                        continue
+                    data = torch.from_numpy(
+                        np.frombuffer(destination, dtype=np.uint8).copy()
+                    )
+                    self._cache_put(layer_idx, cache_key, data)
             self.timings["expert_read_seconds"] += time.perf_counter() - started
         else:
             slot = self._pinned_slot % self._pinned_slot_count
@@ -647,6 +837,12 @@ class GGUFExpertStore:
                     destination = view[position * size : (position + 1) * size]
                     key = (spec.name, expert_id)
                     cached = self._cache_get(layer_idx, key)
+                    if cached is not None:
+                        destination[:] = memoryview(cached.numpy())
+                        continue
+                    cached = self._predictive_cache_get(
+                        (layer_idx, key[0], key[1])
+                    )
                     if cached is not None:
                         destination[:] = memoryview(cached.numpy())
                         continue
@@ -861,6 +1057,8 @@ class DeepSeekV2LiteGGUFRuntime:
         prefill_pipeline: bool = False,
         prefill_prefetch: bool = True,
         decode_prefetch: bool = True,
+        predictive_prefetch: bool = False,
+        predictive_cache_mb: int = 256,
         prefill_all_experts: bool = False,
         expert_cache_mb: int = 0,
         gpu_expert_cache_mb: int = 0,
@@ -898,6 +1096,9 @@ class DeepSeekV2LiteGGUFRuntime:
         self.prefill_pipeline = bool(prefill_pipeline)
         self.prefill_prefetch = bool(prefill_prefetch)
         self.decode_prefetch = bool(decode_prefetch)
+        self.predictive_prefetch = bool(predictive_prefetch)
+        self.predictive_cache_mb = max(0, int(predictive_cache_mb))
+        self._predictive_cache_limit = self.predictive_cache_mb * _MIB
         self.prefill_all_experts = bool(prefill_all_experts)
         self.requested_fused_moe = bool(fused_moe)
         self.dense_mlp_device = dense_mlp_device
@@ -970,6 +1171,13 @@ class DeepSeekV2LiteGGUFRuntime:
         else:
             self.cpu_expert_layer_set = set(self.moe_layer_indices)
         self.has_moe = bool(self.moe_layer_indices)
+        self._next_moe_layer = {
+            current: following
+            for current, following in zip(
+                self.moe_layer_indices, self.moe_layer_indices[1:]
+            )
+        }
+        self._last_token_routes: dict[int, tuple[int, ...]] = {}
         self.dense_mlp_devices: dict[int, str] = {}
         self._validate_gguf_metadata()
 
@@ -993,6 +1201,7 @@ class DeepSeekV2LiteGGUFRuntime:
                 device=self.device,
                 expert_cache_mb=expert_cache_mb,
                 gpu_expert_cache_mb=gpu_expert_cache_mb,
+                predictive_cache_mb=self.predictive_cache_mb,
             )
             if self.has_moe
             else None
@@ -1414,7 +1623,9 @@ class DeepSeekV2LiteGGUFRuntime:
             and len(expert_list) <= self.expert_chunk_size
         ):
             decode_prefetch = self.expert_store.prefetch_experts(
-                layer_idx, expert_list
+                layer_idx,
+                expert_list,
+                skip_cached=self.predictive_prefetch,
             )
         group_index = torch.searchsorted(expert_ids, topk_idx.reshape(-1))
         token_ids = torch.arange(topk_idx.numel(), device=flat.device) // top_k
@@ -1463,6 +1674,20 @@ class DeepSeekV2LiteGGUFRuntime:
                     expert_list,
                     key=lambda expert_id: (counts_all[expert_id], expert_id),
                 )[: self.requested_cpu_experts_per_layer]
+            )
+        if self.predictive_prefetch and token_count == 1:
+            next_moe_layer = self._next_moe_layer.get(layer_idx)
+            predicted = (
+                self._last_token_routes.get(next_moe_layer)
+                if next_moe_layer is not None
+                else None
+            )
+            if predicted:
+                self.expert_store.prefetch_predictive(
+                    next_moe_layer, predicted
+                )
+            self._last_token_routes[layer_idx] = tuple(
+                int(expert_id) for expert_id in expert_list
             )
         assignment_outputs = torch.zeros(
             (topk_idx.numel(), flat.shape[-1]),

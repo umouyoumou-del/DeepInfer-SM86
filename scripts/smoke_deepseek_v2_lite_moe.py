@@ -122,6 +122,22 @@ def _parse_args() -> argparse.Namespace:
         help="disable early background reads for the single decode expert chunk",
     )
     parser.add_argument(
+        "--predictive-prefetch",
+        action="store_true",
+        help="experimental: warm next-layer experts from previous-token routing",
+    )
+    parser.add_argument(
+        "--no-predictive-prefetch",
+        action="store_true",
+        help="kept for compatibility; predictive warmup is off by default",
+    )
+    parser.add_argument(
+        "--predictive-cache-mb",
+        type=int,
+        default=256,
+        help="CPU byte cache for predicted next-layer experts",
+    )
+    parser.add_argument(
         "--no-prefill-pipeline",
         action="store_true",
         help="kept for compatibility; pipeline is off by default",
@@ -197,6 +213,10 @@ def main() -> int:
             args.prefill_prefetch and not args.no_prefill_prefetch
         ),
         decode_prefetch=not args.no_decode_prefetch,
+        predictive_prefetch=(
+            args.predictive_prefetch and not args.no_predictive_prefetch
+        ),
+        predictive_cache_mb=args.predictive_cache_mb,
         prefill_all_experts=(
             args.prefill_all_experts and not args.no_prefill_all_experts
         ),
@@ -276,6 +296,10 @@ def main() -> int:
             args.prefill_prefetch and not args.no_prefill_prefetch
         ),
         "decode_prefetch": not args.no_decode_prefetch,
+        "predictive_prefetch": (
+            args.predictive_prefetch and not args.no_predictive_prefetch
+        ),
+        "predictive_cache_mb": args.predictive_cache_mb,
         "prefill_all_experts": (
             args.prefill_all_experts and not args.no_prefill_all_experts
         ),
