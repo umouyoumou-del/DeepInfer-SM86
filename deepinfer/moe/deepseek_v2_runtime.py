@@ -46,6 +46,7 @@ from transformers.dynamic_module_utils import get_class_from_dynamic_module
 from deepinfer.logger import init_logger
 from deepinfer.moe.gguf_index import GGUFIndex
 from deepinfer.moe.gpu_quant import dequantize_matrix
+from deepinfer.moe.layout import split_layer_indices
 
 logger = init_logger(__name__)
 
@@ -77,6 +78,9 @@ class GenerationResult:
     lm_head_device: str
     token_ids: list[int]
     timings: dict[str, float]
+    dense_layer_indices: list[int]
+    moe_layer_indices: list[int]
+    dense_mlp_devices: dict[int, str]
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -93,6 +97,9 @@ class GenerationResult:
             "lm_head_device": self.lm_head_device,
             "token_ids": self.token_ids,
             "timings": self.timings,
+            "dense_layer_indices": self.dense_layer_indices,
+            "moe_layer_indices": self.moe_layer_indices,
+            "dense_mlp_devices": self.dense_mlp_devices,
         }
 
 
@@ -359,6 +366,7 @@ class DeepSeekV2LiteGGUFRuntime:
         cpu_threads: int = 6,
         expert_chunk_size: int = 8,
         shared_experts_device: str = "auto",
+        dense_mlp_device: str = "auto",
         lm_head_device: str = "auto",
         max_position_embeddings: int = 2048,
         verbose: bool = True,
@@ -379,6 +387,7 @@ class DeepSeekV2LiteGGUFRuntime:
         self.max_cache = int(max_cache)
         self.cpu_threads = int(cpu_threads)
         self.expert_chunk_size = max(1, int(expert_chunk_size))
+        self.dense_mlp_device = dense_mlp_device
         self.verbose = verbose
         self._closed = False
 
@@ -416,6 +425,15 @@ class DeepSeekV2LiteGGUFRuntime:
         self.config.max_position_embeddings = int(max_position_embeddings)
         self.config._attn_implementation = "eager"
         self.config.use_cache = True
+        raw_experts = getattr(self.config, "n_routed_experts", None)
+        if raw_experts is not None and int(raw_experts) <= 0:
+            # The official decoder treats only ``None`` as fully dense.
+            self.config.n_routed_experts = None
+        self.dense_layer_indices, self.moe_layer_indices = split_layer_indices(
+            self.config
+        )
+        self.has_moe = bool(self.moe_layer_indices)
+        self.dense_mlp_devices: dict[int, str] = {}
         self._validate_gguf_metadata()
 
         model_cls = get_class_from_dynamic_module(
@@ -429,12 +447,16 @@ class DeepSeekV2LiteGGUFRuntime:
         for parameter in self.model.parameters():
             parameter.requires_grad_(False)
 
-        self.shared_experts_device = "cpu"
+        self.shared_experts_device = "n/a" if not self.has_moe else "cpu"
         self.lm_head_device = "cpu"
-        self.expert_store = GGUFExpertStore(
-            self.index,
-            layer_indices=range(1, int(self.config.num_hidden_layers)),
-            device=self.device,
+        self.expert_store = (
+            GGUFExpertStore(
+                self.index,
+                layer_indices=self.moe_layer_indices,
+                device=self.device,
+            )
+            if self.has_moe
+            else None
         )
         self._load_weights(shared_experts_device, lm_head_device)
         self.gpu_free_bytes_after_load = int(torch.cuda.mem_get_info()[0])
@@ -461,13 +483,30 @@ class DeepSeekV2LiteGGUFRuntime:
             "deepseek2.embedding_length": int(self.config.hidden_size),
             "deepseek2.attention.head_count": int(self.config.num_attention_heads),
             "deepseek2.attention.kv_lora_rank": int(self.config.kv_lora_rank),
-            "deepseek2.expert_count": int(self.config.n_routed_experts),
-            "deepseek2.expert_used_count": int(self.config.num_experts_per_tok),
-            "deepseek2.expert_shared_count": int(self.config.n_shared_experts),
-            "deepseek2.expert_feed_forward_length": int(
-                self.config.moe_intermediate_size
-            ),
+            "deepseek2.feed_forward_length": int(self.config.intermediate_size),
         }
+        if self.has_moe:
+            expected.update(
+                {
+                    "deepseek2.expert_count": int(self.config.n_routed_experts),
+                    "deepseek2.expert_used_count": int(
+                        self.config.num_experts_per_tok
+                    ),
+                    "deepseek2.expert_shared_count": int(
+                        self.config.n_shared_experts or 0
+                    ),
+                    "deepseek2.expert_feed_forward_length": int(
+                        self.config.moe_intermediate_size
+                    ),
+                }
+            )
+        else:
+            stored_experts = self.index.metadata.get("deepseek2.expert_count")
+            if stored_experts not in (None, 0):
+                raise ValueError(
+                    "checkpoint contains routed experts but the config describes "
+                    f"a dense model (expert_count={stored_experts!r})"
+                )
         for key, value in expected.items():
             actual = self.index.metadata.get(key)
             if actual != value:
@@ -535,6 +574,78 @@ class DeepSeekV2LiteGGUFRuntime:
             return "cuda"
         return "cuda" if free_bytes >= required_mib * _MIB else "cpu"
 
+    @staticmethod
+    def _module_fp16_bytes(module: nn.Module) -> int:
+        # Meta tensors may report float32 element size even though the runtime
+        # loads every non-embedding module as FP16.  Budget the actual target
+        # dtype instead of trusting the meta tensor's element_size().
+        return int(sum(parameter.numel() * 2 for parameter in module.parameters()))
+
+    def _choose_dense_mlp_device(self, mlp: nn.Module, requested: str) -> str:
+        if requested not in ("auto", "cpu", "cuda"):
+            raise ValueError(
+                f"dense_mlp_device must be auto/cpu/cuda, got {requested!r}"
+            )
+        if requested == "cpu":
+            return "cpu"
+        dense_bytes = self._module_fp16_bytes(mlp)
+        required_bytes = dense_bytes + self._unloaded_attention_bytes + 256 * _MIB
+        free_bytes = int(torch.cuda.mem_get_info()[0])
+        if requested == "cuda":
+            if free_bytes < required_bytes:
+                raise RuntimeError(
+                    "requested CUDA dense-MLP placement needs "
+                    f"{required_bytes / _MIB:.1f} MiB including remaining "
+                    f"attention weights, but only {free_bytes / _MIB:.1f} MiB "
+                    "is free"
+                )
+            return "cuda"
+        return "cuda" if free_bytes >= required_bytes else "cpu"
+
+    def _load_dense_mlp(self, mlp: nn.Module, layer_idx: int) -> None:
+        device_name = self._choose_dense_mlp_device(mlp, self.dense_mlp_device)
+        if device_name == "cpu":
+            cpu_bytes = sum(parameter.numel() * 4 for parameter in mlp.parameters())
+            try:
+                import psutil
+
+                available = int(psutil.virtual_memory().available)
+            except Exception:  # noqa: BLE001
+                available = None
+            if available is not None and available < cpu_bytes + 512 * _MIB:
+                raise MemoryError(
+                    f"dense MLP layer {layer_idx} needs about "
+                    f"{cpu_bytes / _MIB:.0f} MiB of CPU RAM for FP32 weights, "
+                    f"but only {available / _MIB:.0f} MiB is available; free "
+                    "other applications or use a smaller dense checkpoint"
+                )
+            target_device = torch.device("cpu")
+            target_dtype = torch.float32
+        else:
+            target_device = self.device
+            target_dtype = torch.float16
+        self._load_linear(
+            mlp.gate_proj,
+            f"blk.{layer_idx}.ffn_gate.weight",
+            device=target_device,
+            dtype=target_dtype,
+        )
+        self._load_linear(
+            mlp.up_proj,
+            f"blk.{layer_idx}.ffn_up.weight",
+            device=target_device,
+            dtype=target_dtype,
+        )
+        self._load_linear(
+            mlp.down_proj,
+            f"blk.{layer_idx}.ffn_down.weight",
+            device=target_device,
+            dtype=target_dtype,
+        )
+        if device_name == "cpu":
+            mlp.forward = _cpu_mlp_forward.__get__(mlp, type(mlp))
+        self.dense_mlp_devices[layer_idx] = device_name
+
     def _load_weights(self, shared_experts_device: str, lm_head_device: str) -> None:
         model = self.model
         # Embedding lookup is tiny at decode time and is deliberately kept on
@@ -551,6 +662,11 @@ class DeepSeekV2LiteGGUFRuntime:
         )
 
         num_layers = int(self.config.num_hidden_layers)
+        dense_set = set(self.dense_layer_indices)
+        self._unloaded_attention_bytes = sum(
+            self._module_fp16_bytes(layer.self_attn)
+            for layer in model.model.layers
+        )
         for layer_idx in range(num_layers):
             layer = model.model.layers[layer_idx]
             attn = layer.self_attn
@@ -568,31 +684,35 @@ class DeepSeekV2LiteGGUFRuntime:
                 layer.post_attention_layernorm, f"blk.{layer_idx}.ffn_norm.weight"
             )
             attn.rotary_emb.to(self.device)
-            if layer_idx == 0:
-                self._load_linear(layer.mlp.gate_proj, "blk.0.ffn_gate.weight")
-                self._load_linear(layer.mlp.up_proj, "blk.0.ffn_up.weight")
-                self._load_linear(layer.mlp.down_proj, "blk.0.ffn_down.weight")
+            self._unloaded_attention_bytes = max(
+                0, self._unloaded_attention_bytes - self._module_fp16_bytes(attn)
+            )
+            if layer_idx in dense_set:
+                self._load_dense_mlp(layer.mlp, layer_idx)
             if layer_idx % 4 == 0:
-                self._log(f"loaded attention/dense weights through layer {layer_idx}")
+                self._log(
+                    f"loaded layer {layer_idx}: dense={layer_idx in dense_set}"
+                )
         self._load_norm(model.model.norm, "output_norm.weight")
         torch.cuda.empty_cache()
 
-        # Now that attention and dense layer 0 are resident, decide where the
-        # shared experts and LM head can live without risking expert OOM.
-        self.shared_experts_device = self._choose_optional_device(
-            shared_experts_device, required_mib=1150
-        )
-        if self.shared_experts_device == "cuda":
-            try:
-                self._load_shared_experts(torch.device("cuda"), torch.float16)
-            except torch.cuda.OutOfMemoryError:
-                torch.cuda.empty_cache()
-                gc.collect()
-                self._log("shared expert CUDA placement OOMed; falling back to CPU")
-                self.shared_experts_device = "cpu"
+        if self.has_moe:
+            self.shared_experts_device = self._choose_optional_device(
+                shared_experts_device, required_mib=1150
+            )
+            if self.shared_experts_device == "cuda":
+                try:
+                    self._load_shared_experts(torch.device("cuda"), torch.float16)
+                except torch.cuda.OutOfMemoryError:
+                    torch.cuda.empty_cache()
+                    gc.collect()
+                    self._log("shared expert CUDA placement OOMed; falling back to CPU")
+                    self.shared_experts_device = "cpu"
+                    self._load_shared_experts(torch.device("cpu"), torch.float32)
+            else:
                 self._load_shared_experts(torch.device("cpu"), torch.float32)
         else:
-            self._load_shared_experts(torch.device("cpu"), torch.float32)
+            self.shared_experts_device = "n/a"
 
         self.lm_head_device = self._choose_optional_device(
             lm_head_device, required_mib=600
@@ -623,7 +743,7 @@ class DeepSeekV2LiteGGUFRuntime:
             )
         )
 
-        for layer_idx in range(1, num_layers):
+        for layer_idx in self.moe_layer_indices:
             layer = model.model.layers[layer_idx]
             self._load_router(layer.mlp, layer_idx)
             # The routed expert module parameters remain meta and are never
@@ -631,6 +751,15 @@ class DeepSeekV2LiteGGUFRuntime:
             layer.mlp.experts = nn.ModuleList()
             self._install_moe(layer.mlp, layer_idx)
         torch.cuda.empty_cache()
+        self._log(
+            "layer layout: %d dense %s, %d MoE %s"
+            % (
+                len(self.dense_layer_indices),
+                self.dense_layer_indices,
+                len(self.moe_layer_indices),
+                self.moe_layer_indices,
+            )
+        )
 
     def _load_router(self, mlp: nn.Module, layer_idx: int) -> None:
         router = self._read_weight(
@@ -641,7 +770,7 @@ class DeepSeekV2LiteGGUFRuntime:
         _set_parameter(mlp.gate, "weight", router)
 
     def _load_shared_experts(self, device: torch.device, dtype: torch.dtype) -> None:
-        for layer_idx in range(1, int(self.config.num_hidden_layers)):
+        for layer_idx in self.moe_layer_indices:
             shared = self.model.model.layers[layer_idx].mlp.shared_experts
             self._load_linear(
                 shared.gate_proj,
@@ -942,14 +1071,18 @@ class DeepSeekV2LiteGGUFRuntime:
             shared_experts_device=self.shared_experts_device,
             lm_head_device=self.lm_head_device,
             token_ids=list(generated),
-            timings=dict(self.expert_store.timings),
+            timings=dict(self.expert_store.timings) if self.expert_store else {},
+            dense_layer_indices=list(self.dense_layer_indices),
+            moe_layer_indices=list(self.moe_layer_indices),
+            dense_mlp_devices=dict(self.dense_mlp_devices),
         )
 
     def close(self) -> None:
         if self._closed:
             return
         self._closed = True
-        self.expert_store.close()
+        if self.expert_store is not None:
+            self.expert_store.close()
         del self.model
         gc.collect()
         torch.cuda.empty_cache()

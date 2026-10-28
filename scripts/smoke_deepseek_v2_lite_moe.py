@@ -69,6 +69,9 @@ def _parse_args() -> argparse.Namespace:
         "--shared-experts-device", choices=("auto", "cuda", "cpu"), default="auto"
     )
     parser.add_argument(
+        "--dense-mlp-device", choices=("auto", "cuda", "cpu"), default="auto"
+    )
+    parser.add_argument(
         "--lm-head-device", choices=("auto", "cuda", "cpu"), default="auto"
     )
     parser.add_argument(
@@ -107,6 +110,7 @@ def main() -> int:
         cpu_threads=args.cpu_threads,
         expert_chunk_size=args.expert_chunk_size,
         shared_experts_device=args.shared_experts_device,
+        dense_mlp_device=args.dense_mlp_device,
         lm_head_device=args.lm_head_device,
         verbose=not args.quiet,
     )
@@ -167,6 +171,7 @@ def main() -> int:
         "gpu_free_bytes_after_close": int(free_bytes),
         "max_cache": args.max_cache,
         "expert_chunk_size": args.expert_chunk_size,
+        "dense_mlp_device": args.dense_mlp_device,
         "results": records,
     }
     if args.output is not None:

@@ -19,10 +19,10 @@ DeepSeek-V2-Lite 的 MoE 路由、专家计算、MLA attention 和自回归 deco
 
 | 指标 | 实测 |
 |---|---:|
-| 模型加载 | 18.12 s |
+| 模型加载 | 17.27 s |
 | 冷启动 warmup（4 token） | 3.5–16 s，取决于 OS page cache |
-| prefill（短 prompt） | 2.13–2.48 s |
-| decode 稳态 | **2.44–2.75 tokens/s** |
+| prefill（短 prompt） | 2.22–2.77 s |
+| decode 稳态 | **2.40–2.70 tokens/s** |
 | peak GPU allocated | **2.41 GiB** |
 | peak GPU reserved | **2.43 GiB** |
 | GPU 加载后空闲 | 约 1.0 GiB |
@@ -566,11 +566,11 @@ F:\QwenQLoRA\venv\Scripts\python.exe `
 
 | prompt | prefill | decode token 数 | decode t/s | peak GPU |
 |---|---:|---:|---:|---:|
-| MoE 解释 | 2.134 s | 23 | **2.444** | 2410.2 MiB |
-| 首都 | 2.320 s | 6 | **2.742** | 2410.0 MiB |
-| 翻译 | 2.180 s | 6 | **2.712** | 2409.6 MiB |
-| 5-2 | 2.144 s | 6 | **2.745** | 2409.1 MiB |
-| 9.11 vs 9.9 | 2.484 s | 6 | **2.715** | 2412.8 MiB |
+| MoE 解释 | 2.349 s | 23 | **2.399** | 2410.2 MiB |
+| 首都 | 2.544 s | 6 | **2.618** | 2410.0 MiB |
+| 翻译 | 2.309 s | 6 | **2.595** | 2409.6 MiB |
+| 5-2 | 2.224 s | 6 | **2.704** | 2409.1 MiB |
+| 9.11 vs 9.9 | 2.772 s | 6 | **2.637** | 2412.8 MiB |
 
 峰值：
 
@@ -580,7 +580,7 @@ peak reserved  ≈ 2.43 GiB
 加载后空闲     ≈ 1.0 GiB
 ```
 
-模型加载 18.12 s。第一次进程内的冷启动 warmup 可能很慢（曾观察 16 s），
+模型加载 17.27 s。第一次进程内的冷启动 warmup 可能很慢（曾观察 16 s），
 因为 Q4_K_M 的 expert 页还没有进入 OS page cache；后续 prefill/decode 会稳定。
 
 ### 5.2 为什么比 llama.cpp CPU 慢
@@ -613,7 +613,7 @@ llama.cpp 有成熟的 AVX2/AVX512 CPU 量化 GEMV、mmap 权重和专门的 MoE
 | 并行 readinto + index_copy 分组 | 约 1.6–1.9 t/s |
 | pinned H2D + down copy stream overlap | 约 2.4–2.7 t/s |
 | 修复 race 前的“2.7” | 不可复现，不能作为结果 |
-| 修复 race 后的最终版本 | **2.44–2.75 t/s，可复现** |
+| 修复 race 后的最终版本 | **2.40–2.70 t/s，可复现** |
 
 ---
 
@@ -756,10 +756,124 @@ tests/moe/test_gpu_quant.py
 
 ---
 
-## 10. 一句话结论
+## 10. 后记：Dense / Hybrid 层支持
+
+最初这版运行时为了尽快跑通 DeepSeek-V2-Lite，默认了“layer 0 dense，其余全部
+MoE”。这对 DeepSeek-V2-Lite 的配置刚好成立，但不是一个完整的执行层：
+
+- DeepSeek 配置里有 `first_k_dense_replace`，不同模型可能是 1、3 或更多；
+- `moe_layer_freq` 允许 MoE 与 dense 层交错；
+- dense-only 模型没有 routed expert，不应该被迫走 `DeepseekV2MoE`；
+- 即使只有 leading dense 层，也要明确 dense MLP 放 GPU 还是 CPU。
+
+因此补了一层很薄的 layout 抽象和 dense MLP 加载路径。
+
+### 10.1 层布局判定
+
+`deepinfer/moe/layout.py` 直接镜像官方 `DeepseekV2DecoderLayer` 的判定：
+
+```python
+def is_moe_layer(config, layer_idx):
+    num_experts = routed_expert_count(config)
+    if num_experts == 0:
+        return False
+    first_dense = int(getattr(config, "first_k_dense_replace", 0) or 0)
+    frequency = max(1, int(getattr(config, "moe_layer_freq", 1) or 1))
+    return layer_idx >= first_dense and layer_idx % frequency == 0
+```
+
+`split_layer_indices()` 返回：
+
+```python
+dense_layer_indices, moe_layer_indices = split_layer_indices(config)
+```
+
+对 DeepSeek-V2-Lite：
+
+```text
+dense = [0]
+moe   = [1, 2, ..., 26]
+```
+
+对 `first_k_dense_replace=3` 的 hybrid 模型：
+
+```text
+dense = [0, 1, 2]
+moe   = [3, 4, ...]
+```
+
+对 `n_routed_experts=None/0` 的 dense-only 模型：
+
+```text
+dense = [0, 1, ..., N-1]
+moe   = []
+```
+
+如果 config 里写的是 `n_routed_experts=0`，在构造官方模型前会归一化成 `None`，
+因为官方 `DeepseekV2DecoderLayer` 只把 `None` 当成 dense。
+
+### 10.2 Dense MLP 的加载和放置
+
+对每个 `dense_layer_indices` 中的层，按照 GGUF 的 dense FFN 名字加载：
+
+```text
+blk.{i}.ffn_gate.weight
+blk.{i}.ffn_up.weight
+blk.{i}.ffn_down.weight
+```
+
+MoE 层继续加载：
+
+```text
+blk.{i}.ffn_gate_inp.weight
+blk.{i}.ffn_gate_shexp.weight / ffn_up_shexp / ffn_down_shexp
+blk.{i}.ffn_gate_exps.weight / ffn_up_exps / ffn_down_exps
+```
+
+dense MLP 的设备选择由 `--dense-mlp-device auto/cuda/cpu` 控制。`auto` 会估算：
+
+```text
+dense_layer_bytes
++ 尚未加载的 attention 权重
++ 256 MiB 预留
+```
+
+如果 GPU 放得下，dense MLP 用 FP16 放在 GPU；否则：
+
+1. 估算 CPU FP32 权重需要多少 RAM；
+2. 用 `psutil.virtual_memory().available` 检查 host 余量；
+3. 放 CPU FP32，并把该层 `forward` 替换成 `_cpu_mlp_forward`；
+4. 如果 host 余量也不够，直接给出明确 `MemoryError`，而不是硬着头皮加载到 OOM。
+
+这样：
+
+- DeepSeek-V2-Lite 的 layer 0 dense 仍然在 GPU；
+- 多个 leading dense 层或 hybrid dense 层不会被误当 MoE；
+- dense-only 模型在 4 GB 卡上会自动把放不下的 dense MLP 回退到 CPU；
+- routed expert store 只在 `moe_layer_indices` 非空时创建。
+
+### 10.3 测试和边界
+
+新增 `tests/moe/test_dense_support.py`：
+
+- 默认 DeepSeek-V2-Lite layout；
+- 多个 leading dense 层；
+- `moe_layer_freq` 交错的 dense/MoE；
+- `n_routed_experts=None/0` 的 dense-only；
+- CPU MLP fallback 的 shape/dtype/数值对照。
+
+当前新增 5 个 dense 测试，`tests/moe` 共 11 个测试，全套 70 个测试通过。
+
+必须说明：本机没有 dense-only DeepSeek-V2 GGUF，因此 dense-only 的端到端
+吞吐和质量没有像 Q4_K_M MoE 那样做真实 benchmark；“dense/hybrid 层可加载、
+可回退、CPU MLP 数值正确”有单元测试，但没有冒充成完整 dense 模型基准。
+dense-only 超出显存时回退 CPU FP32 也会很慢，这是后续可以继续做 dense
+expert-style streaming 的地方。
+
+## 11. 一句话结论
 
 这次最重要的不是“4 GB 跑 15.7B”这个标题，而是把 **MoE 的路由、专家流式读取、
 GPU 反量化、pinned H2D、确定性 scatter、MLA attention 和生成循环** 真正接进了
-DeepInfer 的执行层，并在 4 GB RTX 3050 上用 Q4_K_M 跑出了 **2.44–2.75 tokens/s**
+DeepInfer 的执行层，并在 4 GB RTX 3050 上用 Q4_K_M 跑出了 **2.40–2.70 tokens/s**
 的可复现结果；速度还不是 llama.cpp CPU 的对手，但它是 native 的、可控的、
 可以继续往下做 fused kernel 和调度的基线。
