@@ -65,6 +65,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--max-cache", type=int, default=256)
     parser.add_argument("--expert-chunk-size", type=int, default=8)
     parser.add_argument(
+        "--cpu-moe-layers",
+        type=int,
+        default=0,
+        help="offload the last N routed-expert layers to the CPU FP32 path",
+    )
+    parser.add_argument(
         "--expert-cache-mb",
         type=int,
         default=0,
@@ -126,6 +132,7 @@ def main() -> int:
         max_cache=args.max_cache,
         cpu_threads=args.cpu_threads,
         expert_chunk_size=args.expert_chunk_size,
+        cpu_moe_layers=args.cpu_moe_layers,
         expert_cache_mb=args.expert_cache_mb,
         gpu_expert_cache_mb=args.gpu_expert_cache_mb,
         fused_moe=not args.no_fused_moe,
@@ -191,6 +198,7 @@ def main() -> int:
         "gpu_free_bytes_after_close": int(free_bytes),
         "max_cache": args.max_cache,
         "expert_chunk_size": args.expert_chunk_size,
+        "cpu_moe_layers": args.cpu_moe_layers,
         "expert_cache_mb": args.expert_cache_mb,
         "gpu_expert_cache_mb": args.gpu_expert_cache_mb,
         "dense_mlp_device": args.dense_mlp_device,

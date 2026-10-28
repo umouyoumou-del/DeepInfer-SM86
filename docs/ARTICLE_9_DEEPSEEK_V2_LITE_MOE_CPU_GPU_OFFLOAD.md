@@ -29,6 +29,7 @@ DeepSeek-V2-Lite 的 MoE 路由、专家计算、MLA attention 和自回归 deco
 | 可选 GPU expert cache 1 GiB | decode 2.69；prefill 2.93；peak 3.20 GiB |
 | mini quality gate | MMLU-style 8/10；GSM8K-style 4/8；长链 3/5 |
 | paged scheduler | 2 请求 batched decode；native paged MLA；prefix 16 token |
+| CPU layer offload | 最后 1 个 MoE 层 CPU FP32；decode 1.86 t/s；token IDs 一致 |
 | 对照 per-expert fused | decode 2.56–3.05；64-token 2.63 |
 | 对照 dequant+bmm | decode 2.43–2.77；64-token 2.43 |
 | GPU 加载后空闲 | 约 1.0 GiB |
@@ -793,12 +794,14 @@ tests/moe/test_dense_support.py
   CUDA/FlashMLA kernel，当前比 materialize 基线约慢 16%；
 - Q4_K_M 是唯一验证过的 DeepSeek-V2-Lite GGUF 量化档；
 - 没有长上下文和官方完整 MMLU/GSM8K；perplexity 已做 mini 回归；
+- CPU MoE layer offload 仍是 PyTorch CPU FP32/oneDNN，不是手写 AVX2 packed
+  GEMV；1 个 CPU 层约 1.86 t/s；
 - 只验证 Windows + Python 3.10 + torch 2.5.1+cu121。
 
 ### 下一步优先级
 
-1. **更激进的 CPU/GPU 切分**：把部分层或部分 expert 放在 CPU AVX2 kernel，
-   GPU 只算 attention + 热门 expert；
+1. **热门/冷门 expert 级 CPU 切分 + 手写 AVX2 packed kernel**：当前只做了
+   整层 CPU offload，下一步把少量冷门 expert 放 CPU，GPU 保留 hot experts；
 2. **CUDA Graph / prefill chunk pipeline**：降低 Python/launch 开销，保持确定性；
 3. **更大显存/CPU offload 组合**：GPU cache 已验证可行但 1 GiB 只带来约 2.3%
    提升；若要继续，需要把 shared/lm_head 移到 CPU 腾出 1.5–2 GiB VRAM；
@@ -1273,7 +1276,34 @@ F:/QwenQLoRA/venv/Scripts/python.exe ^
 
 结果文件：`docs/results/deepseek_v2_lite_q4km_moe_paged_scheduler.json`。
 
-## 16. 一句话结论
+## 16. CPU MoE layer offload
+
+新增 `--cpu-moe-layers N`：把最后 N 个真实 MoE 层放到 CPU FP32 路径。
+
+实现：
+
+- runtime 选择 `moe_layer_indices[-N:]`；
+- 这些层在 `_streaming_moe_forward` 内走 `_moe_cpu_fallback()`；
+- CPU 路径使用 `GGUFExpertStore.load_experts(device='cpu', dtype=torch.float32)`；
+- 每个 expert chunk 仍限制为 8，避免 CPU FP32 权重一次性爆内存；
+- attention、shared experts 和 lm_head 仍在 GPU；
+- 默认 `--cpu-moe-layers 0`。
+
+32-token 长故事实测：
+
+| 指标 | 全 GPU | 最后 1 层 CPU |
+|---|---:|---:|
+| decode | 2.50 t/s | **1.86 t/s** |
+| prefill | 3.19 s | 4.39 s |
+| peak GPU allocated | 2259 MiB | 2259 MiB |
+| token IDs / text | 基准 | **完全一致** |
+
+CPU 端是 PyTorch CPU FP32 bmm，实际使用 oneDNN/AVX2，但不是手写的 AVX2
+packed GEMV kernel。这个实验验证了层切分和 CPU 专家读取的正确性，也给出了
+明确代价：1 层 offload 就会降到约 1.86 tok/s。下一步应做热门/冷门 expert
+级切分，把少量冷门 expert 放到 CPU，而不是整层搬运。
+
+## 17. 一句话结论
 
 这次最重要的不是“4 GB 跑 15.7B”这个标题，而是把 **MoE 的路由、专家流式读取、
 GPU 反量化、pinned H2D、确定性 scatter、MLA attention 和生成循环** 真正接进了

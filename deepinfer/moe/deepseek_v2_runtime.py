@@ -127,6 +127,8 @@ class GenerationResult:
     fused_moe_enabled: bool
     fused_moe_chunks: int
     fallback_moe_chunks: int
+    cpu_moe_layers: int
+    cpu_moe_chunks: int
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -149,6 +151,8 @@ class GenerationResult:
             "fused_moe_enabled": self.fused_moe_enabled,
             "fused_moe_chunks": self.fused_moe_chunks,
             "fallback_moe_chunks": self.fallback_moe_chunks,
+            "cpu_moe_layers": self.cpu_moe_layers,
+            "cpu_moe_chunks": self.cpu_moe_chunks,
         }
 
 
@@ -724,6 +728,7 @@ class DeepSeekV2LiteGGUFRuntime:
         max_cache: int = 256,
         cpu_threads: int = 6,
         expert_chunk_size: int = 8,
+        cpu_moe_layers: int = 0,
         expert_cache_mb: int = 0,
         gpu_expert_cache_mb: int = 0,
         fused_moe: bool = True,
@@ -749,6 +754,7 @@ class DeepSeekV2LiteGGUFRuntime:
         self.max_cache = int(max_cache)
         self.cpu_threads = int(cpu_threads)
         self.expert_chunk_size = max(1, int(expert_chunk_size))
+        self.requested_cpu_moe_layers = max(0, int(cpu_moe_layers))
         self.requested_fused_moe = bool(fused_moe)
         self.dense_mlp_device = dense_mlp_device
         self.verbose = verbose
@@ -800,6 +806,13 @@ class DeepSeekV2LiteGGUFRuntime:
         self.dense_layer_indices, self.moe_layer_indices = split_layer_indices(
             self.config
         )
+        cpu_layer_count = min(
+            self.requested_cpu_moe_layers, len(self.moe_layer_indices)
+        )
+        self.cpu_moe_layer_indices = tuple(
+            self.moe_layer_indices[-cpu_layer_count:]
+        ) if cpu_layer_count else ()
+        self.cpu_moe_layer_set = set(self.cpu_moe_layer_indices)
         self.has_moe = bool(self.moe_layer_indices)
         self.dense_mlp_devices: dict[int, str] = {}
         self._validate_gguf_metadata()
@@ -837,6 +850,8 @@ class DeepSeekV2LiteGGUFRuntime:
         )
         self.fused_moe_chunks = 0
         self.fallback_moe_chunks = 0
+        self.cpu_moe_chunks = 0
+        self.cpu_moe_seconds = 0.0
         self._load_weights(shared_experts_device, lm_head_device)
         from deepinfer.moe.paged_adapter import install_native_paged_attention
 
@@ -1255,7 +1270,14 @@ class DeepSeekV2LiteGGUFRuntime:
             chunk_order = order[sorted_offset : sorted_offset + chunk_count]
             sorted_offset += chunk_count
             try:
-                if self.fused_moe_enabled:
+                if layer_idx in self.cpu_moe_layer_set:
+                    cpu_started = time.perf_counter()
+                    expert_output = self._moe_cpu_fallback(
+                        layer_idx, chunk_ids, chunk_tokens
+                    )
+                    self.cpu_moe_seconds += time.perf_counter() - cpu_started
+                    self.cpu_moe_chunks += 1
+                elif self.fused_moe_enabled:
                     expert_output = self._fused_expert_chunk(
                         layer_idx,
                         chunk_ids,
@@ -1690,13 +1712,24 @@ class DeepSeekV2LiteGGUFRuntime:
             shared_experts_device=self.shared_experts_device,
             lm_head_device=self.lm_head_device,
             token_ids=list(generated),
-            timings=dict(self.expert_store.timings) if self.expert_store else {},
+            timings=(
+                {
+                    **(
+                        dict(self.expert_store.timings)
+                        if self.expert_store
+                        else {}
+                    ),
+                    "cpu_moe_seconds": float(self.cpu_moe_seconds),
+                }
+            ),
             dense_layer_indices=list(self.dense_layer_indices),
             moe_layer_indices=list(self.moe_layer_indices),
             dense_mlp_devices=dict(self.dense_mlp_devices),
             fused_moe_enabled=self.fused_moe_enabled,
             fused_moe_chunks=self.fused_moe_chunks,
             fallback_moe_chunks=self.fallback_moe_chunks,
+            cpu_moe_layers=len(self.cpu_moe_layer_indices),
+            cpu_moe_chunks=self.cpu_moe_chunks,
         )
 
     def close(self) -> None:
