@@ -2,7 +2,8 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
-#include <vector>
+
+#define DP_MAX_TOKENS 64
 
 #ifdef _WIN32
 #define DP_EXPORT __declspec(dllexport)
@@ -137,13 +138,18 @@ extern "C" DP_EXPORT void dp_gate_up_q4k(
     int k_size,
     int tokens)
 {
+    if (tokens > DP_MAX_TOKENS) return;
     const int blocks = k_size / 256;
 #pragma omp parallel for schedule(static)
     for (int row = 0; row < rows; ++row) {
         const uint8_t* gate_row = gate + (size_t)row * blocks * 144;
         const uint8_t* up_row = up + (size_t)row * blocks * 144;
-        std::vector<float> gate_acc(tokens, 0.0f);
-        std::vector<float> up_acc(tokens, 0.0f);
+        float gate_acc[DP_MAX_TOKENS];
+        float up_acc[DP_MAX_TOKENS];
+        for (int token = 0; token < tokens; ++token) {
+            gate_acc[token] = 0.0f;
+            up_acc[token] = 0.0f;
+        }
         alignas(32) float gate_w[256];
         alignas(32) float up_w[256];
         for (int block = 0; block < blocks; ++block) {
@@ -171,11 +177,13 @@ extern "C" DP_EXPORT void dp_down_q4k(
     int k_size,
     int tokens)
 {
+    if (tokens > DP_MAX_TOKENS) return;
     const int blocks = k_size / 256;
 #pragma omp parallel for schedule(static)
     for (int row = 0; row < rows; ++row) {
         const uint8_t* down_row = down + (size_t)row * blocks * 144;
-        std::vector<float> acc(tokens, 0.0f);
+        float acc[DP_MAX_TOKENS];
+        for (int token = 0; token < tokens; ++token) acc[token] = 0.0f;
         alignas(32) float weight[256];
         for (int block = 0; block < blocks; ++block) {
             dp_decode_q4_k(down_row + block * 144, weight);
@@ -199,11 +207,13 @@ extern "C" DP_EXPORT void dp_down_q5_0(
     int k_size,
     int tokens)
 {
+    if (tokens > DP_MAX_TOKENS) return;
     const int blocks = k_size / 32;
 #pragma omp parallel for schedule(static)
     for (int row = 0; row < rows; ++row) {
         const uint8_t* down_row = down + (size_t)row * blocks * 22;
-        std::vector<float> acc(tokens, 0.0f);
+        float acc[DP_MAX_TOKENS];
+        for (int token = 0; token < tokens; ++token) acc[token] = 0.0f;
         alignas(32) float weight[32];
         for (int block = 0; block < blocks; ++block) {
             dp_decode_q5_0(down_row + block * 22, weight);
@@ -227,11 +237,13 @@ extern "C" DP_EXPORT void dp_down_q8_0(
     int k_size,
     int tokens)
 {
+    if (tokens > DP_MAX_TOKENS) return;
     const int blocks = k_size / 32;
 #pragma omp parallel for schedule(static)
     for (int row = 0; row < rows; ++row) {
         const uint8_t* down_row = down + (size_t)row * blocks * 34;
-        std::vector<float> acc(tokens, 0.0f);
+        float acc[DP_MAX_TOKENS];
+        for (int token = 0; token < tokens; ++token) acc[token] = 0.0f;
         alignas(32) float weight[32];
         for (int block = 0; block < blocks; ++block) {
             dp_decode_q8_0(down_row + block * 34, weight);

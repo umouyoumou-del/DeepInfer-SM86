@@ -1658,7 +1658,8 @@ class DeepSeekV2LiteGGUFRuntime:
         up_spec = self.expert_store._specs[(layer_idx, "up")]
         down_spec = self.expert_store._specs[(layer_idx, "down")]
         fused_supported = (
-            gate_spec.quant_type.upper() == "Q4_K"
+            padded_tokens.shape[1] <= 64
+            and gate_spec.quant_type.upper() == "Q4_K"
             and up_spec.quant_type.upper() == "Q4_K"
             and down_spec.quant_type.upper() in ("Q4_K", "Q5_0", "Q8_0")
             and gate_spec.in_features % 256 == 0

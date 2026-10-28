@@ -2,14 +2,14 @@
   "model": "DeepSeek-V2-Lite-Chat Q4_K_M",
   "prompt": "请写一段约150字的中文故事，主题是夜晚的火车站。",
   "max_new_tokens": 32,
-  "cpu_experts_per_layer": 1,
-  "cpu_expert_layers": 4,
-  "cpu_expert_layer_indices": [
-    23,
-    24,
-    25,
-    26
-  ],
+  "recommended": {
+    "cpu_expert_layers": 2,
+    "cpu_experts_per_layer": 1,
+    "cpu_expert_layer_indices": [
+      25,
+      26
+    ]
+  },
   "baseline": {
     "decode_tokens_per_second": 2.5001090370175376,
     "prefill_seconds": 3.187250499962829,
@@ -67,10 +67,10 @@
     }
   },
   "cpu_expert_avx2": {
-    "decode_tokens_per_second": 2.334176452924991,
-    "prefill_seconds": 3.4356325000408106,
-    "decode_seconds": 13.280915400013328,
-    "peak_gpu_allocated_bytes": 2370152960,
+    "decode_tokens_per_second": 2.504440312077038,
+    "prefill_seconds": 3.333085199992638,
+    "decode_seconds": 12.37801510002464,
+    "peak_gpu_allocated_bytes": 2368968192,
     "peak_gpu_reserved_bytes": 2464153600,
     "token_ids": [
       207,
@@ -108,28 +108,53 @@
     ],
     "text": " 夜幕降临，火车站的灯光显得格外温暖。站台上，旅客们匆匆赶路，有的提着行李，有的抱着孩子，脸上写",
     "timings": {
-      "expert_read_seconds": 7.585267199785449,
-      "expert_h2d_seconds": 0.43238349980674684,
+      "expert_read_seconds": 7.0753584006452,
+      "expert_h2d_seconds": 0.3929161017294973,
       "expert_dequant_launch_seconds": 0.0,
-      "expert_load_calls": 1240.0,
+      "expert_load_calls": 1194.0,
       "expert_cache_hits": 0.0,
-      "expert_cache_misses": 21612.0,
+      "expert_cache_misses": 21690.0,
       "expert_cache_bytes": 0.0,
       "expert_cache_evictions": 0.0,
       "gpu_cache_hits": 0.0,
       "gpu_cache_misses": 0.0,
       "gpu_cache_bytes": 0.0,
       "gpu_cache_evictions": 0.0,
-      "cpu_moe_seconds": 0.6006682000006549
+      "cpu_moe_seconds": 0.30854290013667196
     }
   },
   "token_ids_equal": true,
   "text_equal": true,
-  "cpu_moe_seconds": 0.6006682000006549,
+  "hot_cold_sweep": [
+    {
+      "cpu_expert_layers": 2,
+      "cpu_experts_per_layer": 1,
+      "decode_tokens_per_second": 2.504440312077038,
+      "prefill_seconds": 3.333085199992638,
+      "cpu_moe_seconds": 0.30854290013667196,
+      "token_ids_equal": true
+    },
+    {
+      "cpu_expert_layers": 3,
+      "cpu_experts_per_layer": 1,
+      "decode_tokens_per_second": 2.486558646549282,
+      "prefill_seconds": 3.3897631999570876,
+      "cpu_moe_seconds": 0.5557240000925958,
+      "token_ids_equal": true
+    },
+    {
+      "cpu_expert_layers": 4,
+      "cpu_experts_per_layer": 1,
+      "decode_tokens_per_second": 2.2976700817471456,
+      "prefill_seconds": 3.817588700039778,
+      "cpu_moe_seconds": 0.650572300015483,
+      "token_ids_equal": true
+    }
+  ],
   "notes": [
     "cold experts: lowest cumulative route count among currently selected experts",
-    "CPU path is fused AVX2 Q4_K gate/up + Q5_0/Q8_0 down packed GEMV/GEMV-style kernels",
+    "CPU path: fused AVX2 Q4_K gate/up + Q5_0/Q8_0 down packed kernels with OpenMP",
     "GPU retains attention, shared experts, lm_head and hot routed experts",
-    "packed CPU expert weights use a 512MB LRU"
+    "2-layer x 1-cold-expert is near zero speed loss and preserves token IDs; 4 layers is more aggressive but slower"
   ]
 }

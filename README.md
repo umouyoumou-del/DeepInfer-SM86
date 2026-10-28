@@ -305,7 +305,7 @@ RTX 3050 Laptop 4 GB + 16 GB RAM，DeepSeek-V2-Lite Q4_K_M：
 | mini 质量回归 | MMLU-style 8/10、GSM8K-style 4/8、长链 3/5；llama.cpp 为 8/10、2/8、1/5 |
 | paged scheduler | 2 请求 batched decode；prefix cache 复用 16 token；token IDs 与单请求一致 |
 | CPU layer offload（1 层） | decode 1.86 t/s；32-token token IDs/text 与 GPU 路径完全一致 |
-| Hot/cold expert split（4 层 × 1 cold） | decode **2.33 t/s**；32-token IDs/text 一致 |
+| Hot/cold expert split（2 层 × 1 cold） | decode **2.50 t/s**；32-token IDs/text 一致 |
 
 同一份 Q4_K_M 的 llama.cpp CPU 基线约 9–13 tokens/s；本实现的重点是 native
 MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比绝对速度。
@@ -494,15 +494,17 @@ AVX2 packed GEMV。层切分验证了 CPU 专家读取和 GPU/CPU 结果一致�
 - CPU expert 权重有 512 MB LRU cache（`--cpu-expert-cache-mb`）；
 - 默认关闭，不影响现有 GPU 路径。
 
-实测：最后 4 层、每层 1 个 cold expert：
+实测矩阵（每层 1 个 cold expert）：
 
-| 指标 | 全 GPU | hot/cold split |
-|---|---:|---:|
-| decode | 2.50 t/s | **2.33 t/s** |
-| prefill | 3.19 s | 3.44 s |
-| peak GPU allocated | 2259 MiB | 2260 MiB |
-| 32-token token IDs / text | 基准 | **完全一致** |
-| CPU MoE 累计时间 | — | 0.60 s |
+| CPU 层数 | decode | prefill | CPU MoE | token IDs |
+|---:|---:|---:|---:|---:|
+| 2 | **2.50 t/s** | 3.33 s | 0.31 s | 一致 |
+| 3 | 2.49 t/s | 3.39 s | 0.56 s | 一致 |
+| 4 | 2.30 t/s | 3.82 s | 0.65 s | 一致 |
+
+推荐 **2 层 × 1 cold expert**：几乎无速度损失，同时仍把一部分 routed expert
+放到 CPU。CPU 路径现在使用 fused AVX2 packed GEMV（OpenMP 按输出 row 并行），
+并用固定 token 累加数组减少 K-block 循环里的小分配。
 
 这比整层 CPU offload 的 1.86 t/s 和 oneDNN 版本的 2.23 t/s 都好，说明少量
 cold expert 放到 CPU 是可行的显存/速度折中。当前 CPU cold-expert 路径已经是
@@ -1238,7 +1240,7 @@ python scripts\export_sm86_kernels.py
   decode / block KV 预算；但 stream overlap 关闭，prefill 仍会扫描大量专家，
   冷启动明显慢于稳态 decode；
 - CPU MoE layer offload 已实现，1 层整层 offload 约 1.86 t/s；
-- cold-expert split 已实现，最后 4 层 × 1 cold expert 约 2.33 t/s；
+- cold-expert split 已实现；推荐 2 层 × 1 cold expert，约 2.50 t/s，
   CPU 路径已有 fused AVX2 packed gate/up/down，oneDNN 作为 fallback；
 - dense/hybrid 层布局已实现并有单元测试，但本机没有 dense DeepSeek-V2 GGUF
   做端到端质量基准；dense-only 模型超出显存时会回退 CPU FP32，速度会很慢；
