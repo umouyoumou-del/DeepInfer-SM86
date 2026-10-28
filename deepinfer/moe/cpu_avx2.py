@@ -21,6 +21,8 @@ from typing import Any
 import torch
 
 _SOURCE = Path(__file__).with_name("cpu_avx2_packed.cpp")
+_GEMV_SOURCE = Path(__file__).with_name("cpu_avx2_gemv.cpp")
+_SOURCES = (_SOURCE, _GEMV_SOURCE)
 _LIB: Any = None
 _LIB_PATH: Path | None = None
 _FUNCTIONS: dict[str, Any] = {}
@@ -29,7 +31,9 @@ _BLOCK_BYTES = {"Q4_K": (256, 144), "Q5_0": (32, 22), "Q8_0": (32, 34)}
 
 
 def _library_path() -> Path:
-    digest = hashlib.sha1(_SOURCE.read_bytes()).hexdigest()[:10]
+    digest = hashlib.sha1(
+        b"".join(source.read_bytes() for source in _SOURCES)
+    ).hexdigest()[:10]
     suffix = ".dll" if os.name == "nt" else ".so"
     return Path(tempfile.gettempdir()) / f"deepinfer_cpu_avx2_{digest}{suffix}"
 
@@ -38,10 +42,13 @@ def _compile() -> Path:
     compiler = os.environ.get("DEEPINFER_CPU_AVX2_COMPILER") or shutil.which("g++")
     if not compiler:
         raise RuntimeError("g++ is unavailable; cannot build CPU AVX2 dequantizer")
-    if not _SOURCE.exists():
-        raise RuntimeError(f"missing AVX2 source: {_SOURCE}")
+    for source in _SOURCES:
+        if not source.exists():
+            raise RuntimeError(f"missing AVX2 source: {source}")
     target = _library_path()
-    if target.exists() and target.stat().st_mtime >= _SOURCE.stat().st_mtime:
+    if target.exists() and target.stat().st_mtime >= max(
+        source.stat().st_mtime for source in _SOURCES
+    ):
         return target
     command = [
         compiler,
@@ -50,11 +57,11 @@ def _compile() -> Path:
         "-mfma",
         "-std=c++17",
         "-shared",
-        "-static-libgcc",
-        "-static-libstdc++",
+        "-fopenmp",
+        "-static",
         "-o",
         str(target),
-        str(_SOURCE),
+        *(str(source) for source in _SOURCES),
     ]
     completed = subprocess.run(
         command,
@@ -90,6 +97,30 @@ def _load() -> Any:
         ]
         function.restype = None
         _FUNCTIONS[qtype] = function
+    function = getattr(_LIB, "dp_gate_up_q4k")
+    function.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+    ]
+    function.restype = None
+    _FUNCTIONS["dp_gate_up_q4k"] = function
+    for name in ("dp_down_q4k", "dp_down_q5_0", "dp_down_q8_0"):
+        function = getattr(_LIB, name)
+        function.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_void_p,
+            ctypes.c_void_p,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+        ]
+        function.restype = None
+        _FUNCTIONS[name] = function
     return _LIB
 
 
@@ -136,4 +167,63 @@ def dequantize(
     return output
 
 
-__all__ = ["available", "dequantize"]
+def fused_expert_chunk(
+    gate: torch.Tensor,
+    up: torch.Tensor,
+    down: torch.Tensor,
+    x: torch.Tensor,
+    *,
+    gate_rows: int,
+    gate_in_features: int,
+    down_rows: int,
+    down_in_features: int,
+    down_quant_type: str,
+    tokens: int,
+) -> torch.Tensor:
+    """Run packed AVX2 gate/up + down for one CPU cold expert."""
+
+    _load()
+    if gate_in_features % 256:
+        raise ValueError("AVX2 gate/up expects a 256-aligned input")
+    gate = gate.detach().to(device="cpu", dtype=torch.uint8).contiguous()
+    up = up.detach().to(device="cpu", dtype=torch.uint8).contiguous()
+    down = down.detach().to(device="cpu", dtype=torch.uint8).contiguous()
+    x = x.detach().to(device="cpu", dtype=torch.float32).contiguous()
+    if tuple(x.shape) != (tokens, gate_in_features):
+        raise ValueError("CPU fused input shape mismatch")
+    activation = torch.empty(
+        (tokens, gate_rows), dtype=torch.float32, device="cpu"
+    )
+    _FUNCTIONS["dp_gate_up_q4k"](
+        ctypes.c_void_p(gate.data_ptr()),
+        ctypes.c_void_p(up.data_ptr()),
+        ctypes.c_void_p(x.data_ptr()),
+        ctypes.c_void_p(activation.data_ptr()),
+        int(gate_rows),
+        int(gate_in_features),
+        int(tokens),
+    )
+    output = torch.empty(
+        (tokens, down_rows), dtype=torch.float32, device="cpu"
+    )
+    down_name = {
+        "Q4_K": "dp_down_q4k",
+        "Q5_0": "dp_down_q5_0",
+        "Q8_0": "dp_down_q8_0",
+    }.get(down_quant_type.upper())
+    if down_name is None:
+        raise NotImplementedError(
+            f"AVX2 fused down does not support {down_quant_type}"
+        )
+    _FUNCTIONS[down_name](
+        ctypes.c_void_p(down.data_ptr()),
+        ctypes.c_void_p(activation.data_ptr()),
+        ctypes.c_void_p(output.data_ptr()),
+        int(down_rows),
+        int(down_in_features),
+        int(tokens),
+    )
+    return output
+
+
+__all__ = ["available", "dequantize", "fused_expert_chunk"]

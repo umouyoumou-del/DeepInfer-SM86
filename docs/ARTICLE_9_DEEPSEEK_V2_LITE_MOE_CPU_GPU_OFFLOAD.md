@@ -30,7 +30,7 @@ DeepSeek-V2-Lite 的 MoE 路由、专家计算、MLA attention 和自回归 deco
 | mini quality gate | MMLU-style 8/10；GSM8K-style 4/8；长链 3/5 |
 | paged scheduler | 2 请求 batched decode；native paged MLA；prefix 16 token |
 | CPU layer offload | 最后 1 个 MoE 层 CPU FP32；decode 1.86 t/s；token IDs 一致 |
-| hot/cold expert split | 最后 4 层 × 1 cold expert；decode 2.23 t/s；token IDs 一致 |
+| hot/cold expert split | 最后 4 层 × 1 cold expert；decode 2.33 t/s；token IDs 一致 |
 | 对照 per-expert fused | decode 2.56–3.05；64-token 2.63 |
 | 对照 dequant+bmm | decode 2.43–2.77；64-token 2.43 |
 | GPU 加载后空闲 | 约 1.0 GiB |
@@ -753,7 +753,9 @@ deepinfer/moe/paged_mla_kernel.py
   - one warp per (batch, head, query-token)
 
 deepinfer/moe/cpu_avx2_packed.cpp
-  - AVX2 Q4_K/Q5_0/Q8_0 packed dequant for CPU cold experts
+  - AVX2 Q4_K/Q5_0/Q8_0 packed dequant
+deepinfer/moe/cpu_avx2_gemv.cpp
+  - fused AVX2 packed gate/up/down GEMV
 deepinfer/moe/cpu_avx2.py
   - runtime g++ build + ctypes bridge
 
@@ -803,15 +805,14 @@ tests/moe/test_dense_support.py
 - 没有长上下文和官方完整 MMLU/GSM8K；perplexity 已做 mini 回归；
 - CPU MoE layer offload 仍是 PyTorch CPU FP32/oneDNN；1 个整层 CPU 约
   1.86 t/s；
-- cold-expert split 已实现，最后 4 层 × 1 cold expert 约 2.23 t/s；AVX2
-  已覆盖 packed dequant，但 GEMM 仍是 oneDNN，不是完全 fused GEMV；
+- cold-expert split 已实现，最后 4 层 × 1 cold expert 约 2.33 t/s；
+  CPU 路径已有 fused AVX2 packed gate/up/down，oneDNN 仅作 fallback；
 - 只验证 Windows + Python 3.10 + torch 2.5.1+cu121。
 
 ### 下一步优先级
 
-1. **完全 fused AVX2 packed GEMV**：当前 AVX2 负责 packed dequant，GEMM 仍是
-   oneDNN；下一步把 dequant + dot 融合成 AVX2 kernel，继续提高 cold-expert
-   路径吞吐；
+1. **继续调优 fused AVX2 cold-expert 路径**：增加块内 K tile、减少重复
+   block-table/权重读取，或按 hot/cold 比例自动选层；
 2. **CUDA Graph / prefill chunk pipeline**：降低 Python/launch 开销，保持确定性；
 3. **更大显存/CPU offload 组合**：GPU cache 已验证可行但 1 GiB 只带来约 2.3%
    提升；若要继续，需要把 shared/lm_head 移到 CPU 腾出 1.5–2 GiB VRAM；
@@ -1009,7 +1010,7 @@ fused 之后 decode 的瓶颈更偏向 packed expert 读取和 H2D，而不是 G
   - 5 个质量 prompt 的 token IDs 完全一致；
   - 64-token 长故事生成 token IDs 完全一致；
   - `--no-fused-moe` 可随时回退到旧路径。
-- 全套测试：**85 passed**。
+- 全套测试：**87 passed**。
 
 ### 11.4 Grouped multi-expert kernel
 
@@ -1116,7 +1117,7 @@ opt-in 实验项保留，默认关闭。
 
 - double-buffer 路径与 grouped、per-expert、dequant+bmm 的 token IDs 一致；
 - 512 MB cache 路径 token IDs 也一致；
-- 全套测试：**85 passed**。
+- 全套测试：**87 passed**。
 
 ## 13. GPU packed cache + pointer-array grouped kernel
 
@@ -1159,7 +1160,7 @@ H2D 进来。
 
 - pointer-array gate/up 和 down 都有独立 GPU 单测；
 - GPU cache 路径与无 cache 路径 token IDs 完全一致；
-- 全套测试：**85 passed**。
+- 全套测试：**87 passed**。
 
 ## 14. 质量回归（mini suite）
 
@@ -1321,22 +1322,24 @@ packed GEMV kernel。这个实验验证了层切分和 CPU 专家读取的正确
 - `--cpu-expert-layers N`：只对最后 N 个 MoE 层启用；
 - 每层维护累计路由计数，从当前 selected experts 中选计数最低的 N 个；
 - GPU 继续计算 hot experts；
-- CPU 使用 `cpu_avx2_packed.cpp` 解码 packed Q4_K/Q5_0/Q8_0；
-- CPU expert 权重有 512 MB LRU cache；
-- GEMM 交给 PyTorch CPU oneDNN/AVX2。
+- CPU 使用 `cpu_avx2_gemv.cpp` 的 fused AVX2 packed GEMV：
+  Q4_K gate/up + Q5_0/Q8_0 down；
+- CPU expert packed 权重有 512 MB LRU cache；
+- 不再先 materialize FP32 权重；oneDNN 版本仅作 fallback。
 
 实测：最后 4 层、每层 1 个 cold expert，32-token 长故事：
 
 | 指标 | 全 GPU | hot/cold split |
 |---|---:|---:|
-| decode | 2.50 t/s | **2.23 t/s** |
-| prefill | 3.19 s | 3.57 s |
+| decode | 2.50 t/s | **2.33 t/s** |
+| prefill | 3.19 s | 3.44 s |
 | peak GPU allocated | 2259 MiB | 2260 MiB |
 | token IDs / text | 基准 | **完全一致** |
+| CPU MoE 累计时间 | — | 0.60 s |
 
-这比整层 CPU offload 的 1.86 t/s 好，说明少量 cold experts 放到 CPU 是可行的
-折中。当前 AVX2 只覆盖 packed **dequant**，GEMM 仍是 oneDNN；要进一步提升
-cold-expert 吞吐，需要把 dequant + dot 融合成完整的 AVX2 packed GEMV。
+这比整层 CPU offload 的 1.86 t/s 和 oneDNN 版本的 2.23 t/s 都好，说明少量
+cold experts 放到 CPU 是可行的折中。当前 CPU cold-expert 路径已经是 fused
+AVX2 packed GEMV；oneDNN 版本保留为 fallback。
 
 ## 18. 一句话结论
 

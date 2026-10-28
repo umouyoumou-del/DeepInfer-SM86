@@ -887,6 +887,10 @@ class DeepSeekV2LiteGGUFRuntime:
             tuple[int, int], tuple[torch.Tensor, torch.Tensor, torch.Tensor]
         ] = OrderedDict()
         self._cpu_expert_weight_bytes = 0
+        self._cpu_packed_cache: OrderedDict[
+            tuple[int, int], tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+        ] = OrderedDict()
+        self._cpu_packed_bytes = 0
         self._cpu_expert_cache_limit = (
             self.requested_cpu_expert_cache_mb * _MIB
         )
@@ -1564,6 +1568,54 @@ class DeepSeekV2LiteGGUFRuntime:
         self._cpu_expert_weight_cache[key] = value
         self._cpu_expert_weight_bytes += size
 
+    def _cpu_packed_get(
+        self, layer_idx: int, expert_id: int
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor] | None:
+        key = (layer_idx, expert_id)
+        value = self._cpu_packed_cache.get(key)
+        if value is None:
+            return None
+        self._cpu_packed_cache.move_to_end(key)
+        return value
+
+    def _cpu_packed_put(
+        self,
+        layer_idx: int,
+        expert_id: int,
+        value: tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+    ) -> None:
+        key = (layer_idx, expert_id)
+        old = self._cpu_packed_cache.pop(key, None)
+        if old is not None:
+            self._cpu_packed_bytes -= sum(tensor.numel() for tensor in old)
+        size = sum(tensor.numel() for tensor in value)
+        if size > self._cpu_expert_cache_limit:
+            return
+        while (
+            self._cpu_packed_cache
+            and self._cpu_packed_bytes + size > self._cpu_expert_cache_limit
+        ):
+            _, evicted = self._cpu_packed_cache.popitem(last=False)
+            self._cpu_packed_bytes -= sum(tensor.numel() for tensor in evicted)
+        self._cpu_packed_cache[key] = value
+        self._cpu_packed_bytes += size
+
+    def _load_cpu_packed_expert(
+        self, layer_idx: int, expert_id: int
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        cached = self._cpu_packed_get(layer_idx, expert_id)
+        if cached is not None:
+            return cached
+        batch = self.expert_store.load_packed_experts(
+            layer_idx, [expert_id], device=torch.device("cpu")
+        )
+        value = tuple(
+            batch.packed[index][: batch.specs[index].bytes_per_expert].clone()
+            for index in range(3)
+        )
+        self._cpu_packed_put(layer_idx, expert_id, value)
+        return value
+
     def _load_cpu_expert_weights(
         self, layer_idx: int, expert_id: int
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -1600,6 +1652,44 @@ class DeepSeekV2LiteGGUFRuntime:
             raise ValueError("CPU expert chunk must not be empty")
         if not self.cpu_avx2_available:
             return self._moe_cpu_fallback(layer_idx, expert_ids, padded_tokens)
+        from deepinfer.moe import cpu_avx2
+
+        gate_spec = self.expert_store._specs[(layer_idx, "gate")]
+        up_spec = self.expert_store._specs[(layer_idx, "up")]
+        down_spec = self.expert_store._specs[(layer_idx, "down")]
+        fused_supported = (
+            gate_spec.quant_type.upper() == "Q4_K"
+            and up_spec.quant_type.upper() == "Q4_K"
+            and down_spec.quant_type.upper() in ("Q4_K", "Q5_0", "Q8_0")
+            and gate_spec.in_features % 256 == 0
+            and down_spec.in_features % 32 == 0
+        )
+        if fused_supported:
+            outputs: list[torch.Tensor] = []
+            tokens = padded_tokens.shape[1]
+            for position, expert_id in enumerate(expert_ids):
+                packed = self._load_cpu_packed_expert(
+                    layer_idx, int(expert_id)
+                )
+                outputs.append(
+                    cpu_avx2.fused_expert_chunk(
+                        packed[0],
+                        packed[1],
+                        packed[2],
+                        padded_tokens[position].float(),
+                        gate_rows=gate_spec.out_features,
+                        gate_in_features=gate_spec.in_features,
+                        down_rows=down_spec.out_features,
+                        down_in_features=down_spec.in_features,
+                        down_quant_type=down_spec.quant_type,
+                        tokens=tokens,
+                    )
+                )
+            output = torch.stack(outputs, dim=0)
+            return output.to(
+                padded_tokens.device, dtype=padded_tokens.dtype
+            )
+
         weights = [
             self._load_cpu_expert_weights(layer_idx, int(expert_id))
             for expert_id in expert_ids
