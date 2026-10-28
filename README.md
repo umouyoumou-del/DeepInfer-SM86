@@ -33,7 +33,9 @@ engine。当前重点是：
 - 新增 `--cpu-experts-per-layer` + `--cpu-expert-layers`：按累计路由频次
   选 cold experts，CPU 用 fused AVX2 packed GEMV，GPU 保留 hot experts；
 - 新增实验性 `--prefill-pipeline`：prefill 多 chunk 的 gate/up 也走 copy
-  stream；本机 WDDM 上实测略慢，默认关闭。
+  stream；本机 WDDM 上实测略慢，默认关闭；
+- 新增默认开启的 prefill prefetch：后台线程预读下一 expert chunk 到双 pinned
+  slot，主线程只做 H2D + grouped kernel；32-token prefill 3.43→2.03 s。
 - 同一 runtime 支持 `first_k_dense_replace`、`moe_layer_freq`、dense-only
   层布局，dense MLP 可按显存自动放 GPU 或回退到 CPU FP32。
 
@@ -309,6 +311,7 @@ RTX 3050 Laptop 4 GB + 16 GB RAM，DeepSeek-V2-Lite Q4_K_M：
 | CPU layer offload（1 层） | decode 1.86 t/s；32-token token IDs/text 与 GPU 路径完全一致 |
 | Hot/cold expert split（2 层 × 1 cold） | decode **2.50 t/s**；32-token IDs/text 一致 |
 | prefill copy-stream pipeline | 可选；本机实测 prefill 慢约 6%，默认关闭 |
+| prefill background prefetch | 默认开启；prefill 3.43→**2.03 s**，token IDs 一致 |
 
 同一份 Q4_K_M 的 llama.cpp CPU 基线约 9–13 tokens/s；本实现的重点是 native
 MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比绝对速度。
@@ -331,7 +334,8 @@ MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比�
   `docs/results/deepseek_v2_lite_q4km_moe_cpu_layer_offload.json`（CPU layer offload）、
   `docs/results/deepseek_v2_lite_q4km_moe_cpu_expert_offload.json`（oneDNN 版本）、
   `docs/results/deepseek_v2_lite_q4km_moe_cpu_expert_avx2.json`（fused AVX2 版本）、
-  `docs/results/deepseek_v2_lite_q4km_moe_prefill_pipeline.json`（pipeline A/B）；
+  `docs/results/deepseek_v2_lite_q4km_moe_prefill_pipeline.json`（pipeline A/B）、
+  `docs/results/deepseek_v2_lite_q4km_moe_prefill_prefetch.json`（background prefetch）；
 - 已知边界：
   - paged scheduler 已接入 chunked prefill / batched decode / KV 预算，但
     DeepSeek 暂不支持 prefill/decode stream overlap；
@@ -537,6 +541,28 @@ token IDs / text 两种配置完全一致。由于 Windows/WDDM 上 copy stream 
 
 另外试验了 `--prefill-all-experts`（把所有 routed expert 合并成一个 prefill
 chunk）：token IDs 正确，但 prefill 3.59 s，也更慢，所以同样默认关闭。
+
+### 10.1 显式 background prefetch（默认开启）
+
+新的有效路径不是 copy-stream overlap，而是 **CPU 后台预读**：
+
+- store 维护 2 个 prefetch pinned slot；
+- 处理当前 expert chunk 前，先通过 `ThreadPoolExecutor` 提交下一 chunk 的
+  packed expert 读取；
+- 主线程只负责当前 chunk 的 H2D 和 grouped kernel；
+- 下一 chunk 完成后，主线程消费 prefetch buffer；
+- 用 Event 保证 prefetch slot 在旧 H2D 完成前不会被覆盖。
+
+32-token A/B：
+
+| 配置 | prefill | decode | token IDs |
+|---|---:|---:|---:|
+| prefetch off | 3.43 s | 2.55 t/s | 基准 |
+| prefetch on | **2.03 s** | 2.51 t/s | **完全一致** |
+
+prefill 降低约 **41%**，decode 在噪声范围内。该路径默认开启；需要对照时用
+`--no-prefill-prefetch`。
+
 
 CUDA Graph 没有强行接入：DeepSeek 的 top-k 路由会改变 expert 集合、tensor
 地址和 chunk 数量，当前不是可安全 capture 的静态图。
@@ -1274,7 +1300,8 @@ python scripts\export_sm86_kernels.py
 - cold-expert split 已实现；推荐 2 层 × 1 cold expert，约 2.50 t/s，
   CPU 路径已有 fused AVX2 packed gate/up/down，oneDNN 作为 fallback；
 - prefill copy-stream pipeline 已实现但默认关闭；本机 WDDM 上比默认路径慢约
-  6%；CUDA Graph 仍因动态 MoE 路由不可安全 capture；
+  6%；background prefetch 默认开启并把 prefill 从 3.43 s 降到 2.03 s；
+  CUDA Graph 仍因动态 MoE 路由不可安全 capture；
 - dense/hybrid 层布局已实现并有单元测试，但本机没有 dense DeepSeek-V2 GGUF
   做端到端质量基准；dense-only 模型超出显存时会回退 CPU FP32，速度会很慢；
 - DeepSeek MLA paged 模式通过 `DeepSeekPagedCache`/paged forward 直接按

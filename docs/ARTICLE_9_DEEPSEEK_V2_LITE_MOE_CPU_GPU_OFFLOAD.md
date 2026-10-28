@@ -32,6 +32,7 @@ DeepSeek-V2-Lite 的 MoE 路由、专家计算、MLA attention 和自回归 deco
 | CPU layer offload | 最后 1 个 MoE 层 CPU FP32；decode 1.86 t/s；token IDs 一致 |
 | hot/cold expert split | 推荐 2 层 × 1 cold expert；decode 2.50 t/s；token IDs 一致 |
 | prefill pipeline | 可选；本机实测 prefill 慢约 6%，默认关闭 |
+| prefill background prefetch | 默认开启；prefill 3.43→2.03 s，token IDs 一致 |
 | 对照 per-expert fused | decode 2.56–3.05；64-token 2.63 |
 | 对照 dequant+bmm | decode 2.43–2.77；64-token 2.43 |
 | GPU 加载后空闲 | 约 1.0 GiB |
@@ -809,7 +810,8 @@ tests/moe/test_dense_support.py
 - cold-expert split 已实现；推荐 2 层 × 1 cold expert，约 2.50 t/s；
   CPU 路径已有 fused AVX2 packed gate/up/down，oneDNN 仅作 fallback；
 - prefill copy-stream pipeline 已实现但默认关闭；本机 WDDM 上 prefill 慢约
-  6%；CUDA Graph 受动态 MoE 路由限制；
+  6%；background prefetch 默认开启，把 prefill 从 3.43 s 降到 2.03 s；
+  CUDA Graph 受动态 MoE 路由限制；
 - 只验证 Windows + Python 3.10 + torch 2.5.1+cu121。
 
 ### 下一步优先级
@@ -1374,7 +1376,29 @@ prefill chunk 的显式预取，而不是 graph capture。
 
 结果文件：`docs/results/deepseek_v2_lite_q4km_moe_prefill_pipeline.json`。
 
-## 19. 一句话结论
+## 19. Prefill background prefetch
+
+真正有效的 prefill 优化是 CPU 后台预读，而不是 copy-stream overlap：
+
+- `GGUFExpertStore` 新增两个 prefetch pinned slot；
+- 当前 chunk 计算前，先通过已有 `ThreadPoolExecutor` 提交下一 chunk 的
+  packed expert 读取；
+- 主线程只负责当前 chunk 的 H2D 和 grouped kernel；
+- 下一 chunk 的读取在后台完成，主线程消费 prefetch buffer；
+- 每个 prefetch slot 用 Event 防止覆盖尚未完成 H2D 的 pinned buffer；
+- 默认开启，`--no-prefill-prefetch` 可关闭。
+
+32-token A/B：
+
+| 配置 | prefill | decode | token IDs |
+|---|---:|---:|---:|
+| prefetch off | 3.43 s | 2.55 t/s | 基准 |
+| prefetch on | **2.03 s** | 2.51 t/s | **完全一致** |
+
+prefill 降低约 **41%**，decode 在噪声范围内。结果文件：
+`docs/results/deepseek_v2_lite_q4km_moe_prefill_prefetch.json`。
+
+## 20. 一句话结论
 
 这次最重要的不是“4 GB 跑 15.7B”这个标题，而是把 **MoE 的路由、专家流式读取、
 GPU 反量化、pinned H2D、确定性 scatter、MLA attention 和生成循环** 真正接进了

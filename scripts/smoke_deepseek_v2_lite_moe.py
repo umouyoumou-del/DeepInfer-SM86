@@ -101,6 +101,17 @@ def _parse_args() -> argparse.Namespace:
         help="GPU packed-expert LRU cache size in MiB; 0 disables it",
     )
     parser.add_argument(
+        "--prefill-prefetch",
+        action="store_true",
+        default=True,
+        help="background-read the next prefill expert chunk (default on)",
+    )
+    parser.add_argument(
+        "--no-prefill-prefetch",
+        action="store_true",
+        help="disable background prefill expert prefetch",
+    )
+    parser.add_argument(
         "--prefill-pipeline",
         action="store_true",
         help="experimental copy-stream pipeline for multi-token prefill chunks",
@@ -177,6 +188,9 @@ def main() -> int:
         prefill_pipeline=(
             args.prefill_pipeline and not args.no_prefill_pipeline
         ),
+        prefill_prefetch=(
+            args.prefill_prefetch and not args.no_prefill_prefetch
+        ),
         prefill_all_experts=(
             args.prefill_all_experts and not args.no_prefill_all_experts
         ),
@@ -251,6 +265,9 @@ def main() -> int:
         "cpu_expert_cache_mb": args.cpu_expert_cache_mb,
         "prefill_pipeline": (
             args.prefill_pipeline and not args.no_prefill_pipeline
+        ),
+        "prefill_prefetch": (
+            args.prefill_prefetch and not args.no_prefill_prefetch
         ),
         "prefill_all_experts": (
             args.prefill_all_experts and not args.no_prefill_all_experts
