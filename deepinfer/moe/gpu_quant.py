@@ -98,6 +98,7 @@ def _to_cupy(tensor: torch.Tensor) -> Any:
     dtype = {
         torch.uint8: cp.uint8,
         torch.int32: cp.int32,
+        torch.int64: cp.int64,
         torch.float16: cp.float16,
         torch.float32: cp.float32,
     }[contiguous.dtype]

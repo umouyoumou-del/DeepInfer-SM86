@@ -21,7 +21,9 @@ engine。当前重点是：
   去掉 FP16 expert 权重 materialize；grouped 版把 decode 每层 12 次 expert
   launch 合并为 2 次；`--no-fused-moe` 可回退 dequant+bmm；
 - expert staging 使用双 pinned slot + per-slot down copy stream；
-- 可选 packed expert LRU cache（`--expert-cache-mb`，默认 0）。
+- 可选 packed expert LRU cache（`--expert-cache-mb`，默认 0）；
+- 可选 GPU packed expert cache + pointer-array grouped kernel
+  （`--gpu-expert-cache-mb`，默认 0）。
 - 同一 runtime 支持 `first_k_dense_replace`、`moe_layer_freq`、dense-only
   层布局，dense MLP 可按显存自动放 GPU 或回退到 CPU FP32。
 
@@ -245,6 +247,15 @@ overlap 开关对照（均启用 tiled prefill）：
   - `--expert-cache-mb` 控制，默认 **0**；
   - 512 MB 实测 hit rate 约 **11%**，但因为 CPU cache copy 和 eviction 开销，
     长生成从 2.63 t/s 降到 1.61 t/s；因此建议保持默认关闭。
+- 可选 GPU packed expert cache + pointer-array grouped kernel：
+  - 新增 `deepinfer/moe/ptr_grouped_moe.py`，kernel 接受每个 expert 的
+    packed 权重指针数组，不再要求连续 packed buffer；
+  - cache 存在 GPU 上，命中时跳过文件读和 H2D；
+  - prefill 阶段自动关闭 cache，decode 前清空并启用，避免 prefill 污染；
+  - 1 GiB 实测 hit rate **24.8%**，64-token decode 从 2.63 提升到
+    **2.69 t/s**，但 peak allocated 从 2.23 GiB 升到 **3.20 GiB**；
+  - 512 MB 时只有 12.0% hit，长生成反而降到 2.40 t/s；
+  - 由于 4 GB 卡的 OOM 风险，`--gpu-expert-cache-mb` 默认 **0**。
 - 新增 `deepinfer/moe/fused_moe.py`：
   - `dp_fused_gate_up_gemm`：一个 CUDA block 处理一个中间维输出 row，
     线程先从 Q4_K/Q5_0/Q8_0 packed row 解码权重到寄存器，再对多个 token
@@ -282,6 +293,7 @@ RTX 3050 Laptop 4 GB + 16 GB RAM，DeepSeek-V2-Lite Q4_K_M：
 | 加载后 GPU 空闲 | 约 1.0 GiB |
 | 质量抽检 | MoE 解释、首都、翻译、`5-2=3`、`9.9 > 9.11` 均正确；grouped/per-expert/回退 token IDs 一致 |
 | 可选 expert cache | 512 MB 时约 11% hit，但长生成 1.61 t/s，默认关闭 |
+| 可选 GPU expert cache | 1 GiB 时 hit 24.8%，长生成 2.69 t/s，peak 3.20 GiB；默认关闭 |
 
 同一份 Q4_K_M 的 llama.cpp CPU 基线约 9–13 tokens/s；本实现的重点是 native
 MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比绝对速度。
@@ -291,7 +303,7 @@ MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比�
 - `tests/moe/` 新增 GGUF 索引、截断拒绝、expert slice、Q4_K/Q5_0/Q8_0
   GPU 反量化、dense/MoE 层布局、CPU MLP fallback、per-expert fused 和
   grouped MoE kernel 对照测试；
-- 全套测试：**77 passed**；
+- 全套测试：**79 passed**；
 - 新增文章：
   `docs/ARTICLE_9_DEEPSEEK_V2_LITE_MOE_CPU_GPU_OFFLOAD.md`；
 - 结构化结果：
@@ -507,6 +519,7 @@ deepinfer/
   moe/gpu_quant.py                      Q4_K/Q5_0/Q8_0 SM86 GPU dequant
   moe/fused_moe.py                      per-expert fused Q4_K/Q5_0/Q8_0 GEMV/GEMM
   moe/grouped_moe.py                    grouped multi-expert fused GEMV/GEMM
+  moe/ptr_grouped_moe.py                pointer-array grouped GEMV/GEMM
   moe/layout.py                         dense / MoE / hybrid 层布局判定
   moe/deepseek_v2_runtime.py            DeepSeek-V2-Lite MoE/MLA 流式执行与 offload
   engine/kv_cache.py                    block allocator、paged FP16/INT8/FP8、CPU payload
@@ -580,6 +593,7 @@ tests/
   moe/test_gpu_quant.py                 Q4_K/Q5_0/Q8_0 GPU 反量化对照
   moe/test_fused_moe.py                 per-expert fused GEMV/GEMM 对照
   moe/test_grouped_moe.py               grouped multi-expert kernel 对照
+  moe/test_ptr_grouped_moe.py           pointer-array grouped kernel 对照
   moe/test_dense_support.py             dense/MoE 层布局与 CPU MLP fallback
 docs/
   ARTICLE_1_DEEPINFER_SM86_KERNEL.md          上篇：内核与量化工程
@@ -1043,8 +1057,10 @@ python scripts\export_sm86_kernels.py
   与常驻 dense 网关互斥；
 - DeepSeek-V2-Lite 原生 MoE 已用双 pinned slot；但当前仍是“读下一个 chunk”
   而不是跨层预测 prefetch；
-- packed expert cache 已实现但默认关闭：512 MB 实测约 11% hit，CPU cache copy
-  比 NVMe 读更慢；要做有意义需要 GPU packed cache 或 pointer-array grouped kernel；
+- CPU packed expert cache 已实现但默认关闭：512 MB 实测约 11% hit，CPU cache
+  copy 比 NVMe 读更慢；
+- GPU packed expert cache + pointer-array kernel 已实现，但 1 GiB cache 只换来约
+  2.3% decode 提升，且 peak 升到 3.20 GiB；当前 4 GB 卡上默认关闭；
 - 桌面快捷操作依赖 Windows PowerShell 剪贴板和本地 HTTP 网关。
 
 ---
@@ -1084,8 +1100,10 @@ python scripts\export_sm86_kernels.py
   `docs/results/deepseek_v2_lite_q4km_moe_grouped_vs_per_expert.json`
 - double-buffer 长生成：
   `docs/results/deepseek_v2_lite_q4km_moe_double_buffer_long.json`
-- packed expert cache 负结果：
+- CPU packed expert cache 负结果：
   `docs/results/deepseek_v2_lite_q4km_moe_expert_cache_eval.json`
+- GPU packed expert cache + pointer-array kernel：
+  `docs/results/deepseek_v2_lite_q4km_moe_gpu_cache_eval.json`
 - GPU TTFT/TPOT/并发 benchmarks：`scripts/bench_paged_scheduler.py`
 - 长文档插入 TPOT 抖动：`scripts/bench_tpot_jitter.py`
 - batched W4 GEMV 微基准：`scripts/bench_w4a16_batched_gemv.py`

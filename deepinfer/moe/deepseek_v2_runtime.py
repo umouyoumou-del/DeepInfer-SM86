@@ -50,6 +50,10 @@ from deepinfer.moe.grouped_moe import (
     fused_down_gemm_grouped,
     fused_gate_up_gemm_grouped,
 )
+from deepinfer.moe.ptr_grouped_moe import (
+    fused_down_gemm_ptr_grouped,
+    fused_gate_up_gemm_ptr_grouped,
+)
 from deepinfer.moe.gguf_index import GGUFIndex
 from deepinfer.moe.gpu_quant import dequantize_matrix
 from deepinfer.moe.layout import split_layer_indices
@@ -92,6 +96,14 @@ class StagedExpertBatch:
 
     def wait_for_down(self) -> None:
         self._wait(self.down_ready, self.packed[2])
+
+
+@dataclass(slots=True)
+class PointerExpertBatch:
+    specs: tuple[ExpertTensorSpec, ...]
+    pointers: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    entries: tuple[tuple[torch.Tensor, ...], ...]
+    keepalive: tuple[Any, ...] = ()
 
 
 @dataclass(slots=True)
@@ -177,6 +189,7 @@ class GGUFExpertStore:
         max_gpu_spill_mb: int = 512,
         parallel_read_workers: int = 8,
         expert_cache_mb: int = 0,
+        gpu_expert_cache_mb: int = 0,
     ) -> None:
         self.index = index
         self.device = device
@@ -190,6 +203,17 @@ class GGUFExpertStore:
         self._packed_cache_bytes = 0
         self._packed_cache_bytes_by_layer: dict[int, int] = {}
         self._expert_access_counts: dict[tuple[str, int], int] = {}
+        self._gpu_cache_limit_bytes = max(0, int(gpu_expert_cache_mb)) * _MIB
+        self._gpu_cache_per_layer = (
+            self._gpu_cache_limit_bytes // self._layer_count
+        )
+        self._gpu_expert_cache: dict[
+            int, OrderedDict[int, tuple[torch.Tensor, torch.Tensor, torch.Tensor]]
+        ] = {}
+        self._gpu_cache_bytes = 0
+        self._gpu_cache_bytes_by_layer: dict[int, int] = {}
+        self._gpu_expert_access_counts: dict[tuple[int, int], int] = {}
+        self._gpu_cache_active = True
         self._specs: dict[tuple[int, str], ExpertTensorSpec] = {}
         for layer_idx in layer_indices:
             for projection in ("gate", "up", "down"):
@@ -226,6 +250,10 @@ class GGUFExpertStore:
             "expert_cache_misses": 0.0,
             "expert_cache_bytes": 0.0,
             "expert_cache_evictions": 0.0,
+            "gpu_cache_hits": 0.0,
+            "gpu_cache_misses": 0.0,
+            "gpu_cache_bytes": 0.0,
+            "gpu_cache_evictions": 0.0,
         }
 
     def supports_fused_moe(self) -> bool:
@@ -240,6 +268,9 @@ class GGUFExpertStore:
         self._packed_cache.clear()
         self._packed_cache_bytes = 0
         self._packed_cache_bytes_by_layer.clear()
+        self._gpu_expert_cache.clear()
+        self._gpu_cache_bytes = 0
+        self._gpu_cache_bytes_by_layer.clear()
         with self._read_handles_lock:
             handles = list(self._read_handles)
             self._read_handles.clear()
@@ -258,6 +289,145 @@ class GGUFExpertStore:
             with self._read_handles_lock:
                 self._read_handles.append(handle)
         return handle
+
+    def gpu_cache_configured(self) -> bool:
+        return self._gpu_cache_per_layer > 0
+
+    def gpu_cache_enabled(self) -> bool:
+        return self._gpu_cache_active and self.gpu_cache_configured()
+
+    def set_gpu_cache_active(self, active: bool) -> None:
+        self._gpu_cache_active = bool(active)
+
+    def _gpu_cache_get(
+        self, layer_idx: int, expert_id: int
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor] | None:
+        if not self.gpu_cache_enabled():
+            return None
+        layer_cache = self._gpu_expert_cache.get(layer_idx)
+        if layer_cache is None:
+            return None
+        entry = layer_cache.get(expert_id)
+        if entry is None:
+            return None
+        layer_cache.move_to_end(expert_id)
+        self.timings["gpu_cache_hits"] += 1.0
+        return entry
+
+    def _gpu_cache_put(
+        self,
+        layer_idx: int,
+        expert_id: int,
+        entry: tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+    ) -> bool:
+        if not self.gpu_cache_enabled():
+            return False
+        size = sum(tensor.numel() for tensor in entry)
+        if size > self._gpu_cache_per_layer:
+            return False
+        layer_cache = self._gpu_expert_cache.setdefault(layer_idx, OrderedDict())
+        old = layer_cache.pop(expert_id, None)
+        if old is not None:
+            old_size = sum(tensor.numel() for tensor in old)
+            self._gpu_cache_bytes -= old_size
+            self._gpu_cache_bytes_by_layer[layer_idx] -= old_size
+        while (
+            layer_cache
+            and self._gpu_cache_bytes_by_layer.get(layer_idx, 0) + size
+            > self._gpu_cache_per_layer
+        ):
+            _, evicted = layer_cache.popitem(last=False)
+            evicted_size = sum(tensor.numel() for tensor in evicted)
+            self._gpu_cache_bytes -= evicted_size
+            self._gpu_cache_bytes_by_layer[layer_idx] -= evicted_size
+            self.timings["gpu_cache_evictions"] += 1.0
+        layer_cache[expert_id] = entry
+        self._gpu_cache_bytes += size
+        self._gpu_cache_bytes_by_layer[layer_idx] = (
+            self._gpu_cache_bytes_by_layer.get(layer_idx, 0) + size
+        )
+        self.timings["gpu_cache_bytes"] = float(self._gpu_cache_bytes)
+        return True
+
+    def clear_gpu_cache(self) -> None:
+        self._gpu_expert_cache.clear()
+        self._gpu_cache_bytes = 0
+        self._gpu_cache_bytes_by_layer.clear()
+
+    def load_pointer_experts(
+        self,
+        layer_idx: int,
+        expert_ids: Sequence[int],
+    ) -> PointerExpertBatch:
+        """Load experts and return per-expert GPU pointers.
+
+        Cached experts bypass file reads and H2D. Missing experts are staged
+        through the normal double-buffered packed path, then exposed as views
+        or cloned into the GPU cache.
+        """
+
+        if not expert_ids:
+            raise ValueError("at least one expert must be selected")
+        if not self.gpu_cache_enabled():
+            raise RuntimeError("GPU expert cache is disabled")
+        ids = tuple(int(expert_id) for expert_id in expert_ids)
+        entries: list[tuple[torch.Tensor, ...] | None] = [None] * len(ids)
+        missing: list[tuple[int, int]] = []
+        for position, expert_id in enumerate(ids):
+            cached = self._gpu_cache_get(layer_idx, expert_id)
+            if cached is not None:
+                entries[position] = cached
+            else:
+                self.timings["gpu_cache_misses"] += 1.0
+                missing.append((position, expert_id))
+
+        keepalive: tuple[Any, ...] = ()
+        if missing:
+            batch = self.load_packed_experts(
+                layer_idx, [expert_id for _, expert_id in missing]
+            )
+            batch.wait_for_gate_up()
+            batch.wait_for_down()
+            sizes = tuple(spec.bytes_per_expert for spec in batch.specs)
+            for missing_position, (original_position, expert_id) in enumerate(missing):
+                views = tuple(
+                    batch.packed[projection][
+                        missing_position * sizes[projection] :
+                        (missing_position + 1) * sizes[projection]
+                    ]
+                    for projection in range(3)
+                )
+                key = (layer_idx, expert_id)
+                access_count = self._gpu_expert_access_counts.get(key, 0) + 1
+                self._gpu_expert_access_counts[key] = access_count
+                if access_count >= 2:
+                    cached_entry = tuple(view.clone() for view in views)
+                    if self._gpu_cache_put(layer_idx, expert_id, cached_entry):
+                        views = cached_entry
+                entries[original_position] = views
+            keepalive = (batch,)
+
+        resolved = tuple(entry for entry in entries if entry is not None)
+        if len(resolved) != len(ids):
+            raise RuntimeError("internal error: expert entry was not resolved")
+        pointers = tuple(
+            torch.tensor(
+                [entry[projection].data_ptr() for entry in resolved],
+                dtype=torch.int64,
+                device=self.device,
+            )
+            for projection in range(3)
+        )
+        specs = tuple(
+            self._specs[(layer_idx, projection)]
+            for projection in ("gate", "up", "down")
+        )
+        return PointerExpertBatch(
+            specs=specs,
+            pointers=pointers,
+            entries=resolved,
+            keepalive=keepalive,
+        )
 
     def _cache_get(
         self, layer_idx: int, key: tuple[str, int]
@@ -555,6 +725,7 @@ class DeepSeekV2LiteGGUFRuntime:
         cpu_threads: int = 6,
         expert_chunk_size: int = 8,
         expert_cache_mb: int = 0,
+        gpu_expert_cache_mb: int = 0,
         fused_moe: bool = True,
         shared_experts_device: str = "auto",
         dense_mlp_device: str = "auto",
@@ -647,6 +818,7 @@ class DeepSeekV2LiteGGUFRuntime:
                 layer_indices=self.moe_layer_indices,
                 device=self.device,
                 expert_cache_mb=expert_cache_mb,
+                gpu_expert_cache_mb=gpu_expert_cache_mb,
             )
             if self.has_moe
             else None
@@ -1126,8 +1298,6 @@ class DeepSeekV2LiteGGUFRuntime:
         chunk_tokens: torch.Tensor,
         chunk_counts: Sequence[int],
     ) -> torch.Tensor:
-        batch = self.expert_store.load_packed_experts(layer_idx, chunk_ids)
-        gate_spec, up_spec, down_spec = batch.specs
         n_experts = len(chunk_ids)
         max_count = chunk_tokens.shape[1]
         counts = torch.tensor(
@@ -1135,6 +1305,39 @@ class DeepSeekV2LiteGGUFRuntime:
             dtype=torch.int32,
             device=chunk_tokens.device,
         )
+        if self.expert_store.gpu_cache_enabled():
+            pointer_batch = self.expert_store.load_pointer_experts(
+                layer_idx, chunk_ids
+            )
+            gate_spec, up_spec, down_spec = pointer_batch.specs
+            gate_activation = fused_gate_up_gemm_ptr_grouped(
+                chunk_tokens,
+                pointer_batch.pointers[0],
+                pointer_batch.pointers[1],
+                counts,
+                n_experts=n_experts,
+                max_count=max_count,
+                out_features=gate_spec.out_features,
+                k_size=gate_spec.in_features,
+                gate_qtype=gate_spec.quant_type,
+                up_qtype=up_spec.quant_type,
+                gate_row_bytes=gate_spec.row_bytes,
+                up_row_bytes=up_spec.row_bytes,
+            )
+            return fused_down_gemm_ptr_grouped(
+                gate_activation,
+                pointer_batch.pointers[2],
+                counts,
+                n_experts=n_experts,
+                max_count=max_count,
+                out_features=down_spec.out_features,
+                k_size=down_spec.in_features,
+                down_qtype=down_spec.quant_type,
+                down_row_bytes=down_spec.row_bytes,
+            )
+
+        batch = self.expert_store.load_packed_experts(layer_idx, chunk_ids)
+        gate_spec, up_spec, down_spec = batch.specs
         batch.wait_for_gate_up()
         gate_activation = fused_gate_up_gemm_grouped(
             chunk_tokens,
@@ -1258,6 +1461,14 @@ class DeepSeekV2LiteGGUFRuntime:
         stop_ids.add(int(self.tokenizer.eos_token_id))
         eos_token_id = int(self.tokenizer.eos_token_id)
 
+        expert_store = self.expert_store
+        if expert_store is not None and expert_store.gpu_cache_configured():
+            # Prefill sees many experts per layer and would evict the decode
+            # working set.  Free the previous request's cache first, keep
+            # prefill on the contiguous path, then start decode with a clean
+            # GPU packed cache.
+            expert_store.clear_gpu_cache()
+            expert_store.set_gpu_cache_active(False)
         torch.cuda.reset_peak_memory_stats()
         cache = DynamicCache()
         attention_mask = torch.ones((1, prompt_tokens), dtype=torch.long, device=self.device)
@@ -1280,6 +1491,9 @@ class DeepSeekV2LiteGGUFRuntime:
             top_k=top_k,
         )
         prefill_seconds = time.perf_counter() - prefill_start
+        if expert_store is not None and expert_store.gpu_cache_configured():
+            expert_store.clear_gpu_cache()
+            expert_store.set_gpu_cache_active(True)
         generated = [next_token]
         total_tokens = prompt_tokens + 1
 

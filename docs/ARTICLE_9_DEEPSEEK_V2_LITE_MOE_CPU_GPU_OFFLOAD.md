@@ -26,6 +26,7 @@ DeepSeek-V2-Lite 的 MoE 路由、专家计算、MLA attention 和自回归 deco
 | peak GPU allocated | **2.23 GiB** |
 | peak GPU reserved | **2.31 GiB** |
 | 对照 grouped 无 double buffer | decode 2.53–2.95；prefill 2.20–2.88 |
+| 可选 GPU expert cache 1 GiB | decode 2.69；prefill 2.93；peak 3.20 GiB |
 | 对照 per-expert fused | decode 2.56–3.05；64-token 2.63 |
 | 对照 dequant+bmm | decode 2.43–2.77；64-token 2.43 |
 | GPU 加载后空闲 | 约 1.0 GiB |
@@ -733,6 +734,11 @@ deepinfer/moe/grouped_moe.py
   - grouped multi-expert down GEMV/GEMM
   - 2D grid `(output_row, expert)` + per-expert counts
 
+deepinfer/moe/ptr_grouped_moe.py
+  - pointer-array grouped gate/up GEMV/GEMM
+  - pointer-array grouped down GEMV/GEMM
+  - 支持 cached/missed expert 混合，无需拼连续 packed buffer
+
 deepinfer/moe/deepseek_v2_runtime.py
   - GGUFExpertStore：并行读取、pinned staging、copy stream、Event
   - DeepSeekV2LiteGGUFRuntime：meta 加载、权重放置、streaming MoE、生成
@@ -746,6 +752,7 @@ tests/moe/test_gguf_index.py
 tests/moe/test_gpu_quant.py
 tests/moe/test_fused_moe.py
 tests/moe/test_grouped_moe.py
+tests/moe/test_ptr_grouped_moe.py
 tests/moe/test_dense_support.py
 ```
 
@@ -775,8 +782,8 @@ tests/moe/test_dense_support.py
 3. **更激进的 CPU/GPU 切分**：把部分层或部分 expert 放在 CPU AVX2 kernel，
    GPU 只算 attention + 热门 expert；
 4. **CUDA Graph / prefill chunk pipeline**：降低 Python/launch 开销，保持确定性；
-5. **GPU packed expert cache / pointer-array grouped kernel**：CPU cache 已证明
-   受 memcpy 限制，下一步应把 cache 放到 GPU 并让 kernel 直接使用指针数组。
+5. **更大显存/CPU offload 组合**：GPU cache 已验证可行但 1 GiB 只带来约 2.3%
+   提升；若要继续，需要把 shared/lm_head 移到 CPU 腾出 1.5–2 GiB VRAM。
 
 ---
 
@@ -886,7 +893,7 @@ dense_layer_bytes
 - `n_routed_experts=None/0` 的 dense-only；
 - CPU MLP fallback 的 shape/dtype/数值对照。
 
-当前 `tests/moe` 共 18 个测试（含 grouped fused GEMV/GEMM 对照），全套 77 个测试通过。
+当前 `tests/moe` 共 20 个测试（含 grouped 与 pointer-array GEMV/GEMM 对照），全套 79 个测试通过。
 
 必须说明：本机没有 dense-only DeepSeek-V2 GGUF，因此 dense-only 的端到端
 吞吐和质量没有像 Q4_K_M MoE 那样做真实 benchmark；“dense/hybrid 层可加载、
@@ -966,7 +973,7 @@ fused 之后 decode 的瓶颈更偏向 packed expert 读取和 H2D，而不是 G
   - 5 个质量 prompt 的 token IDs 完全一致；
   - 64-token 长故事生成 token IDs 完全一致；
   - `--no-fused-moe` 可随时回退到旧路径。
-- 全套测试：**77 passed**。
+- 全套测试：**79 passed**。
 
 ### 11.4 Grouped multi-expert kernel
 
@@ -1073,9 +1080,52 @@ opt-in 实验项保留，默认关闭。
 
 - double-buffer 路径与 grouped、per-expert、dequant+bmm 的 token IDs 一致；
 - 512 MB cache 路径 token IDs 也一致；
-- 全套测试：**77 passed**。
+- 全套测试：**79 passed**。
 
-## 13. 一句话结论
+## 13. GPU packed cache + pointer-array grouped kernel
+
+### 13.1 为什么需要 pointer array
+
+CPU cache 的瓶颈是命中后仍要 memcpy 到 pinned staging。要真正跳过数据搬运，
+cache 必须放在 GPU；同时 grouped kernel 不能再假设所有 expert 的 packed
+权重排成一块连续 buffer，因为一部分 expert 来自 cache，另一部分刚从文件
+H2D 进来。
+
+新增 `deepinfer/moe/ptr_grouped_moe.py`：
+
+- kernel 参数从 `const __half* packed` 改成 `unsigned long long* ptrs`；
+- 每个 block 通过 `ptrs[expert]` 取该 expert 的 packed 基址；
+- 命中 expert 指向 cache tensor，miss expert 指向本 chunk 的 staging view；
+- 不再需要把 cached/missed expert 重排成一个连续 packed tensor。
+
+### 13.2 cache 策略
+
+- per-layer LRU，存整个 expert 的 gate/up/down 三个 packed tensor；
+- 第一次 miss 只计数，第二次 miss 才 admission；
+- prefill 阶段关闭 cache，避免大量 prefill expert 污染 decode 工作集；
+- prefill 结束、decode 开始前清空 cache 并启用；
+- `--gpu-expert-cache-mb` 控制容量，默认 **0**。
+
+### 13.3 实测
+
+64-token 长生成：
+
+| 配置 | decode | prefill | hit rate | peak allocated |
+|---|---:|---:|---:|---:|
+| 无 GPU cache | 2.63 t/s | 2.56 s | 0% | 2.23 GiB |
+| 512 MB GPU cache | 2.40 t/s | 3.11 s | 12.0% | 2.70 GiB |
+| 1 GiB GPU cache | **2.69 t/s** | 2.93 s | **24.8%** | **3.20 GiB** |
+
+1 GiB 只换来约 **2.3%** decode 提升，却多占约 1 GiB VRAM；512 MB 反而更慢。
+在 4 GB RTX 3050 上，OOM 风险比这点收益更重要，所以默认关闭。
+
+### 13.4 验证
+
+- pointer-array gate/up 和 down 都有独立 GPU 单测；
+- GPU cache 路径与无 cache 路径 token IDs 完全一致；
+- 全套测试：**79 passed**。
+
+## 14. 一句话结论
 
 这次最重要的不是“4 GB 跑 15.7B”这个标题，而是把 **MoE 的路由、专家流式读取、
 GPU 反量化、pinned H2D、确定性 scatter、MLA attention 和生成循环** 真正接进了
