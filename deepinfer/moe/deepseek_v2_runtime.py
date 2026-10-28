@@ -510,6 +510,7 @@ class GGUFExpertStore:
         expert_ids: Sequence[int],
         *,
         device: torch.device | None = None,
+        async_gate_up: bool = False,
     ) -> StagedExpertBatch:
         """Read packed expert bytes and stage them on the target device.
 
@@ -590,45 +591,66 @@ class GGUFExpertStore:
         if use_cuda:
             started = time.perf_counter()
             compute_stream = torch.cuda.current_stream()
-            # Gate/up stay on the compute stream: on WDDM, moving the small
-            # gate/up copies to a non-blocking stream adds event/scheduling
-            # overhead and can be slower than the legacy default stream.
-            packed_gate = packed_cpu_tensors[0].to(
-                target_device, non_blocking=True
-            )
-            gate_ready = torch.cuda.Event()
-            gate_ready.record(compute_stream)
-            packed_up = packed_cpu_tensors[1].to(
-                target_device, non_blocking=True
-            )
-            up_ready = torch.cuda.Event()
-            up_ready.record(compute_stream)
             copy_stream = (
                 self._copy_streams[slot] if self._overlap_down_copy else None
             )
-            if copy_stream is not None:
+            if async_gate_up and copy_stream is not None:
+                # Prefill pipeline: all three copies are issued on the slot's
+                # copy stream so the next expert chunk can be transferred while
+                # the current grouped kernels are still running.  The consumer
+                # waits for gate/up before compute and for down later.
                 with torch.cuda.stream(copy_stream):
+                    packed_gate = packed_cpu_tensors[0].to(
+                        target_device, non_blocking=True
+                    )
+                    gate_ready = torch.cuda.Event()
+                    gate_ready.record(copy_stream)
+                    packed_up = packed_cpu_tensors[1].to(
+                        target_device, non_blocking=True
+                    )
+                    up_ready = torch.cuda.Event()
+                    up_ready.record(copy_stream)
                     packed_down = packed_cpu_tensors[2].to(
                         target_device, non_blocking=True
                     )
                     down_ready = torch.cuda.Event()
                     down_ready.record(copy_stream)
             else:
-                packed_down = packed_cpu_tensors[2].to(
+                # Decode stays on the compute stream: on WDDM, moving the
+                # small gate/up copies to a second stream adds event overhead
+                # without useful overlap for a single expert chunk.
+                packed_gate = packed_cpu_tensors[0].to(
                     target_device, non_blocking=True
                 )
-                down_ready = torch.cuda.Event()
-                down_ready.record(compute_stream)
+                gate_ready = torch.cuda.Event()
+                gate_ready.record(compute_stream)
+                packed_up = packed_cpu_tensors[1].to(
+                    target_device, non_blocking=True
+                )
+                up_ready = torch.cuda.Event()
+                up_ready.record(compute_stream)
+                if copy_stream is not None:
+                    with torch.cuda.stream(copy_stream):
+                        packed_down = packed_cpu_tensors[2].to(
+                            target_device, non_blocking=True
+                        )
+                        down_ready = torch.cuda.Event()
+                        down_ready.record(copy_stream)
+                else:
+                    packed_down = packed_cpu_tensors[2].to(
+                        target_device, non_blocking=True
+                    )
+                    down_ready = torch.cuda.Event()
+                    down_ready.record(compute_stream)
+                # Gate/up are ordered on the compute stream; only down needs a
+                # consumer-side event wait.
+                gate_ready = None
+                up_ready = None
+                if copy_stream is None:
+                    down_ready = None
             self._pinned_copy_events[("gate", slot)] = gate_ready
             self._pinned_copy_events[("up", slot)] = up_ready
             self._pinned_copy_events[("down", slot)] = down_ready
-            # Gate/up copies live on the compute stream, so same-stream
-            # ordering is enough.  Only a down copy on another stream needs a
-            # consumer-side event wait.
-            gate_ready = None
-            up_ready = None
-            if copy_stream is None:
-                down_ready = None
             self.timings["expert_h2d_seconds"] += time.perf_counter() - started
         else:
             packed_gate, packed_up, packed_down = (
@@ -712,11 +734,15 @@ class GGUFExpertStore:
         expert_ids: Sequence[int],
         *,
         device: torch.device | None = None,
+        async_gate_up: bool = False,
     ) -> StagedExpertBatch:
         """Return staged packed expert bytes without dequantizing them."""
 
         return self._stage_experts(
-            layer_idx, expert_ids, device=self.device if device is None else device
+            layer_idx,
+            expert_ids,
+            device=self.device if device is None else device,
+            async_gate_up=async_gate_up,
         )
 
 
@@ -740,6 +766,7 @@ class DeepSeekV2LiteGGUFRuntime:
         cpu_experts_per_layer: int = 0,
         cpu_expert_layers: int = 0,
         cpu_expert_cache_mb: int = 512,
+        prefill_pipeline: bool = False,
         expert_cache_mb: int = 0,
         gpu_expert_cache_mb: int = 0,
         fused_moe: bool = True,
@@ -773,6 +800,7 @@ class DeepSeekV2LiteGGUFRuntime:
         self.requested_cpu_expert_cache_mb = max(
             0, int(cpu_expert_cache_mb)
         )
+        self.prefill_pipeline = bool(prefill_pipeline)
         self.requested_fused_moe = bool(fused_moe)
         self.dense_mlp_device = dense_mlp_device
         self.verbose = verbose
@@ -1503,7 +1531,11 @@ class DeepSeekV2LiteGGUFRuntime:
                 down_row_bytes=down_spec.row_bytes,
             )
 
-        batch = self.expert_store.load_packed_experts(layer_idx, chunk_ids)
+        batch = self.expert_store.load_packed_experts(
+            layer_idx,
+            chunk_ids,
+            async_gate_up=self.prefill_pipeline and chunk_tokens.shape[1] > 1,
+        )
         gate_spec, up_spec, down_spec = batch.specs
         batch.wait_for_gate_up()
         gate_activation = fused_gate_up_gemm_grouped(

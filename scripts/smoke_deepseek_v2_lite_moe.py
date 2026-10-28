@@ -101,6 +101,16 @@ def _parse_args() -> argparse.Namespace:
         help="GPU packed-expert LRU cache size in MiB; 0 disables it",
     )
     parser.add_argument(
+        "--prefill-pipeline",
+        action="store_true",
+        help="experimental copy-stream pipeline for multi-token prefill chunks",
+    )
+    parser.add_argument(
+        "--no-prefill-pipeline",
+        action="store_true",
+        help="kept for compatibility; pipeline is off by default",
+    )
+    parser.add_argument(
         "--no-fused-moe",
         action="store_true",
         help="disable fused packed-weight MoE GEMV/GEMM and use dequant+bmm",
@@ -154,6 +164,9 @@ def main() -> int:
         cpu_experts_per_layer=args.cpu_experts_per_layer,
         cpu_expert_layers=args.cpu_expert_layers,
         cpu_expert_cache_mb=args.cpu_expert_cache_mb,
+        prefill_pipeline=(
+            args.prefill_pipeline and not args.no_prefill_pipeline
+        ),
         expert_cache_mb=args.expert_cache_mb,
         gpu_expert_cache_mb=args.gpu_expert_cache_mb,
         fused_moe=not args.no_fused_moe,
@@ -223,6 +236,9 @@ def main() -> int:
         "cpu_experts_per_layer": args.cpu_experts_per_layer,
         "cpu_expert_layers": args.cpu_expert_layers,
         "cpu_expert_cache_mb": args.cpu_expert_cache_mb,
+        "prefill_pipeline": (
+            args.prefill_pipeline and not args.no_prefill_pipeline
+        ),
         "expert_cache_mb": args.expert_cache_mb,
         "gpu_expert_cache_mb": args.gpu_expert_cache_mb,
         "dense_mlp_device": args.dense_mlp_device,

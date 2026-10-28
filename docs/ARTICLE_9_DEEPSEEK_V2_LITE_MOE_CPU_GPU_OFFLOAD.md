@@ -31,6 +31,7 @@ DeepSeek-V2-Lite 的 MoE 路由、专家计算、MLA attention 和自回归 deco
 | paged scheduler | 2 请求 batched decode；native paged MLA；prefix 16 token |
 | CPU layer offload | 最后 1 个 MoE 层 CPU FP32；decode 1.86 t/s；token IDs 一致 |
 | hot/cold expert split | 推荐 2 层 × 1 cold expert；decode 2.50 t/s；token IDs 一致 |
+| prefill pipeline | 可选；本机实测 prefill 慢约 6%，默认关闭 |
 | 对照 per-expert fused | decode 2.56–3.05；64-token 2.63 |
 | 对照 dequant+bmm | decode 2.43–2.77；64-token 2.43 |
 | GPU 加载后空闲 | 约 1.0 GiB |
@@ -807,6 +808,8 @@ tests/moe/test_dense_support.py
   1.86 t/s；
 - cold-expert split 已实现；推荐 2 层 × 1 cold expert，约 2.50 t/s；
   CPU 路径已有 fused AVX2 packed gate/up/down，oneDNN 仅作 fallback；
+- prefill copy-stream pipeline 已实现但默认关闭；本机 WDDM 上 prefill 慢约
+  6%；CUDA Graph 受动态 MoE 路由限制；
 - 只验证 Windows + Python 3.10 + torch 2.5.1+cu121。
 
 ### 下一步优先级
@@ -1342,7 +1345,33 @@ packed GEMV kernel。这个实验验证了层切分和 CPU 专家读取的正确
 折中。当前 CPU cold-expert 路径已经是 fused AVX2 packed GEMV；oneDNN 版本保留
 为 fallback。2 层配置的 token IDs/text 与全 GPU 完全一致。
 
-## 18. 一句话结论
+## 18. Prefill copy-stream pipeline（实验，默认关闭）
+
+新增 `--prefill-pipeline`：
+
+- prefill 多 token chunk 的 gate/up/down 三个 H2D 都发到该 slot 的 copy stream；
+- compute stream 先等 gate/up，down 继续异步；
+- 配合双 pinned slot，尝试重叠下一 expert chunk 的读取/H2D 与当前 grouped
+  kernel；
+- decode 仍保持 gate/up 在 compute stream，避免 decode 的事件开销。
+
+A/B 实测（32-token 长故事）：
+
+| 配置 | prefill | decode |
+|---|---:|---:|
+| pipeline off | **3.11 s** | **2.58 t/s** |
+| pipeline on | 3.29 s | 2.56 t/s |
+
+token IDs / text 两种配置完全一致。Windows/WDDM 上 copy stream + event 调度
+开销使 pipeline 在本机反而慢约 6%，所以默认关闭，仅作为实验开关。
+
+CUDA Graph 没有强行接入：DeepSeek 的 top-k 路由会改变 expert 集合、tensor
+地址和 chunk 数，当前不是可安全 capture 的静态图。更现实的方向是继续做
+prefill chunk 的显式预取，而不是 graph capture。
+
+结果文件：`docs/results/deepseek_v2_lite_q4km_moe_prefill_pipeline.json`。
+
+## 19. 一句话结论
 
 这次最重要的不是“4 GB 跑 15.7B”这个标题，而是把 **MoE 的路由、专家流式读取、
 GPU 反量化、pinned H2D、确定性 scatter、MLA attention 和生成循环** 真正接进了
