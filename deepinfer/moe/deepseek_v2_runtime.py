@@ -44,6 +44,11 @@ from transformers.cache_utils import DynamicCache
 from transformers.dynamic_module_utils import get_class_from_dynamic_module
 
 from deepinfer.logger import init_logger
+from deepinfer.moe.fused_moe import (
+    fused_down_gemm,
+    fused_gate_up_gemm,
+    fused_moe_supported,
+)
 from deepinfer.moe.gguf_index import GGUFIndex
 from deepinfer.moe.gpu_quant import dequantize_matrix
 from deepinfer.moe.layout import split_layer_indices
@@ -61,6 +66,20 @@ class ExpertTensorSpec:
     expert_count: int
     quant_type: str
     bytes_per_expert: int
+    row_bytes: int
+
+
+@dataclass(slots=True)
+class StagedExpertBatch:
+    specs: tuple[ExpertTensorSpec, ...]
+    packed: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    down_ready: torch.cuda.Event | None
+    expert_ids: tuple[int, ...]
+
+    def wait_for_down(self) -> None:
+        if self.down_ready is not None:
+            torch.cuda.current_stream().wait_event(self.down_ready)
+            self.packed[2].record_stream(torch.cuda.current_stream())
 
 
 @dataclass(slots=True)
@@ -81,6 +100,9 @@ class GenerationResult:
     dense_layer_indices: list[int]
     moe_layer_indices: list[int]
     dense_mlp_devices: dict[int, str]
+    fused_moe_enabled: bool
+    fused_moe_chunks: int
+    fallback_moe_chunks: int
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -100,6 +122,9 @@ class GenerationResult:
             "dense_layer_indices": self.dense_layer_indices,
             "moe_layer_indices": self.moe_layer_indices,
             "dense_mlp_devices": self.dense_mlp_devices,
+            "fused_moe_enabled": self.fused_moe_enabled,
+            "fused_moe_chunks": self.fused_moe_chunks,
+            "fallback_moe_chunks": self.fallback_moe_chunks,
         }
 
 
@@ -109,6 +134,7 @@ def _expert_spec(index: GGUFIndex, layer_idx: int, projection: str) -> ExpertTen
     if len(info.dims) != 3:
         raise ValueError(f"expected a 3-D expert tensor for {name}, got {info.dims}")
     in_features, out_features, expert_count = info.dims
+    row_bytes = int(in_features) // info.block_size * info.type_size
     return ExpertTensorSpec(
         name=name,
         in_features=int(in_features),
@@ -116,6 +142,7 @@ def _expert_spec(index: GGUFIndex, layer_idx: int, projection: str) -> ExpertTen
         expert_count=int(expert_count),
         quant_type=info.qtype.name,
         bytes_per_expert=info.nbytes // int(expert_count),
+        row_bytes=row_bytes,
     )
 
 
@@ -173,6 +200,13 @@ class GGUFExpertStore:
             "expert_load_calls": 0.0,
         }
 
+    def supports_fused_moe(self) -> bool:
+        supported_types = {"Q4_K", "Q5_0", "Q8_0"}
+        return all(
+            spec.quant_type in supported_types and spec.in_features <= 4096
+            for spec in self._specs.values()
+        )
+
     def close(self) -> None:
         self._read_executor.shutdown(wait=True, cancel_futures=True)
         with self._read_handles_lock:
@@ -210,6 +244,111 @@ class GGUFExpertStore:
                 f"wanted {spec.bytes_per_expert}, got {written}"
             )
 
+    def _stage_experts(
+        self,
+        layer_idx: int,
+        expert_ids: Sequence[int],
+        *,
+        device: torch.device | None = None,
+    ) -> StagedExpertBatch:
+        """Read packed expert bytes and stage them on the target device.
+
+        The returned down projection is not guaranteed to be ready yet when
+        the down copy runs on a separate CUDA stream.  Call
+        :meth:`StagedExpertBatch.wait_for_down` before consuming it.
+        """
+
+        if not expert_ids:
+            raise ValueError("at least one expert must be selected")
+        target_device = self.device if device is None else device
+        expert_id_tuple = tuple(int(expert_id) for expert_id in expert_ids)
+        expert_count = len(expert_id_tuple)
+        projections = ("gate", "up", "down")
+        specs = tuple(
+            self._specs[(layer_idx, projection)] for projection in projections
+        )
+        use_cuda = target_device.type == "cuda"
+        packed_cpu_tensors: list[torch.Tensor] = []
+        for projection, spec in zip(projections, specs, strict=True):
+            total_bytes = spec.bytes_per_expert * expert_count
+            previous_copy = self._pinned_copy_events.get(projection)
+            if previous_copy is not None:
+                # The H2D copy is asynchronous.  Before the same pinned
+                # staging buffer is overwritten by another prefill expert
+                # chunk, wait for that copy to finish.
+                previous_copy.synchronize()
+            buffer = self._pinned_buffers.get(projection)
+            if buffer is None or buffer.numel() < total_bytes:
+                buffer = torch.empty(
+                    total_bytes,
+                    dtype=torch.uint8,
+                    pin_memory=use_cuda,
+                )
+                self._pinned_buffers[projection] = buffer
+            packed_cpu_tensors.append(buffer[:total_bytes])
+
+        started = time.perf_counter()
+        read_futures = []
+        for spec, buffer in zip(specs, packed_cpu_tensors, strict=True):
+            view = memoryview(buffer.numpy())
+            size = spec.bytes_per_expert
+            for position, expert_id in enumerate(expert_id_tuple):
+                destination = view[position * size : (position + 1) * size]
+                read_futures.append(
+                    self._read_executor.submit(
+                        self._read_expert_slice,
+                        spec,
+                        expert_id,
+                        destination,
+                    )
+                )
+        for future in read_futures:
+            future.result()
+        self.timings["expert_read_seconds"] += time.perf_counter() - started
+
+        down_ready = None
+        if use_cuda:
+            started = time.perf_counter()
+            packed_gate = packed_cpu_tensors[0].to(
+                target_device, non_blocking=True
+            )
+            gate_ready = torch.cuda.Event()
+            gate_ready.record(torch.cuda.current_stream())
+            self._pinned_copy_events["gate"] = gate_ready
+            packed_up = packed_cpu_tensors[1].to(
+                target_device, non_blocking=True
+            )
+            up_ready = torch.cuda.Event()
+            up_ready.record(torch.cuda.current_stream())
+            self._pinned_copy_events["up"] = up_ready
+            if self._overlap_down_copy:
+                with torch.cuda.stream(self._copy_stream):
+                    packed_down = packed_cpu_tensors[2].to(
+                        target_device, non_blocking=True
+                    )
+                    down_ready = torch.cuda.Event()
+                    down_ready.record(self._copy_stream)
+            else:
+                packed_down = packed_cpu_tensors[2].to(
+                    target_device, non_blocking=True
+                )
+                down_ready = torch.cuda.Event()
+                down_ready.record(torch.cuda.current_stream())
+            self._pinned_copy_events["down"] = down_ready
+            self.timings["expert_h2d_seconds"] += time.perf_counter() - started
+        else:
+            packed_gate, packed_up, packed_down = (
+                buffer.clone() for buffer in packed_cpu_tensors
+            )
+
+        self.timings["expert_load_calls"] += 1.0
+        return StagedExpertBatch(
+            specs=specs,
+            packed=(packed_gate, packed_up, packed_down),
+            down_ready=down_ready,
+            expert_ids=expert_id_tuple,
+        )
+
     def load_experts(
         self,
         layer_idx: int,
@@ -220,92 +359,16 @@ class GGUFExpertStore:
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Return gate/up/down as ``(experts, out_features, in_features)``."""
 
-        if not expert_ids:
-            raise ValueError("at least one expert must be selected")
-        target_device = self.device if device is None else device
         target_dtype = self.dtype if dtype is None else dtype
-        expert_count = len(expert_ids)
+        batch = self._stage_experts(layer_idx, expert_ids, device=device)
+        expert_count = len(batch.expert_ids)
         tensors: list[torch.Tensor] = []
-        self.timings["expert_load_calls"] += 1.0
         try:
-            projections = ("gate", "up", "down")
-            specs = [self._specs[(layer_idx, projection)] for projection in projections]
-            use_cuda = target_device.type == "cuda"
-            packed_cpu_tensors: list[torch.Tensor] = []
-            for projection, spec in zip(projections, specs, strict=True):
-                total_bytes = spec.bytes_per_expert * expert_count
-                previous_copy = self._pinned_copy_events.get(projection)
-                if previous_copy is not None:
-                    # The H2D copy is asynchronous.  Before the same pinned
-                    # staging buffer is overwritten by another prefill expert
-                    # chunk, wait for that copy to finish.
-                    previous_copy.synchronize()
-                buffer = self._pinned_buffers.get(projection)
-                if buffer is None or buffer.numel() < total_bytes:
-                    buffer = torch.empty(
-                        total_bytes,
-                        dtype=torch.uint8,
-                        pin_memory=use_cuda,
-                    )
-                    self._pinned_buffers[projection] = buffer
-                packed_cpu_tensors.append(buffer[:total_bytes])
-            started = time.perf_counter()
-            read_futures = []
-            for spec, buffer in zip(specs, packed_cpu_tensors, strict=True):
-                view = memoryview(buffer.numpy())
-                size = spec.bytes_per_expert
-                for position, expert_id in enumerate(expert_ids):
-                    destination = view[position * size : (position + 1) * size]
-                    read_futures.append(
-                        self._read_executor.submit(
-                            self._read_expert_slice,
-                            spec,
-                            int(expert_id),
-                            destination,
-                        )
-                    )
-            for future in read_futures:
-                future.result()
-            self.timings["expert_read_seconds"] += time.perf_counter() - started
-
-            down_ready = None
-            if use_cuda:
-                started = time.perf_counter()
-                packed_gate = packed_cpu_tensors[0].to(target_device, non_blocking=True)
-                gate_ready = torch.cuda.Event()
-                gate_ready.record(torch.cuda.current_stream())
-                self._pinned_copy_events["gate"] = gate_ready
-                packed_up = packed_cpu_tensors[1].to(target_device, non_blocking=True)
-                up_ready = torch.cuda.Event()
-                up_ready.record(torch.cuda.current_stream())
-                self._pinned_copy_events["up"] = up_ready
-                if self._overlap_down_copy:
-                    with torch.cuda.stream(self._copy_stream):
-                        packed_down = packed_cpu_tensors[2].to(
-                            target_device, non_blocking=True
-                        )
-                        down_ready = torch.cuda.Event()
-                        down_ready.record(self._copy_stream)
-                else:
-                    packed_down = packed_cpu_tensors[2].to(
-                        target_device, non_blocking=True
-                    )
-                    down_ready = torch.cuda.Event()
-                    down_ready.record(torch.cuda.current_stream())
-                self._pinned_copy_events["down"] = down_ready
-                self.timings["expert_h2d_seconds"] += time.perf_counter() - started
-                packed_tensors = [packed_gate, packed_up, packed_down]
-            else:
-                packed_tensors = [buffer.clone() for buffer in packed_cpu_tensors]
-
-            # Gate/up are consumed while the copy stream finishes the down
-            # projection.  This hides a useful fraction of the ~0.17 s/token
-            # PCIe traffic on the RTX 3050.
             for index in (0, 1):
-                spec = specs[index]
+                spec = batch.specs[index]
                 started = time.perf_counter()
                 dequantized = dequantize_matrix(
-                    packed_tensors[index],
+                    batch.packed[index],
                     spec.quant_type,
                     out_features=expert_count * spec.out_features,
                     in_features=spec.in_features,
@@ -319,13 +382,11 @@ class GGUFExpertStore:
                         expert_count, spec.out_features, spec.in_features
                     )
                 )
-            if down_ready is not None:
-                torch.cuda.current_stream().wait_event(down_ready)
-                packed_tensors[2].record_stream(torch.cuda.current_stream())
-            spec = specs[2]
+            batch.wait_for_down()
+            spec = batch.specs[2]
             started = time.perf_counter()
             dequantized = dequantize_matrix(
-                packed_tensors[2],
+                batch.packed[2],
                 spec.quant_type,
                 out_features=expert_count * spec.out_features,
                 in_features=spec.in_features,
@@ -339,7 +400,7 @@ class GGUFExpertStore:
                     expert_count, spec.out_features, spec.in_features
                 )
             )
-            del packed_tensors
+            del batch
             return tensors[0], tensors[1], tensors[2]
         except torch.cuda.OutOfMemoryError:
             for tensor in tensors:
@@ -347,6 +408,15 @@ class GGUFExpertStore:
             gc.collect()
             torch.cuda.empty_cache()
             raise
+
+    def load_packed_experts(
+        self,
+        layer_idx: int,
+        expert_ids: Sequence[int],
+    ) -> StagedExpertBatch:
+        """Return pinned/H2D packed expert bytes without dequantizing them."""
+
+        return self._stage_experts(layer_idx, expert_ids, device=self.device)
 
 
 def _set_parameter(module: nn.Module, name: str, value: torch.Tensor) -> None:
@@ -365,6 +435,7 @@ class DeepSeekV2LiteGGUFRuntime:
         max_cache: int = 256,
         cpu_threads: int = 6,
         expert_chunk_size: int = 8,
+        fused_moe: bool = True,
         shared_experts_device: str = "auto",
         dense_mlp_device: str = "auto",
         lm_head_device: str = "auto",
@@ -387,6 +458,7 @@ class DeepSeekV2LiteGGUFRuntime:
         self.max_cache = int(max_cache)
         self.cpu_threads = int(cpu_threads)
         self.expert_chunk_size = max(1, int(expert_chunk_size))
+        self.requested_fused_moe = bool(fused_moe)
         self.dense_mlp_device = dense_mlp_device
         self.verbose = verbose
         self._closed = False
@@ -458,15 +530,25 @@ class DeepSeekV2LiteGGUFRuntime:
             if self.has_moe
             else None
         )
+        self.fused_moe_enabled = (
+            self.requested_fused_moe
+            and fused_moe_supported()
+            and self.expert_store is not None
+            and self.expert_store.supports_fused_moe()
+            and os.environ.get("DEEPINFER_DISABLE_FUSED_MOE") != "1"
+        )
+        self.fused_moe_chunks = 0
+        self.fallback_moe_chunks = 0
         self._load_weights(shared_experts_device, lm_head_device)
         self.gpu_free_bytes_after_load = int(torch.cuda.mem_get_info()[0])
         self._log(
             "loaded: GPU free %.1f MiB, shared=%s, lm_head=%s, "
-            "peak allocated %.1f MiB"
+            "fused_moe=%s, peak allocated %.1f MiB"
             % (
                 self.gpu_free_bytes_after_load / _MIB,
                 self.shared_experts_device,
                 self.lm_head_device,
+                self.fused_moe_enabled,
                 torch.cuda.max_memory_allocated() / _MIB,
             )
         )
@@ -857,7 +939,8 @@ class DeepSeekV2LiteGGUFRuntime:
             chunk_end = min(chunk_start + self.expert_chunk_size, len(expert_list))
             chunk_ids = expert_list[chunk_start:chunk_end]
             chunk_tokens = padded_tokens[chunk_start:chunk_end]
-            chunk_count = sum(counts_list[chunk_start:chunk_end])
+            chunk_counts = counts_list[chunk_start:chunk_end]
+            chunk_count = sum(chunk_counts)
             local_pad_index = (
                 padded_flat_index[sorted_offset : sorted_offset + chunk_count]
                 - chunk_start * max_count
@@ -866,18 +949,30 @@ class DeepSeekV2LiteGGUFRuntime:
             chunk_order = order[sorted_offset : sorted_offset + chunk_count]
             sorted_offset += chunk_count
             try:
-                gate_w, up_w, down_w = self.expert_store.load_experts(
-                    layer_idx, chunk_ids
-                )
-                gate = torch.bmm(
-                    gate_w, chunk_tokens.transpose(1, 2)
-                ).transpose(1, 2)
-                up = torch.bmm(up_w, chunk_tokens.transpose(1, 2)).transpose(1, 2)
-                hidden = F.silu(gate) * up
-                expert_output = torch.bmm(
-                    down_w, hidden.transpose(1, 2)
-                ).transpose(1, 2)
-                del gate_w, up_w, down_w, gate, up, hidden
+                if self.fused_moe_enabled:
+                    expert_output = self._fused_expert_chunk(
+                        layer_idx,
+                        chunk_ids,
+                        chunk_tokens,
+                        chunk_counts,
+                    )
+                    self.fused_moe_chunks += 1
+                else:
+                    gate_w, up_w, down_w = self.expert_store.load_experts(
+                        layer_idx, chunk_ids
+                    )
+                    gate = torch.bmm(
+                        gate_w, chunk_tokens.transpose(1, 2)
+                    ).transpose(1, 2)
+                    up = torch.bmm(
+                        up_w, chunk_tokens.transpose(1, 2)
+                    ).transpose(1, 2)
+                    hidden = F.silu(gate) * up
+                    expert_output = torch.bmm(
+                        down_w, hidden.transpose(1, 2)
+                    ).transpose(1, 2)
+                    del gate_w, up_w, down_w, gate, up, hidden
+                    self.fallback_moe_chunks += 1
             except torch.cuda.OutOfMemoryError:
                 torch.cuda.empty_cache()
                 gc.collect()
@@ -888,6 +983,7 @@ class DeepSeekV2LiteGGUFRuntime:
                 expert_output = self._moe_cpu_fallback(
                     layer_idx, chunk_ids, chunk_tokens
                 )
+                self.fallback_moe_chunks += 1
             selected = expert_output.reshape(-1, flat.shape[-1]).index_select(
                 0, local_pad_index
             )
@@ -901,6 +997,66 @@ class DeepSeekV2LiteGGUFRuntime:
         routed = routed.float().sum(dim=1).to(flat.dtype)
         routed = routed.reshape(*original_shape)
         return routed + mlp.shared_experts(identity)
+
+    def _fused_expert_chunk(
+        self,
+        layer_idx: int,
+        chunk_ids: Sequence[int],
+        chunk_tokens: torch.Tensor,
+        chunk_counts: Sequence[int],
+    ) -> torch.Tensor:
+        batch = self.expert_store.load_packed_experts(layer_idx, chunk_ids)
+        gate_spec, up_spec, down_spec = batch.specs
+        gate_activations: list[torch.Tensor | None] = []
+        for local_index, count in enumerate(chunk_counts):
+            if count == 0:
+                gate_activations.append(None)
+                continue
+            x = chunk_tokens[local_index, :count]
+            gate_start = local_index * gate_spec.bytes_per_expert
+            gate_end = gate_start + gate_spec.bytes_per_expert
+            up_start = local_index * up_spec.bytes_per_expert
+            up_end = up_start + up_spec.bytes_per_expert
+            gate_activations.append(
+                fused_gate_up_gemm(
+                    x,
+                    batch.packed[0][gate_start:gate_end],
+                    batch.packed[1][up_start:up_end],
+                    n_tokens=int(count),
+                    out_features=gate_spec.out_features,
+                    k_size=gate_spec.in_features,
+                    gate_qtype=gate_spec.quant_type,
+                    up_qtype=up_spec.quant_type,
+                    gate_row_bytes=gate_spec.row_bytes,
+                    up_row_bytes=up_spec.row_bytes,
+                )
+            )
+        batch.wait_for_down()
+        expert_output = torch.zeros(
+            (
+                len(chunk_ids),
+                chunk_tokens.shape[1],
+                down_spec.out_features,
+            ),
+            dtype=chunk_tokens.dtype,
+            device=chunk_tokens.device,
+        )
+        for local_index, activation in enumerate(gate_activations):
+            if activation is None:
+                continue
+            count = int(chunk_counts[local_index])
+            down_start = local_index * down_spec.bytes_per_expert
+            down_end = down_start + down_spec.bytes_per_expert
+            expert_output[local_index, :count] = fused_down_gemm(
+                activation,
+                batch.packed[2][down_start:down_end],
+                n_tokens=count,
+                out_features=down_spec.out_features,
+                k_size=down_spec.in_features,
+                down_qtype=down_spec.quant_type,
+                down_row_bytes=down_spec.row_bytes,
+            )
+        return expert_output
 
     def _moe_cpu_fallback(
         self,
@@ -1075,6 +1231,9 @@ class DeepSeekV2LiteGGUFRuntime:
             dense_layer_indices=list(self.dense_layer_indices),
             moe_layer_indices=list(self.moe_layer_indices),
             dense_mlp_devices=dict(self.dense_mlp_devices),
+            fused_moe_enabled=self.fused_moe_enabled,
+            fused_moe_chunks=self.fused_moe_chunks,
+            fallback_moe_chunks=self.fallback_moe_chunks,
         )
 
     def close(self) -> None:

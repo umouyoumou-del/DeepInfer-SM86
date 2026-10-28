@@ -16,7 +16,9 @@ engine。当前重点是：
 - Qwen2 / Llama / Mistral / Gemma / Gemma2 dense 架构适配；
 - 4 GB 显存下的混合精度（Q4/Q3）与整体 Q4 实验数据；
 - DeepSeek-V2-Lite Q4_K_M 的 GGUF routed-expert 流式 MoE、MLA reference
-  路径与 CPU/GPU 混合 offload（单请求，2.4–2.7 tokens/s 稳态）；
+  路径与 CPU/GPU 混合 offload（单请求，2.56–3.05 tokens/s 稳态）；
+- fused Q4_K/Q5_0/Q8_0 MoE GEMV/GEMM 默认开启，直接消费 packed expert rows，
+  去掉 FP16 expert 权重 materialize；`--no-fused-moe` 可回退 dequant+bmm。
 - 同一 runtime 支持 `first_k_dense_replace`、`moe_layer_freq`、dense-only
   层布局，dense MLP 可按显存自动放 GPU 或回退到 CPU FP32。
 
@@ -33,6 +35,7 @@ engine。当前重点是：
 | Qwen2.5-3B 常驻网关 | W4A16 + 256 context | 约 2.5 GiB | **44.773 tokens/s / 0.895 秒一次请求** |
 | Qwen2.5-7B 混合精度 | 4-bit attention/embed + 3-bit MLP/head | 3.20 GiB allocated | **25.962 平均 / 26.188 中位** |
 | Qwen2.5-7B 整体 Q4 | 全 4-bit | 3.92 GiB allocated | 7.942 tokens/s（持续 paging） |
+| DeepSeek-V2-Lite MoE Q4_K_M | Q4_K_M + fused MoE GEMV/GEMM | 2.23 GiB allocated | 2.56–3.05 tokens/s（长生成 2.63） |
 
 > 这些结果均为 `model_executor` 级；`full_engine=false`、`native_runner_ready=false`。
 > 不能把它们写成“完整 DeepInfer engine 已支持 Qwen2.5”。当前新增的是
@@ -47,27 +50,31 @@ engine。当前重点是：
 - 9.65 GiB Q4_K_M GGUF 不整体加载；routed experts 由 GGUFIndex 按需读取；
 - 每个 expert chunk 最多 8 个专家，Q4_K / Q5_0 / Q8_0 packed bytes 通过
   pinned staging buffer + 独立 copy stream 异步拷贝到 GPU；
-- SM86 CUDA kernel 在 GPU 上把 packed expert 反量化成 FP16，再做 grouped
-  batched GEMM；GPU 不同时保留 64 个专家；
+- 默认走 fused Q4_K/Q5_0/Q8_0 MoE GEMV/GEMM：kernel 直接消费 packed
+  expert rows，不再 materialize FP16 expert 权重；`--no-fused-moe` 保留
+  dequant + grouped bmm 回退路径；
+- GPU 不同时保留 64 个专家；
 - attention / router / dense layer0 / shared experts / lm_head 按可用显存
   自动放在 GPU 或 CPU；嵌入留在 CPU；
-- 最终 `peak GPU allocated ≈ 2.41 GiB`，加载后仍有约 1.0 GiB 空闲显存。
+- 最终 `peak GPU allocated ≈ 2.23 GiB`，加载后仍有约 1.0 GiB 空闲显存。
 
 最终实测（greedy、Q4_K_M、单请求、短 prompt / max_cache=256）：
 
 | 指标 | 结果 |
 |---|---:|
-| 模型加载 | 17.3 s |
-| cold/warmup（4 token） | 3.5–16 s（取决于 OS page cache） |
-| prefill（短 prompt） | 2.22–2.77 s |
-| decode 稳态 | **2.40–2.70 tokens/s** |
-| peak GPU allocated / reserved | **2.41 GiB / 2.43 GiB** |
+| 模型加载 | 17.6 s |
+| cold/warmup（4 token） | 3.4–16 s（取决于 OS page cache） |
+| prefill（短 prompt） | 1.91–2.70 s |
+| decode 稳态 | **2.56–3.05 tokens/s**（64-token 长生成 2.63） |
+| peak GPU allocated / reserved | **2.23 GiB / 2.31 GiB** |
+| 对照 dequant+bmm | decode 2.43–2.77；长生成 2.43 |
 | shared experts / lm_head | GPU（auto 放置） |
 | 质量抽检 | MoE 解释、首都、翻译、`5-2=3`、`9.9 > 9.11` 均正确 |
 
 同一份 Q4_K_M 用 llama.cpp CPU 基线约 9–13 tokens/s，因此这条路径不是“最快”；
 它证明的是 **DeepInfer 自己的 MoE/MLA 执行层可以在 4 GB 卡上不 OOM 地跑起来**，
-而速度可以继续通过 fused quantized MoE kernel、专家 prefetch 和多流流水线提高。
+而 fused packed MoE kernel 已经把 dequant materialize 往返去掉；后续还可以继续
+通过多 expert 合并 kernel、专家 prefetch 和多流流水线提高。
 复现：
 
 ```powershell
@@ -207,35 +214,63 @@ overlap 开关对照（均启用 tiled prefill）：
   - 结果 JSON 记录 `dense_layer_indices`、`moe_layer_indices`、
     `dense_mlp_devices`。
 
-### 3. 实测结果
+### 3. Fused packed-weight MoE GEMV/GEMM
+
+- 新增 `deepinfer/moe/fused_moe.py`：
+  - `dp_fused_gate_up_gemm`：一个 CUDA block 处理一个中间维输出 row，
+    线程先从 Q4_K/Q5_0/Q8_0 packed row 解码权重到寄存器，再对多个 token
+    做 dot-product，并直接写 `silu(gate) * up`；
+  - `dp_fused_down_gemm`：同样直接消费 packed down row，写回 hidden；
+  - GEMV（decode 单 token）和 GEMM（prefill 多 token）共用同一套 kernel，
+    多 token 时权重只解码一次；
+  - packed bytes 直接进 kernel，不再生成/写入/读回 FP16 expert 权重；
+  - `--no-fused-moe` 可切回旧的 dequant + grouped bmm 路径做 A/B 对照。
+
+效果：
+
+| 指标 | dequant+bmm | fused MoE |
+|---|---:|---:|
+| 64-token 长生成 decode | 2.43 t/s | **2.63 t/s** |
+| 5-prompt decode 范围 | 2.43–2.77 | **2.56–3.05** |
+| peak GPU allocated | 2.36 GiB | **2.23 GiB** |
+| peak GPU reserved | 2.43 GiB | **2.31 GiB** |
+| expert dequant launch 累计 | 非零 | **0** |
+
+5 个质量 prompt 和 64-token 长生成的 token IDs 在 fused / dequant+bmm 两条路径
+逐 token 完全一致。
+
+### 4. 实测结果
 
 RTX 3050 Laptop 4 GB + 16 GB RAM，DeepSeek-V2-Lite Q4_K_M：
 
 | 指标 | 结果 |
 |---|---:|
-| 模型加载 | 17.3 s |
-| prefill（短 prompt） | 2.22–2.77 s |
-| decode 稳态 | **2.40–2.70 tokens/s** |
-| peak GPU allocated / reserved | **2.41 GiB / 2.43 GiB** |
+| 模型加载 | 17.6 s |
+| prefill（短 prompt） | 1.91–2.70 s |
+| decode 稳态 | **2.56–3.05 tokens/s**（64-token 长生成 2.63） |
+| peak GPU allocated / reserved | **2.23 GiB / 2.31 GiB** |
 | 加载后 GPU 空闲 | 约 1.0 GiB |
-| 质量抽检 | MoE 解释、首都、翻译、`5-2=3`、`9.9 > 9.11` 均正确 |
+| 质量抽检 | MoE 解释、首都、翻译、`5-2=3`、`9.9 > 9.11` 均正确；fused/回退 token IDs 一致 |
 
 同一份 Q4_K_M 的 llama.cpp CPU 基线约 9–13 tokens/s；本实现的重点是 native
 MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比绝对速度。
 
-### 4. 测试与文档
+### 5. 测试与文档
 
 - `tests/moe/` 新增 GGUF 索引、截断拒绝、expert slice、Q4_K/Q5_0/Q8_0
-  GPU 反量化、dense/MoE 层布局和 CPU MLP fallback 测试；
-- 全套测试：**70 passed**；
+  GPU 反量化、dense/MoE 层布局、CPU MLP fallback 和 fused MoE kernel 对照测试；
+- 全套测试：**74 passed**；
 - 新增文章：
   `docs/ARTICLE_9_DEEPSEEK_V2_LITE_MOE_CPU_GPU_OFFLOAD.md`；
 - 结构化结果：
-  `docs/results/deepseek_v2_lite_q4km_moe_sm86.json`；
+  `docs/results/deepseek_v2_lite_q4km_moe_sm86.json`（fused）、
+  `docs/results/deepseek_v2_lite_q4km_moe_dequant_bmm_sm86.json`（回退基线）、
+  `docs/results/deepseek_v2_lite_q4km_moe_fused_vs_dequant.json`（长生成对照）；
 - 已知边界：
   - 单请求，未接入 paged scheduler / continuous batching；
   - MLA 是 eager/reference attention，不是 FlashMLA；
-  - MoE 目前是 GPU 反量化 + grouped bmm，不是 fused packed MoE kernel；
+  - fused GEMV/GEMM 是 block-per-row 的通用实现，尚未做多 expert 合并 kernel、
+    Tensor Core tile 或 cp.async；prefill 与 dequant+bmm 基本同速，decode 更快；
   - dense/hybrid 路径有单元测试，但本机没有 dense-only DeepSeek GGUF 做
     端到端 benchmark；
   - Q4_K_M 有损，不能宣传成 BF16 等价。
@@ -405,7 +440,8 @@ lm_head           : 3-bit, group 128
 | KV FP8 paged cache | ✅ | E4M3/E5M2，native paged decode，无 scale sidecar |
 | CPU cold-block offload | ✅ | 请求级 used-block swap，pinned CPU payload |
 | Prometheus / health | ✅ | block/prefix/queue/prefill/decode/swap 指标 |
-| DeepSeek-V2-Lite MoE | ✅ | Q4_K_M routed-expert 流式执行、grouped bmm、CPU/GPU offload；单请求 |
+| DeepSeek-V2-Lite MoE | ✅ | Q4_K_M routed-expert 流式执行、fused GEMV/GEMM、CPU/GPU offload；单请求 |
+| Fused MoE GEMV/GEMM | ✅ | Q4_K/Q5_0/Q8_0 直接消费 packed rows；`--no-fused-moe` 回退 |
 | DeepSeek-V2 dense / hybrid layers | ✅ | `first_k_dense_replace` / `moe_layer_freq` / dense-only；dense MLP 自动 GPU/CPU |
 | DeepSeek-V2 MLA | ✅ | eager/reference attention + DynamicCache；不是 FlashMLA |
 | GPTQ | ✅ | 2/4/8-bit、group quant、`g_idx`/desc_act -> W4A16 |
@@ -435,6 +471,7 @@ deepinfer/
   quantization/convert.py               任意支持格式 -> layered W4A16
   moe/gguf_index.py                     GGUF header/index、完整性与 expert slice
   moe/gpu_quant.py                      Q4_K/Q5_0/Q8_0 SM86 GPU dequant
+  moe/fused_moe.py                      fused Q4_K/Q5_0/Q8_0 MoE GEMV/GEMM
   moe/layout.py                         dense / MoE / hybrid 层布局判定
   moe/deepseek_v2_runtime.py            DeepSeek-V2-Lite MoE/MLA 流式执行与 offload
   engine/kv_cache.py                    block allocator、paged FP16/INT8/FP8、CPU payload
@@ -506,6 +543,7 @@ tests/
   apps/test_paged_scheduler_gpu.py      双 CUDA stream overlap GPU 测试
   moe/test_gguf_index.py                GGUF 索引、截断检测和 expert slice
   moe/test_gpu_quant.py                 Q4_K/Q5_0/Q8_0 GPU 反量化对照
+  moe/test_fused_moe.py                 fused GEMV/GEMM 与反量化参考对照
   moe/test_dense_support.py             dense/MoE 层布局与 CPU MLP fallback
 docs/
   ARTICLE_1_DEEPINFER_SM86_KERNEL.md          上篇：内核与量化工程
@@ -956,8 +994,9 @@ python scripts\export_sm86_kernels.py
   batching，prefill 会扫描大量专家，冷启动明显慢于稳态 decode；
 - dense/hybrid 层布局已实现并有单元测试，但本机没有 dense DeepSeek-V2 GGUF
   做端到端质量基准；dense-only 模型超出显存时会回退 CPU FP32，速度会很慢；
-- DeepSeek MLA 使用官方 eager/reference attention，不是 FlashMLA；MoE 路径是
-  “GPU 反量化 + cuBLAS grouped GEMM”，还不是 packed-weight fused MoE kernel；
+- DeepSeek MLA 使用官方 eager/reference attention，不是 FlashMLA；MoE 默认为
+  packed-weight fused GEMV/GEMM，`--no-fused-moe` 可回退到 dequant + grouped
+  GEMM；当前 fused kernel 是 block-per-row 通用实现，尚未做多 expert 合并/tile；
 - 非 tied 的 lm_head 仍以 FP16 dense 保存，7B 转换后体积需要单独评估；
 - dense 通用执行层仍未实现 activation quantization、SmoothQuant 或 MoE；
 - 没有 tensor/pipeline parallel 或跨厂商后端抽象；
@@ -1001,6 +1040,8 @@ python scripts\export_sm86_kernels.py
   `docs/P0_CHUNKED_PREFILL_AND_MEMORY_BUDGET.md`
 - DeepSeek-V2-Lite MoE 复盘：
   `docs/ARTICLE_9_DEEPSEEK_V2_LITE_MOE_CPU_GPU_OFFLOAD.md`
+- fused MoE vs dequant+bmm 长生成对照：
+  `docs/results/deepseek_v2_lite_q4km_moe_fused_vs_dequant.json`
 - GPU TTFT/TPOT/并发 benchmarks：`scripts/bench_paged_scheduler.py`
 - 长文档插入 TPOT 抖动：`scripts/bench_tpot_jitter.py`
 - batched W4 GEMV 微基准：`scripts/bench_w4a16_batched_gemv.py`

@@ -64,6 +64,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--top-k", type=int, default=0)
     parser.add_argument("--max-cache", type=int, default=256)
     parser.add_argument("--expert-chunk-size", type=int, default=8)
+    parser.add_argument(
+        "--no-fused-moe",
+        action="store_true",
+        help="disable fused packed-weight MoE GEMV/GEMM and use dequant+bmm",
+    )
     parser.add_argument("--cpu-threads", type=int, default=6)
     parser.add_argument(
         "--shared-experts-device", choices=("auto", "cuda", "cpu"), default="auto"
@@ -109,6 +114,7 @@ def main() -> int:
         max_cache=args.max_cache,
         cpu_threads=args.cpu_threads,
         expert_chunk_size=args.expert_chunk_size,
+        fused_moe=not args.no_fused_moe,
         shared_experts_device=args.shared_experts_device,
         dense_mlp_device=args.dense_mlp_device,
         lm_head_device=args.lm_head_device,
@@ -172,6 +178,7 @@ def main() -> int:
         "max_cache": args.max_cache,
         "expert_chunk_size": args.expert_chunk_size,
         "dense_mlp_device": args.dense_mlp_device,
+        "fused_moe_requested": not args.no_fused_moe,
         "results": records,
     }
     if args.output is not None:

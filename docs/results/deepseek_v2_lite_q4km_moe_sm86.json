@@ -1,9 +1,9 @@
 {
-  "created_at": "2026-10-28 09:50:23",
+  "created_at": "2026-10-28 10:10:37",
   "model": "E:\\DeepInfer-MoE\\models\\DeepSeek-V2-Lite-Chat-GGUF\\DeepSeek-V2-Lite-Chat-Q4_K_M.gguf",
   "meta_dir": "E:\\DeepInfer-MoE\\meta",
-  "load_seconds": 17.270157099992502,
-  "warmup_seconds": 3.6657496000116225,
+  "load_seconds": 17.601067299983697,
+  "warmup_seconds": 3.4013807000010274,
   "device": "NVIDIA GeForce RTX 3050 Laptop GPU",
   "torch": "2.5.1+cu121",
   "cuda": "12.1",
@@ -12,17 +12,18 @@
   "max_cache": 256,
   "expert_chunk_size": 8,
   "dense_mlp_device": "auto",
+  "fused_moe_requested": true,
   "results": [
     {
       "prompt": "用一句话解释什么是混合专家模型（MoE）。",
       "text": " 混合专家模型（MoE）是一种人工智能模型，它通过结合多个专家系统来提高整体性能，每个",
       "prompt_tokens": 20,
       "completion_tokens": 24,
-      "prefill_seconds": 2.3489378000085708,
-      "decode_seconds": 9.585871199989924,
-      "decode_tokens_per_second": 2.3993645981832277,
-      "peak_gpu_allocated_bytes": 2527241216,
-      "peak_gpu_reserved_bytes": 2592079872,
+      "prefill_seconds": 2.372728999995161,
+      "decode_seconds": 8.999545099999523,
+      "decode_tokens_per_second": 2.5556847312206057,
+      "peak_gpu_allocated_bytes": 2389216256,
+      "peak_gpu_reserved_bytes": 2451570688,
       "gpu_free_bytes_after_load": 1099379508,
       "shared_experts_device": "cuda",
       "lm_head_device": "cuda",
@@ -53,9 +54,9 @@
         13712
       ],
       "timings": {
-        "expert_read_seconds": 5.173210999579169,
-        "expert_h2d_seconds": 0.30264540048665367,
-        "expert_dequant_launch_seconds": 0.406140599923674,
+        "expert_read_seconds": 5.386261299659964,
+        "expert_h2d_seconds": 0.30594929985818453,
+        "expert_dequant_launch_seconds": 0.0,
         "expert_load_calls": 922.0
       },
       "dense_layer_indices": [
@@ -91,18 +92,21 @@
       ],
       "dense_mlp_devices": {
         "0": "cuda"
-      }
+      },
+      "fused_moe_enabled": true,
+      "fused_moe_chunks": 922,
+      "fallback_moe_chunks": 0
     },
     {
       "prompt": "中国的首都是哪里？请只回答城市名。",
       "text": " 中国的首都是北京。",
       "prompt_tokens": 19,
       "completion_tokens": 7,
-      "prefill_seconds": 2.5443176999979187,
-      "decode_seconds": 2.2916558999859262,
-      "decode_tokens_per_second": 2.618194118949903,
-      "peak_gpu_allocated_bytes": 2527118336,
-      "peak_gpu_reserved_bytes": 2592079872,
+      "prefill_seconds": 2.7003629000100773,
+      "decode_seconds": 2.168427900003735,
+      "decode_tokens_per_second": 2.7669815537743565,
+      "peak_gpu_allocated_bytes": 2389120512,
+      "peak_gpu_reserved_bytes": 2451570688,
       "gpu_free_bytes_after_load": 1099379508,
       "shared_experts_device": "cuda",
       "lm_head_device": "cuda",
@@ -116,9 +120,9 @@
         100001
       ],
       "timings": {
-        "expert_read_seconds": 7.3662057998008095,
-        "expert_h2d_seconds": 0.4049878001678735,
-        "expert_dequant_launch_seconds": 0.4719117999775335,
+        "expert_read_seconds": 7.762548799539218,
+        "expert_h2d_seconds": 0.4191811998025514,
+        "expert_dequant_launch_seconds": 0.0,
         "expert_load_calls": 1235.0
       },
       "dense_layer_indices": [
@@ -154,18 +158,21 @@
       ],
       "dense_mlp_devices": {
         "0": "cuda"
-      }
+      },
+      "fused_moe_enabled": true,
+      "fused_moe_chunks": 1235,
+      "fallback_moe_chunks": 0
     },
     {
       "prompt": "把这句话翻译成英文：今天天气很好。",
       "text": " The weather is beautiful today.",
       "prompt_tokens": 18,
       "completion_tokens": 7,
-      "prefill_seconds": 2.309091300005093,
-      "decode_seconds": 2.3123116999922786,
-      "decode_tokens_per_second": 2.5948058819319364,
-      "peak_gpu_allocated_bytes": 2526645248,
-      "peak_gpu_reserved_bytes": 2613051392,
+      "prefill_seconds": 2.1014696000202093,
+      "decode_seconds": 1.9774475000158418,
+      "decode_tokens_per_second": 3.0342145619299288,
+      "peak_gpu_allocated_bytes": 2388741120,
+      "peak_gpu_reserved_bytes": 2451570688,
       "gpu_free_bytes_after_load": 1099379508,
       "shared_experts_device": "cuda",
       "lm_head_device": "cuda",
@@ -179,10 +186,10 @@
         100001
       ],
       "timings": {
-        "expert_read_seconds": 9.437664099794347,
-        "expert_h2d_seconds": 0.5033894005173352,
-        "expert_dequant_launch_seconds": 0.535609300568467,
-        "expert_load_calls": 1538.0
+        "expert_read_seconds": 9.527634199766908,
+        "expert_h2d_seconds": 0.5206225996371359,
+        "expert_dequant_launch_seconds": 0.0,
+        "expert_load_calls": 1537.0
       },
       "dense_layer_indices": [
         0
@@ -217,18 +224,21 @@
       ],
       "dense_mlp_devices": {
         "0": "cuda"
-      }
+      },
+      "fused_moe_enabled": true,
+      "fused_moe_chunks": 1537,
+      "fallback_moe_chunks": 0
     },
     {
       "prompt": "只回答数字：5-2=?",
       "text": " 5-2=3",
       "prompt_tokens": 17,
       "completion_tokens": 7,
-      "prefill_seconds": 2.224299900000915,
-      "decode_seconds": 2.2191254000063054,
-      "decode_tokens_per_second": 2.7037678898105315,
-      "peak_gpu_allocated_bytes": 2526135296,
-      "peak_gpu_reserved_bytes": 2613051392,
+      "prefill_seconds": 1.907402999990154,
+      "decode_seconds": 1.9706454999977723,
+      "decode_tokens_per_second": 3.0446876416924216,
+      "peak_gpu_allocated_bytes": 2388169728,
+      "peak_gpu_reserved_bytes": 2476736512,
       "gpu_free_bytes_after_load": 1099379508,
       "shared_experts_device": "cuda",
       "lm_head_device": "cuda",
@@ -242,10 +252,10 @@
         100001
       ],
       "timings": {
-        "expert_read_seconds": 11.388102399389027,
-        "expert_h2d_seconds": 0.5993530005216599,
-        "expert_dequant_launch_seconds": 0.5973448009754065,
-        "expert_load_calls": 1838.0
+        "expert_read_seconds": 11.09652809999534,
+        "expert_h2d_seconds": 0.6693054996139836,
+        "expert_dequant_launch_seconds": 0.0,
+        "expert_load_calls": 1837.0
       },
       "dense_layer_indices": [
         0
@@ -280,18 +290,21 @@
       ],
       "dense_mlp_devices": {
         "0": "cuda"
-      }
+      },
+      "fused_moe_enabled": true,
+      "fused_moe_chunks": 1837,
+      "fallback_moe_chunks": 0
     },
     {
       "prompt": "9.11和9.9哪个大？只回答更大的数字。",
       "text": " 9.9大。",
       "prompt_tokens": 24,
       "completion_tokens": 7,
-      "prefill_seconds": 2.7718080999911763,
-      "decode_seconds": 2.2753926999866962,
-      "decode_tokens_per_second": 2.636907466581518,
-      "peak_gpu_allocated_bytes": 2530010112,
-      "peak_gpu_reserved_bytes": 2613051392,
+      "prefill_seconds": 2.5794262000126764,
+      "decode_seconds": 2.0033425000146963,
+      "decode_tokens_per_second": 2.9949946152272937,
+      "peak_gpu_allocated_bytes": 2392162304,
+      "peak_gpu_reserved_bytes": 2476736512,
       "gpu_free_bytes_after_load": 1099379508,
       "shared_experts_device": "cuda",
       "lm_head_device": "cuda",
@@ -305,10 +318,10 @@
         100001
       ],
       "timings": {
-        "expert_read_seconds": 13.72746869904222,
-        "expert_h2d_seconds": 0.7050043000199366,
-        "expert_dequant_launch_seconds": 0.6646431006956846,
-        "expert_load_calls": 2162.0
+        "expert_read_seconds": 12.908625000418397,
+        "expert_h2d_seconds": 0.7722253994725179,
+        "expert_dequant_launch_seconds": 0.0,
+        "expert_load_calls": 2161.0
       },
       "dense_layer_indices": [
         0
@@ -343,7 +356,10 @@
       ],
       "dense_mlp_devices": {
         "0": "cuda"
-      }
+      },
+      "fused_moe_enabled": true,
+      "fused_moe_chunks": 2161,
+      "fallback_moe_chunks": 0
     }
   ]
 }
