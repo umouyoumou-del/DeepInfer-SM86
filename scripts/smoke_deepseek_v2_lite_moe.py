@@ -101,6 +101,13 @@ def _parse_args() -> argparse.Namespace:
         help="GPU packed-expert LRU cache size in MiB; 0 disables it",
     )
     parser.add_argument(
+        "--ecs",
+        action="store_true",
+        help="enable ECS heat/LRU/tier control plane",
+    )
+    parser.add_argument("--ecs-l1-mb", type=int, default=0)
+    parser.add_argument("--ecs-l2-mb", type=int, default=0)
+    parser.add_argument(
         "--prefill-prefetch",
         action="store_true",
         default=True,
@@ -217,6 +224,9 @@ def main() -> int:
             args.predictive_prefetch and not args.no_predictive_prefetch
         ),
         predictive_cache_mb=args.predictive_cache_mb,
+        ecs_enabled=args.ecs,
+        ecs_l1_mb=args.ecs_l1_mb,
+        ecs_l2_mb=args.ecs_l2_mb,
         prefill_all_experts=(
             args.prefill_all_experts and not args.no_prefill_all_experts
         ),
@@ -300,6 +310,9 @@ def main() -> int:
             args.predictive_prefetch and not args.no_predictive_prefetch
         ),
         "predictive_cache_mb": args.predictive_cache_mb,
+        "ecs": args.ecs,
+        "ecs_l1_mb": args.ecs_l1_mb,
+        "ecs_l2_mb": args.ecs_l2_mb,
         "prefill_all_experts": (
             args.prefill_all_experts and not args.no_prefill_all_experts
         ),

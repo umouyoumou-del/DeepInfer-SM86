@@ -146,6 +146,7 @@ class GenerationResult:
     cpu_moe_chunks: int
     cpu_experts_per_layer: int
     cpu_expert_chunks: int
+    ecs: dict[str, Any] | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -172,6 +173,7 @@ class GenerationResult:
             "cpu_moe_chunks": self.cpu_moe_chunks,
             "cpu_experts_per_layer": self.cpu_experts_per_layer,
             "cpu_expert_chunks": self.cpu_expert_chunks,
+            "ecs": self.ecs,
         }
 
 
@@ -214,9 +216,12 @@ class GGUFExpertStore:
         expert_cache_mb: int = 0,
         gpu_expert_cache_mb: int = 0,
         predictive_cache_mb: int = 256,
+        ecs: Any = None,
     ) -> None:
         self.index = index
         self.device = device
+        self.ecs = ecs
+        self._ecs_device = int(device.index or 0) if device.index is not None else 0
         self.dtype = dtype
         self.max_gpu_spill_bytes = int(max_gpu_spill_mb) * _MIB
         self.parallel_read_workers = max(1, int(parallel_read_workers))
@@ -350,6 +355,10 @@ class GGUFExpertStore:
             return None
         layer_cache.move_to_end(expert_id)
         self.timings["gpu_cache_hits"] += 1.0
+        for projection, tensor in zip(("gate", "up", "down"), entry, strict=True):
+            self._ecs_access(
+                layer_idx, projection, expert_id, 0, tensor.numel()
+            )
         return entry
 
     def _gpu_cache_put(
@@ -385,6 +394,10 @@ class GGUFExpertStore:
             self._gpu_cache_bytes_by_layer.get(layer_idx, 0) + size
         )
         self.timings["gpu_cache_bytes"] = float(self._gpu_cache_bytes)
+        for projection, tensor in zip(("gate", "up", "down"), entry, strict=True):
+            self._ecs_access(
+                layer_idx, projection, expert_id, 0, tensor.numel()
+            )
         return True
 
     def clear_gpu_cache(self) -> None:
@@ -467,6 +480,31 @@ class GGUFExpertStore:
             keepalive=keepalive,
         )
 
+    def _ecs_access(
+        self,
+        layer_idx: int,
+        projection: str,
+        expert_id: int,
+        tier: Any,
+        bytes: int,
+    ) -> None:
+        if self.ecs is None:
+            return
+        try:
+            from deepinfer.ecs import ExpertKey, Tier
+
+            self.ecs.touch(
+                ExpertKey(layer_idx, projection, int(expert_id)),
+                tier=Tier(tier),
+                device=self._ecs_device,
+                bytes=int(bytes),
+                heat_delta=1.0,
+            )
+            self.ecs.record_tier_access(Tier(tier), int(bytes))
+        except Exception:
+            # Telemetry must never break inference.
+            return
+
     def _cache_get(
         self, layer_idx: int, key: tuple[str, int]
     ) -> torch.Tensor | None:
@@ -478,6 +516,7 @@ class GGUFExpertStore:
             return None
         layer_cache.move_to_end(key)
         self.timings["expert_cache_hits"] += 1.0
+        self._ecs_access(layer_idx, key[0], key[1], 1, value.numel())
         return value
 
     def _cache_put(
@@ -508,6 +547,7 @@ class GGUFExpertStore:
             self._packed_cache_bytes_by_layer.get(layer_idx, 0) + size
         )
         self.timings["expert_cache_bytes"] = float(self._packed_cache_bytes)
+        self._ecs_access(layer_idx, key[0], key[1], 1, size)
 
     def _predictive_cache_get(
         self, key: tuple[int, str, int]
@@ -859,6 +899,7 @@ class GGUFExpertStore:
             for future in read_futures:
                 future.result()
             for key, destination in cache_misses:
+                self._ecs_access(layer_idx, key[0], key[1], 2, len(destination))
                 if not self._cache_candidate(key):
                     continue
                 data = torch.from_numpy(
@@ -1060,6 +1101,9 @@ class DeepSeekV2LiteGGUFRuntime:
         predictive_prefetch: bool = False,
         predictive_cache_mb: int = 256,
         prefill_all_experts: bool = False,
+        ecs_enabled: bool = False,
+        ecs_l1_mb: int = 0,
+        ecs_l2_mb: int = 0,
         expert_cache_mb: int = 0,
         gpu_expert_cache_mb: int = 0,
         fused_moe: bool = True,
@@ -1100,6 +1144,17 @@ class DeepSeekV2LiteGGUFRuntime:
         self.predictive_cache_mb = max(0, int(predictive_cache_mb))
         self._predictive_cache_limit = self.predictive_cache_mb * _MIB
         self.prefill_all_experts = bool(prefill_all_experts)
+        self.ecs_controller = None
+        if ecs_enabled:
+            from deepinfer.ecs import ECSController
+
+            self.ecs_controller = ECSController(
+                l1_capacity_bytes=max(0, int(ecs_l1_mb)) * _MIB,
+                l2_capacity_bytes=max(0, int(ecs_l2_mb)) * _MIB,
+                devices=(int(self.device.index or 0),)
+                if self.device.index is not None
+                else (0,),
+            )
         self.requested_fused_moe = bool(fused_moe)
         self.dense_mlp_device = dense_mlp_device
         self.verbose = verbose
@@ -1204,6 +1259,7 @@ class DeepSeekV2LiteGGUFRuntime:
                 expert_cache_mb=expert_cache_mb,
                 gpu_expert_cache_mb=gpu_expert_cache_mb,
                 predictive_cache_mb=self.predictive_cache_mb,
+                ecs=self.ecs_controller,
             )
             if self.has_moe
             else None
@@ -1671,12 +1727,19 @@ class DeepSeekV2LiteGGUFRuntime:
                 self._moe_route_counts[layer_idx] = counts_all
             for expert_id, count in zip(expert_list, counts_list, strict=True):
                 counts_all[expert_id] += int(count)
-            cpu_expert_set = set(
-                sorted(
+            if self.ecs_controller is not None:
+                cpu_expert_set = self.ecs_controller.choose_cold_experts(
+                    layer_idx,
                     expert_list,
-                    key=lambda expert_id: (counts_all[expert_id], expert_id),
-                )[: self.requested_cpu_experts_per_layer]
-            )
+                    count=self.requested_cpu_experts_per_layer,
+                )
+            else:
+                cpu_expert_set = set(
+                    sorted(
+                        expert_list,
+                        key=lambda expert_id: (counts_all[expert_id], expert_id),
+                    )[: self.requested_cpu_experts_per_layer]
+                )
         if self.predictive_prefetch and token_count == 1:
             next_moe_layer = self._next_moe_layer.get(layer_idx)
             predicted = (
@@ -2456,6 +2519,11 @@ class DeepSeekV2LiteGGUFRuntime:
             cpu_moe_chunks=self.cpu_moe_chunks,
             cpu_experts_per_layer=self.requested_cpu_experts_per_layer,
             cpu_expert_chunks=self.cpu_expert_chunks,
+            ecs=(
+                self.ecs_controller.snapshot()
+                if self.ecs_controller is not None
+                else None
+            ),
         )
 
     def close(self) -> None:

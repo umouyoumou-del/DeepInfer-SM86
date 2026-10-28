@@ -11,7 +11,7 @@ PACKAGE = ROOT / "pypi" / "deepinfer-sm86"
 def test_pypi_project_and_package_data() -> None:
     pyproject = (PACKAGE / "pyproject.toml").read_text(encoding="utf-8")
     assert 'name = "deepinfer-sm86"' in pyproject
-    assert 'version = "0.1.0"' in pyproject
+    assert 'version = "0.2.0"' in pyproject
     assert 'include = ["deepinfer*"]' in pyproject
     assert 'package-dir = { "" = "src" }' in pyproject
     assert 'license-files = ["LICENSE", "NOTICE"]' in pyproject
@@ -21,6 +21,9 @@ def test_pypi_project_and_package_data() -> None:
         "src/deepinfer/moe/deepseek_v2_runtime.py",
         "src/deepinfer/moe/paged_mla_quant.py",
         "src/deepinfer/scheduler/paged.py",
+        "src/deepinfer/ecs/controller.py",
+        "src/deepinfer/ecs/transport.py",
+        "src/deepinfer/ecs/ecs_core.cpp",
         "src/deepinfer/py.typed",
         "README.md",
         "LICENSE",

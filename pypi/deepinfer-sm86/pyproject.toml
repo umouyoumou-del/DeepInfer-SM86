@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "deepinfer-sm86"
-version = "0.1.0"
+version = "0.2.0"
 description = "Native streaming DeepSeek-V2-Lite GGUF MoE and paged MLA primitives for memory-constrained CUDA GPUs"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -44,4 +44,5 @@ include = ["deepinfer*"]
 
 [tool.setuptools.package-data]
 "deepinfer.moe" = ["*.cpp"]
+"deepinfer.ecs" = ["*.cpp"]
 "deepinfer" = ["py.typed"]

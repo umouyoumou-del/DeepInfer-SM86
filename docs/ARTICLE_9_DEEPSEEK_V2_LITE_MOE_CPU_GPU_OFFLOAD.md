@@ -31,6 +31,7 @@ DeepSeek-V2-Lite 的 MoE 路由、专家计算、MLA attention 和自回归 deco
 | full-category quality | MMLU 27/57（47.4%）；GSM8K 9/32（28.1%）；长链 2/32；PPL 6.59 |
 | OpenAI server | chat/completions、raw completions、SSE、health/models、paged scheduler |
 | INT8/FP8 paged MLA | native quant kernel；KV 106→约 53 MiB；INT8/FP8/E5M2 单测通过 |
+| ECS control plane | C++ heat/LRU/tier；opt-in；模拟 2 卡 all-to-all |
 | paged scheduler | 2 请求 batched decode；native paged MLA；prefix 16 token |
 | CPU layer offload | 最后 1 个 MoE 层 CPU FP32；decode 1.86 t/s；token IDs 一致 |
 | hot/cold expert split | 推荐 2 层 × 1 cold expert；decode 2.50 t/s；token IDs 一致 |
@@ -759,6 +760,15 @@ deepinfer/moe/paged_adapter.py
 deepinfer/moe/server_adapter.py
   - OpenAI server facade over the DeepSeek runtime
 
+deepinfer/ecs/core.py
+  - runtime-built C++ policy core facade
+deepinfer/ecs/controller.py
+  - heat/LRU/tier placement, chunk packing and cold selection
+deepinfer/ecs/transport.py
+  - expert packets, ECS router and simulated/torch all-to-all
+deepinfer/ecs/ecs_core.cpp
+  - C++ control-plane policy core
+
 pypi/deepinfer-sm86/
   - standalone PyPI source tree and built wheel/sdist artifacts
 
@@ -1036,7 +1046,7 @@ fused 之后 decode 的瓶颈更偏向 packed expert 读取和 H2D，而不是 G
   - 5 个质量 prompt 的 token IDs 完全一致；
   - 64-token 长故事生成 token IDs 完全一致；
   - `--no-fused-moe` 可随时回退到旧路径。
-- 全套测试：**98 passed**。
+- 全套测试：**103 passed**。
 
 ### 11.4 Grouped multi-expert kernel
 
@@ -1143,7 +1153,7 @@ opt-in 实验项保留，默认关闭。
 
 - double-buffer 路径与 grouped、per-expert、dequant+bmm 的 token IDs 一致；
 - 512 MB cache 路径 token IDs 也一致；
-- 全套测试：**98 passed**。
+- 全套测试：**103 passed**。
 
 ## 13. GPU packed cache + pointer-array grouped kernel
 
@@ -1186,7 +1196,7 @@ H2D 进来。
 
 - pointer-array gate/up 和 down 都有独立 GPU 单测；
 - GPU cache 路径与无 cache 路径 token IDs 完全一致；
-- 全套测试：**98 passed**。
+- 全套测试：**103 passed**。
 
 ## 14. 质量回归（mini suite）
 
@@ -1569,7 +1579,37 @@ SHA256SUMS
 `PagedBatchScheduler`、`deepinfer.moe.cpu_avx2.available()`，且 wheel 内含
 两个 AVX2 `.cpp` 源文件和 LICENSE/NOTICE。
 
-## 21. 一句话结论
+## 21. ECS control plane
+
+新增 `deepinfer/ecs/`：
+
+- `ECSController`：heat、tier placement、LRU victim、cold expert 选择；
+- `ecs_core.cpp`：C++ CPU 控制面，负责 heat/LRU/victim 和 chunk packing；
+- `ECSRouter`：把 expert→token assignment 打成 device-addressed packet；
+- `SimulatedAllToAll`：双设备确定性仿真；
+- `TorchCollectiveAllToAll`：可选真实 `torch.distributed` transport；
+- runtime 集成：ECS 开启时，路由 heat 和 L3/L2/L1 访问会进入控制面，
+  cold expert 选择可由 ECS heat 驱动。
+
+smoke 实测：
+
+| 指标 | 结果 |
+|---|---:|
+| ECS backend | C++ |
+| 输出 | `5-2=3` 正确 |
+| decode | 2.36 tok/s（启用 cold split 的 smoke） |
+| ECS entries | 1908 |
+| L3 reads | 3642 |
+| 默认 ECS | 关闭 |
+
+多设备部分必须说清楚：本机只有一张 RTX 3050，本轮实现了 device
+abstraction、packet encoding、模拟 all-to-all 和 torch collective adapter，
+但没有 8 卡 P100/NCCL 实机验收；Level 2 仍需多卡环境。
+
+结果文件：`docs/results/deepseek_v2_lite_q4km_moe_ecs_smoke.json`。
+PyPI 库本地0.2.0已构建，正式 PyPI 仍为0.1.0，待上传。
+
+## 22. 一句话结论
 
 这次最重要的不是“4 GB 跑 15.7B”这个标题，而是把 **MoE 的路由、专家流式读取、
 GPU 反量化、pinned H2D、确定性 scatter、MLA attention 和生成循环** 真正接进了

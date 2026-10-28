@@ -1,0 +1,61 @@
+{
+  "model": "DeepSeek-V2-Lite-Chat Q4_K_M",
+  "prompt": "只回答数字：5-2=?",
+  "ecs": {
+    "enabled": true,
+    "l1_mb": 32,
+    "l2_mb": 0,
+    "cpu_experts_per_layer": 1,
+    "cpu_expert_layers": 2
+  },
+  "result": {
+    "text": " 5-2=3",
+    "token_ids": [
+      207,
+      20,
+      12,
+      17,
+      28,
+      18,
+      100001
+    ],
+    "decode_tokens_per_second": 2.362108008162789,
+    "prefill_seconds": 2.4390619000187144,
+    "peak_gpu_allocated_bytes": 2364072448,
+    "ecs": {
+      "backend": "cpp",
+      "tier_bytes": {
+        "L1": 0,
+        "L2": 0,
+        "L3": 3672244224
+      },
+      "device_bytes": {
+        "0": 3672244224
+      },
+      "entries": 1908,
+      "metrics": {
+        "l1_hits": 0.0,
+        "l2_hits": 0.0,
+        "l3_reads": 3642.0,
+        "l1_promotions": 0.0,
+        "evictions": 0.0,
+        "chunk_plans": 0.0,
+        "cross_device_packets": 0.0,
+        "cross_device_bytes": 0.0,
+        "hot_replications": 0.0
+      },
+      "tick": 3642
+    }
+  },
+  "validation": {
+    "semantic_answer": "5-2=3",
+    "ecs_backend": "cpp",
+    "l3_reads": 3642.0,
+    "entries": 1908
+  },
+  "notes": [
+    "This smoke validates the Python runtime → ECS controller → C++ heat/LRU core → GGUF L3 access hook path.",
+    "The 2-device all-to-all transport is covered by the simulated ECS unit test; no P100 hardware was available in this session.",
+    "ECS is opt-in; default runtime behavior is unchanged."
+  ]
+}

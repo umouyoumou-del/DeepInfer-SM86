@@ -10,7 +10,9 @@ This wheel contains the reusable library layer:
 - fused paged MLA (FP16) and native INT8/FP8 E4M3/E5M2 paged MLA;
 - CPU AVX2 packed GEMV/dequant sources, compiled at runtime;
 - paged KV cache, memory budget and metrics primitives;
-- generic paged continuous-batching scheduler.
+- generic paged continuous-batching scheduler;
+- ECS control plane: heat/LRU tier placement, chunk packing and an
+  all-to-all transport abstraction.
 
 Model weights, tokenizer metadata, benchmark scripts, the Qwen server and the
 repository's application workspace are **not** included in the wheel.

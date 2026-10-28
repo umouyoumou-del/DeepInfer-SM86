@@ -35,7 +35,7 @@ _so_dir = os.path.join(os.path.dirname(__file__), "_so", _so_platform_tag())
 if os.path.isdir(_so_dir):
     __path__.append(_so_dir)
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 # 导入依赖时可能调用 torch.cuda.is_available，提前初始化 CUDA 后再设置

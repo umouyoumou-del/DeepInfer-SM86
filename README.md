@@ -316,6 +316,7 @@ RTX 3050 Laptop 4 GB + 16 GB RAM，DeepSeek-V2-Lite Q4_K_M：
 | paged prefill/decode overlap | 已开启；CuPy 跟随 torch stream；token IDs 一致 |
 | DeepSeek OpenAI server | chat/completions、raw completions、SSE、health/models；paged scheduler 接入 |
 | INT8/FP8 paged MLA | native quant kernel；KV 106→约 53 MiB；INT8/FP8/E5M2 单测通过 |
+| ECS control plane | C++ heat/LRU/tier + Python placement；opt-in；模拟 2 卡 all-to-all |
 | CPU layer offload（1 层） | decode 1.86 t/s；32-token token IDs/text 与 GPU 路径完全一致 |
 | Hot/cold expert split（2 层 × 1 cold） | decode **2.50 t/s**；32-token IDs/text 一致 |
 | prefill copy-stream pipeline | 可选；本机实测 prefill 慢约 6%，默认关闭 |
@@ -331,7 +332,7 @@ MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比�
 - `tests/moe/` 新增 GGUF 索引、截断拒绝、expert slice、Q4_K/Q5_0/Q8_0
   GPU 反量化、dense/MoE 层布局、CPU MLP fallback、per-expert fused 和
   grouped MoE kernel 对照测试；
-- 全套测试：**98 passed**；
+- 全套测试：**103 passed**；
 - 新增文章：
   `docs/ARTICLE_9_DEEPSEEK_V2_LITE_MOE_CPU_GPU_OFFLOAD.md`；
 - 结构化结果：
@@ -352,8 +353,8 @@ MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比�
   `docs/results/deepseek_v2_lite_q4km_moe_prefill_prefetch.json`（prefill prefetch）、
   `docs/results/deepseek_v2_lite_q4km_moe_decode_prefetch.json`（decode prefetch）、
   `docs/results/deepseek_v2_lite_q4km_moe_decode_predictive.json`（预测式 prefetch）；
-- PyPI 独立库：`pypi/deepinfer-sm86/`，可构建
-  `deepinfer_sm86-0.1.0-py3-none-any.whl` / `.tar.gz`；
+- PyPI 独立库：`pypi/deepinfer-sm86/`；PyPI 已发布 `0.1.0`，
+  本地 ECS `0.2.0` wheel/sdist 已构建但尚未上传；
 - 已知边界：
   - paged scheduler 已接入 chunked prefill / batched decode / KV 预算，但
     DeepSeek 暂不支持 prefill/decode stream overlap；
@@ -469,7 +470,9 @@ buffer 地址和 chunk 数，当前不是可安全 capture 的静态图。代码
 - FP16 fused paged MLA + INT8/FP8 E4M3/E5M2 native paged MLA；
 - CPU AVX2 packed dequant/GEMV C++ source；
 - paged KV cache、memory budget、metrics；
-- 通用 `PagedBatchScheduler`。
+- 通用 `PagedBatchScheduler`；
+- ECS control plane：C++ heat/LRU/tier policy、Python placement 和模拟
+  all-to-all transport。
 
 不包含：模型权重、tokenizer 文件、Qwen server、benchmark/application
 workspace。server 仍是仓库 app，不是库 wheel 的一部分。
@@ -485,18 +488,20 @@ python -m build --no-isolation --sdist --wheel
 本地已生成：
 
 ```text
-pypi/deepinfer-sm86/dist/deepinfer_sm86-0.1.0-py3-none-any.whl
-pypi/deepinfer-sm86/dist/deepinfer_sm86-0.1.0.tar.gz
+pypi/deepinfer-sm86/dist/deepinfer_sm86-0.2.0-py3-none-any.whl
+pypi/deepinfer-sm86/dist/deepinfer_sm86-0.2.0.tar.gz
 pypi/deepinfer-sm86/dist/SHA256SUMS
 ```
 
 安装方式：
 
 ```powershell
-# 推荐：PyPI
+# PyPI 当前已发布版本（不含 ECS 0.2）
 pip install deepinfer-sm86==0.1.0
-# GPU kernels:
-pip install "deepinfer-sm86[cuda]==0.1.0"
+# ECS 0.2 本地 wheel
+pip install .\pypi\deepinfer-sm86\dist\deepinfer_sm86-0.2.0-py3-none-any.whl
+# GPU kernels for the local wheel:
+pip install "deepinfer-sm86[cuda]"
 
 # GitHub 直接安装库（不走 PyPI）
 pip install "git+https://github.com/umouyoumou-del/DeepInfer-SM86.git@main#subdirectory=pypi/deepinfer-sm86"
@@ -517,13 +522,59 @@ Wheel 已在隔离 target 中验证：
 - `DeepSeekV2LiteGGUFRuntime`；
 - `PagedBatchScheduler`；
 - `deepinfer.moe.cpu_avx2.available()`；
-- wheel 内包含 two `.cpp` 源文件和 LICENSE/NOTICE。
+- wheel 内包含 MoE/ECS `.cpp` 源文件和 LICENSE/NOTICE；
+- `ECSController`、`ECSRouter` 和 C++ policy core 导入通过。
 
 发布前检查 PyPI 上 `deepinfer-sm86` 名称是否可用，然后：
 
 ```powershell
 python -m twine upload dist/*
 ```
+
+### 6.3 ECS：Expert Coordination System
+
+ECS 是这一轮新增的控制面/数据面分层：
+
+- 数据面：GPU 继续做 Attention、grouped MoE GEMM 和当前专家计算；
+- 控制面：CPU 侧 `ECSController` + C++ `ecs_core.cpp` 负责 heat、LRU、
+  tier placement 和 victim selection；
+- 存储层：L1 GPU packed expert cache、L2 packed CPU cache、L3 GGUF/NVMe
+  文件读取；
+- 批处理：C++ `ecs_plan_chunks` 和现有 paged scheduler 共同完成
+  expert/token chunk packing；
+- 多设备：`ECSRouter` 生成 device-addressed `ExpertPacket`，提供
+  `SimulatedAllToAll` 和可选 `TorchCollectiveAllToAll`。
+
+模块：
+
+```text
+deepinfer/ecs/core.py          runtime C++ build + ctypes facade
+deepinfer/ecs/controller.py    heat/LRU/tier placement + cold selection
+deepinfer/ecs/transport.py     packets, router, simulated/torch all-to-all
+deepinfer/ecs/ecs_core.cpp     CPU policy core
+```
+
+启用方式：
+
+```powershell
+python scripts/smoke_deepseek_v2_lite_moe.py `
+  --ecs --ecs-l1-mb 32 --ecs-l2-mb 0 `
+  --cpu-experts-per-layer 1 --cpu-expert-layers 2 ...
+```
+
+实测 smoke：
+
+- ECS backend：**cpp**；
+- 输出正确：`5-2=3`；
+- decode 2.36 tok/s（该 smoke 启用了 cold-expert split，不是默认 2.7）；
+- ECS 记录了 3642 次 L3 read、1908 个 placement entries；
+- 默认 `--ecs` 关闭，不改变原 GPU 路径。
+
+需要明确：本机只有一张 RTX 3050，因此 **真实 8 卡 P100 / All-to-All 未实机验证**；
+多设备部分目前是 device abstraction + simulated transport + torch distributed
+adapter。ECS 的 Level 2 仍需要多卡硬件和 NCCL/Gloo 环境才能验收。
+
+结果文件：`docs/results/deepseek_v2_lite_q4km_moe_ecs_smoke.json`。
 
 ### 7. Paged scheduler 接入
 
@@ -983,6 +1034,9 @@ deepinfer/
   moe/cpu_avx2.py                       AVX2 packed-dequant runtime loader
   moe/cpu_avx2_packed.cpp               Q4_K/Q5_0/Q8_0 CPU AVX2 dequant
   moe/cpu_avx2_gemv.cpp                 fused AVX2 packed gate/up/down GEMV
+  ecs/controller.py                      ECS heat/LRU/tier placement
+  ecs/transport.py                       multi-device packet/all-to-all
+  ecs/ecs_core.cpp                       C++ control-plane policy core
   moe/layout.py                         dense / MoE / hybrid 层布局判定
   moe/deepseek_v2_runtime.py            DeepSeek-V2-Lite MoE/MLA 流式执行与 offload
   engine/kv_cache.py                    block allocator、paged FP16/INT8/FP8、CPU payload
@@ -1047,6 +1101,7 @@ tests/
   apps/test_paged_scheduler.py          chunked prefill / decode / OOM 测试
   apps/test_server_api.py               OpenAI chat/completions API 测试
   moe/test_server_adapter.py            DeepSeek server adapter 测试
+  ecs/test_ecs.py                       ECS heat/LRU/tier/transport 测试
   engine/test_memory_budget.py          KV 显存预算测试
   models/test_model_probe.py            模型目录探测测试
   models/test_qwen2_source_integration.py

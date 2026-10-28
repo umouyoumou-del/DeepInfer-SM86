@@ -42,6 +42,7 @@ def main() -> int:
         shutil.rmtree(DEST)
     (SRC / "moe").mkdir(parents=True)
     (SRC / "engine").mkdir(parents=True)
+    (SRC / "ecs").mkdir(parents=True)
     (SRC / "scheduler").mkdir(parents=True)
 
     for name in ("__init__.py", "attrdict.py", "environ.py", "logger.py"):
@@ -68,6 +69,15 @@ def main() -> int:
 
     for name in ("__init__.py", "kv_cache.py", "memory_budget.py", "metrics.py"):
         copy_file(f"deepinfer/engine/{name}")
+
+    for name in (
+        "__init__.py",
+        "core.py",
+        "controller.py",
+        "transport.py",
+        "ecs_core.cpp",
+    ):
+        copy_file(f"deepinfer/ecs/{name}")
 
     scheduler = (ROOT / "apps" / "paged_scheduler.py").read_text(encoding="utf-8")
     (SRC / "scheduler" / "paged.py").write_text(
@@ -108,7 +118,9 @@ This wheel contains the reusable library layer:
 - fused paged MLA (FP16) and native INT8/FP8 E4M3/E5M2 paged MLA;
 - CPU AVX2 packed GEMV/dequant sources, compiled at runtime;
 - paged KV cache, memory budget and metrics primitives;
-- generic paged continuous-batching scheduler.
+- generic paged continuous-batching scheduler;
+- ECS control plane: heat/LRU tier placement, chunk packing and an
+  all-to-all transport abstraction.
 
 Model weights, tokenizer metadata, benchmark scripts, the Qwen server and the
 repository's application workspace are **not** included in the wheel.
@@ -191,7 +203,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "deepinfer-sm86"
-version = "0.1.0"
+version = "0.2.0"
 description = "Native streaming DeepSeek-V2-Lite GGUF MoE and paged MLA primitives for memory-constrained CUDA GPUs"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -231,6 +243,7 @@ include = ["deepinfer*"]
 
 [tool.setuptools.package-data]
 "deepinfer.moe" = ["*.cpp"]
+"deepinfer.ecs" = ["*.cpp"]
 "deepinfer" = ["py.typed"]
 ''',
         encoding="utf-8",
