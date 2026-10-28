@@ -30,6 +30,7 @@ DeepSeek-V2-Lite 的 MoE 路由、专家计算、MLA attention 和自回归 deco
 | mini quality gate | MMLU-style 8/10；GSM8K-style 4/8；长链 3/5 |
 | paged scheduler | 2 请求 batched decode；native paged MLA；prefix 16 token |
 | CPU layer offload | 最后 1 个 MoE 层 CPU FP32；decode 1.86 t/s；token IDs 一致 |
+| hot/cold expert split | 最后 4 层 × 1 cold expert；decode 2.23 t/s；token IDs 一致 |
 | 对照 per-expert fused | decode 2.56–3.05；64-token 2.63 |
 | 对照 dequant+bmm | decode 2.43–2.77；64-token 2.43 |
 | GPU 加载后空闲 | 约 1.0 GiB |
@@ -751,6 +752,11 @@ deepinfer/moe/paged_mla_kernel.py
   - fused FP16 CUDA paged MLA attention
   - one warp per (batch, head, query-token)
 
+deepinfer/moe/cpu_avx2_packed.cpp
+  - AVX2 Q4_K/Q5_0/Q8_0 packed dequant for CPU cold experts
+deepinfer/moe/cpu_avx2.py
+  - runtime g++ build + ctypes bridge
+
 deepinfer/moe/deepseek_v2_runtime.py
   - GGUFExpertStore：并行读取、pinned staging、copy stream、Event
   - DeepSeekV2LiteGGUFRuntime：meta 加载、权重放置、streaming MoE、生成
@@ -772,6 +778,7 @@ tests/moe/test_fused_moe.py
 tests/moe/test_grouped_moe.py
 tests/moe/test_ptr_grouped_moe.py
 tests/moe/test_paged_adapter.py
+tests/moe/test_cpu_avx2.py
 tests/moe/test_dense_support.py
 ```
 
@@ -794,14 +801,17 @@ tests/moe/test_dense_support.py
   CUDA/FlashMLA kernel，当前比 materialize 基线约慢 16%；
 - Q4_K_M 是唯一验证过的 DeepSeek-V2-Lite GGUF 量化档；
 - 没有长上下文和官方完整 MMLU/GSM8K；perplexity 已做 mini 回归；
-- CPU MoE layer offload 仍是 PyTorch CPU FP32/oneDNN，不是手写 AVX2 packed
-  GEMV；1 个 CPU 层约 1.86 t/s；
+- CPU MoE layer offload 仍是 PyTorch CPU FP32/oneDNN；1 个整层 CPU 约
+  1.86 t/s；
+- cold-expert split 已实现，最后 4 层 × 1 cold expert 约 2.23 t/s；AVX2
+  已覆盖 packed dequant，但 GEMM 仍是 oneDNN，不是完全 fused GEMV；
 - 只验证 Windows + Python 3.10 + torch 2.5.1+cu121。
 
 ### 下一步优先级
 
-1. **热门/冷门 expert 级 CPU 切分 + 手写 AVX2 packed kernel**：当前只做了
-   整层 CPU offload，下一步把少量冷门 expert 放 CPU，GPU 保留 hot experts；
+1. **完全 fused AVX2 packed GEMV**：当前 AVX2 负责 packed dequant，GEMM 仍是
+   oneDNN；下一步把 dequant + dot 融合成 AVX2 kernel，继续提高 cold-expert
+   路径吞吐；
 2. **CUDA Graph / prefill chunk pipeline**：降低 Python/launch 开销，保持确定性；
 3. **更大显存/CPU offload 组合**：GPU cache 已验证可行但 1 GiB 只带来约 2.3%
    提升；若要继续，需要把 shared/lm_head 移到 CPU 腾出 1.5–2 GiB VRAM；
@@ -999,7 +1009,7 @@ fused 之后 decode 的瓶颈更偏向 packed expert 读取和 H2D，而不是 G
   - 5 个质量 prompt 的 token IDs 完全一致；
   - 64-token 长故事生成 token IDs 完全一致；
   - `--no-fused-moe` 可随时回退到旧路径。
-- 全套测试：**82 passed**。
+- 全套测试：**85 passed**。
 
 ### 11.4 Grouped multi-expert kernel
 
@@ -1106,7 +1116,7 @@ opt-in 实验项保留，默认关闭。
 
 - double-buffer 路径与 grouped、per-expert、dequant+bmm 的 token IDs 一致；
 - 512 MB cache 路径 token IDs 也一致；
-- 全套测试：**82 passed**。
+- 全套测试：**85 passed**。
 
 ## 13. GPU packed cache + pointer-array grouped kernel
 
@@ -1149,7 +1159,7 @@ H2D 进来。
 
 - pointer-array gate/up 和 down 都有独立 GPU 单测；
 - GPU cache 路径与无 cache 路径 token IDs 完全一致；
-- 全套测试：**82 passed**。
+- 全套测试：**85 passed**。
 
 ## 14. 质量回归（mini suite）
 
@@ -1300,10 +1310,35 @@ F:/QwenQLoRA/venv/Scripts/python.exe ^
 
 CPU 端是 PyTorch CPU FP32 bmm，实际使用 oneDNN/AVX2，但不是手写的 AVX2
 packed GEMV kernel。这个实验验证了层切分和 CPU 专家读取的正确性，也给出了
-明确代价：1 层 offload 就会降到约 1.86 tok/s。下一步应做热门/冷门 expert
-级切分，把少量冷门 expert 放到 CPU，而不是整层搬运。
+明确代价：1 层 offload 就会降到约 1.86 tok/s。下一节进一步做了 expert 级
+冷热切分。
 
-## 17. 一句话结论
+## 17. Hot/cold expert split + AVX2 packed CPU
+
+在整层 CPU offload 之外，新增 expert 级冷热切分：
+
+- `--cpu-experts-per-layer N`：每层把 N 个 cold experts 放 CPU；
+- `--cpu-expert-layers N`：只对最后 N 个 MoE 层启用；
+- 每层维护累计路由计数，从当前 selected experts 中选计数最低的 N 个；
+- GPU 继续计算 hot experts；
+- CPU 使用 `cpu_avx2_packed.cpp` 解码 packed Q4_K/Q5_0/Q8_0；
+- CPU expert 权重有 512 MB LRU cache；
+- GEMM 交给 PyTorch CPU oneDNN/AVX2。
+
+实测：最后 4 层、每层 1 个 cold expert，32-token 长故事：
+
+| 指标 | 全 GPU | hot/cold split |
+|---|---:|---:|
+| decode | 2.50 t/s | **2.23 t/s** |
+| prefill | 3.19 s | 3.57 s |
+| peak GPU allocated | 2259 MiB | 2260 MiB |
+| token IDs / text | 基准 | **完全一致** |
+
+这比整层 CPU offload 的 1.86 t/s 好，说明少量 cold experts 放到 CPU 是可行的
+折中。当前 AVX2 只覆盖 packed **dequant**，GEMM 仍是 oneDNN；要进一步提升
+cold-expert 吞吐，需要把 dequant + dot 融合成完整的 AVX2 packed GEMV。
+
+## 18. 一句话结论
 
 这次最重要的不是“4 GB 跑 15.7B”这个标题，而是把 **MoE 的路由、专家流式读取、
 GPU 反量化、pinned H2D、确定性 scatter、MLA attention 和生成循环** 真正接进了

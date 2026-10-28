@@ -129,6 +129,8 @@ class GenerationResult:
     fallback_moe_chunks: int
     cpu_moe_layers: int
     cpu_moe_chunks: int
+    cpu_experts_per_layer: int
+    cpu_expert_chunks: int
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -153,6 +155,8 @@ class GenerationResult:
             "fallback_moe_chunks": self.fallback_moe_chunks,
             "cpu_moe_layers": self.cpu_moe_layers,
             "cpu_moe_chunks": self.cpu_moe_chunks,
+            "cpu_experts_per_layer": self.cpu_experts_per_layer,
+            "cpu_expert_chunks": self.cpu_expert_chunks,
         }
 
 
@@ -706,10 +710,14 @@ class GGUFExpertStore:
         self,
         layer_idx: int,
         expert_ids: Sequence[int],
+        *,
+        device: torch.device | None = None,
     ) -> StagedExpertBatch:
-        """Return pinned/H2D packed expert bytes without dequantizing them."""
+        """Return staged packed expert bytes without dequantizing them."""
 
-        return self._stage_experts(layer_idx, expert_ids, device=self.device)
+        return self._stage_experts(
+            layer_idx, expert_ids, device=self.device if device is None else device
+        )
 
 
 def _set_parameter(module: nn.Module, name: str, value: torch.Tensor) -> None:
@@ -729,6 +737,9 @@ class DeepSeekV2LiteGGUFRuntime:
         cpu_threads: int = 6,
         expert_chunk_size: int = 8,
         cpu_moe_layers: int = 0,
+        cpu_experts_per_layer: int = 0,
+        cpu_expert_layers: int = 0,
+        cpu_expert_cache_mb: int = 512,
         expert_cache_mb: int = 0,
         gpu_expert_cache_mb: int = 0,
         fused_moe: bool = True,
@@ -755,6 +766,13 @@ class DeepSeekV2LiteGGUFRuntime:
         self.cpu_threads = int(cpu_threads)
         self.expert_chunk_size = max(1, int(expert_chunk_size))
         self.requested_cpu_moe_layers = max(0, int(cpu_moe_layers))
+        self.requested_cpu_experts_per_layer = max(
+            0, int(cpu_experts_per_layer)
+        )
+        self.requested_cpu_expert_layers = max(0, int(cpu_expert_layers))
+        self.requested_cpu_expert_cache_mb = max(
+            0, int(cpu_expert_cache_mb)
+        )
         self.requested_fused_moe = bool(fused_moe)
         self.dense_mlp_device = dense_mlp_device
         self.verbose = verbose
@@ -803,6 +821,9 @@ class DeepSeekV2LiteGGUFRuntime:
         if raw_experts is not None and int(raw_experts) <= 0:
             # The official decoder treats only ``None`` as fully dense.
             self.config.n_routed_experts = None
+        self.routed_expert_count = int(
+            getattr(self.config, "n_routed_experts", 0) or 0
+        )
         self.dense_layer_indices, self.moe_layer_indices = split_layer_indices(
             self.config
         )
@@ -813,6 +834,15 @@ class DeepSeekV2LiteGGUFRuntime:
             self.moe_layer_indices[-cpu_layer_count:]
         ) if cpu_layer_count else ()
         self.cpu_moe_layer_set = set(self.cpu_moe_layer_indices)
+        if self.requested_cpu_expert_layers:
+            expert_layer_count = min(
+                self.requested_cpu_expert_layers, len(self.moe_layer_indices)
+            )
+            self.cpu_expert_layer_set = set(
+                self.moe_layer_indices[-expert_layer_count:]
+            )
+        else:
+            self.cpu_expert_layer_set = set(self.moe_layer_indices)
         self.has_moe = bool(self.moe_layer_indices)
         self.dense_mlp_devices: dict[int, str] = {}
         self._validate_gguf_metadata()
@@ -852,6 +882,23 @@ class DeepSeekV2LiteGGUFRuntime:
         self.fallback_moe_chunks = 0
         self.cpu_moe_chunks = 0
         self.cpu_moe_seconds = 0.0
+        self.cpu_expert_chunks = 0
+        self._cpu_expert_weight_cache: OrderedDict[
+            tuple[int, int], tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+        ] = OrderedDict()
+        self._cpu_expert_weight_bytes = 0
+        self._cpu_expert_cache_limit = (
+            self.requested_cpu_expert_cache_mb * _MIB
+        )
+        self._moe_route_counts: dict[int, list[int]] = {}
+        self.cpu_avx2_available = False
+        if (
+            self.requested_cpu_experts_per_layer > 0
+            or self.requested_cpu_moe_layers > 0
+        ):
+            from deepinfer.moe import cpu_avx2
+
+            self.cpu_avx2_available = cpu_avx2.available()
         self._load_weights(shared_experts_device, lm_head_device)
         from deepinfer.moe.paged_adapter import install_native_paged_attention
 
@@ -1250,6 +1297,26 @@ class DeepSeekV2LiteGGUFRuntime:
 
         expert_list = expert_ids.cpu().tolist()
         counts_list = counts.cpu().tolist()
+        cpu_expert_set: set[int] = set()
+        if (
+            self.requested_cpu_experts_per_layer > 0
+            and layer_idx in self.cpu_expert_layer_set
+            and layer_idx not in self.cpu_moe_layer_set
+        ):
+            counts_all = self._moe_route_counts.get(layer_idx)
+            if counts_all is None:
+                counts_all = [0] * max(
+                    self.routed_expert_count, max(expert_list) + 1
+                )
+                self._moe_route_counts[layer_idx] = counts_all
+            for expert_id, count in zip(expert_list, counts_list, strict=True):
+                counts_all[expert_id] += int(count)
+            cpu_expert_set = set(
+                sorted(
+                    expert_list,
+                    key=lambda expert_id: (counts_all[expert_id], expert_id),
+                )[: self.requested_cpu_experts_per_layer]
+            )
         assignment_outputs = torch.zeros(
             (topk_idx.numel(), flat.shape[-1]),
             dtype=flat.dtype,
@@ -1272,11 +1339,72 @@ class DeepSeekV2LiteGGUFRuntime:
             try:
                 if layer_idx in self.cpu_moe_layer_set:
                     cpu_started = time.perf_counter()
-                    expert_output = self._moe_cpu_fallback(
+                    expert_output = self._moe_cpu_packed_chunk(
                         layer_idx, chunk_ids, chunk_tokens
                     )
                     self.cpu_moe_seconds += time.perf_counter() - cpu_started
                     self.cpu_moe_chunks += 1
+                elif cpu_expert_set:
+                    cpu_local = [
+                        index
+                        for index, expert_id in enumerate(chunk_ids)
+                        if expert_id in cpu_expert_set
+                    ]
+                    gpu_local = [
+                        index
+                        for index in range(len(chunk_ids))
+                        if index not in cpu_local
+                    ]
+                    expert_output = torch.zeros(
+                        (len(chunk_ids), chunk_tokens.shape[1], flat.shape[-1]),
+                        dtype=flat.dtype,
+                        device=flat.device,
+                    )
+                    if gpu_local:
+                        gpu_index = torch.tensor(
+                            gpu_local, dtype=torch.long, device=flat.device
+                        )
+                        gpu_ids = [chunk_ids[index] for index in gpu_local]
+                        gpu_tokens = chunk_tokens.index_select(0, gpu_index)
+                        gpu_counts = [chunk_counts[index] for index in gpu_local]
+                        if self.fused_moe_enabled:
+                            gpu_output = self._fused_expert_chunk(
+                                layer_idx,
+                                gpu_ids,
+                                gpu_tokens,
+                                gpu_counts,
+                            )
+                            self.fused_moe_chunks += 1
+                        else:
+                            gate_w, up_w, down_w = self.expert_store.load_experts(
+                                layer_idx, gpu_ids
+                            )
+                            gate = torch.bmm(
+                                gate_w, gpu_tokens.transpose(1, 2)
+                            ).transpose(1, 2)
+                            up = torch.bmm(
+                                up_w, gpu_tokens.transpose(1, 2)
+                            ).transpose(1, 2)
+                            hidden = F.silu(gate) * up
+                            gpu_output = torch.bmm(
+                                down_w, hidden.transpose(1, 2)
+                            ).transpose(1, 2)
+                            del gate_w, up_w, down_w, gate, up, hidden
+                            self.fallback_moe_chunks += 1
+                        expert_output.index_copy_(0, gpu_index, gpu_output)
+                    if cpu_local:
+                        cpu_index = torch.tensor(
+                            cpu_local, dtype=torch.long, device=flat.device
+                        )
+                        cpu_ids = [chunk_ids[index] for index in cpu_local]
+                        cpu_tokens = chunk_tokens.index_select(0, cpu_index)
+                        cpu_started = time.perf_counter()
+                        cpu_output = self._moe_cpu_packed_chunk(
+                            layer_idx, cpu_ids, cpu_tokens
+                        )
+                        self.cpu_moe_seconds += time.perf_counter() - cpu_started
+                        self.cpu_expert_chunks += 1
+                        expert_output.index_copy_(0, cpu_index, cpu_output)
                 elif self.fused_moe_enabled:
                     expert_output = self._fused_expert_chunk(
                         layer_idx,
@@ -1308,7 +1436,7 @@ class DeepSeekV2LiteGGUFRuntime:
                     f"layer {layer_idx} expert chunk {chunk_start} OOMed; "
                     "falling back to CPU for this chunk"
                 )
-                expert_output = self._moe_cpu_fallback(
+                expert_output = self._moe_cpu_packed_chunk(
                     layer_idx, chunk_ids, chunk_tokens
                 )
                 self.fallback_moe_chunks += 1
@@ -1400,6 +1528,92 @@ class DeepSeekV2LiteGGUFRuntime:
             down_qtype=down_spec.quant_type,
             down_row_bytes=down_spec.row_bytes,
         )
+
+    def _cpu_expert_weight_get(
+        self, layer_idx: int, expert_id: int
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor] | None:
+        key = (layer_idx, expert_id)
+        value = self._cpu_expert_weight_cache.get(key)
+        if value is None:
+            return None
+        self._cpu_expert_weight_cache.move_to_end(key)
+        return value
+
+    def _cpu_expert_weight_put(
+        self,
+        layer_idx: int,
+        expert_id: int,
+        value: tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+    ) -> None:
+        key = (layer_idx, expert_id)
+        old = self._cpu_expert_weight_cache.pop(key, None)
+        if old is not None:
+            old_bytes = sum(tensor.numel() * tensor.element_size() for tensor in old)
+            self._cpu_expert_weight_bytes -= old_bytes
+        size = sum(tensor.numel() * tensor.element_size() for tensor in value)
+        if size > self._cpu_expert_cache_limit:
+            return
+        while (
+            self._cpu_expert_weight_cache
+            and self._cpu_expert_weight_bytes + size > self._cpu_expert_cache_limit
+        ):
+            _, evicted = self._cpu_expert_weight_cache.popitem(last=False)
+            self._cpu_expert_weight_bytes -= sum(
+                tensor.numel() * tensor.element_size() for tensor in evicted
+            )
+        self._cpu_expert_weight_cache[key] = value
+        self._cpu_expert_weight_bytes += size
+
+    def _load_cpu_expert_weights(
+        self, layer_idx: int, expert_id: int
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        cached = self._cpu_expert_weight_get(layer_idx, expert_id)
+        if cached is not None:
+            return cached
+        from deepinfer.moe import cpu_avx2
+
+        batch = self.expert_store.load_packed_experts(
+            layer_idx, [expert_id], device=torch.device("cpu")
+        )
+        weights: list[torch.Tensor] = []
+        for projection, spec in enumerate(batch.specs):
+            packed = batch.packed[projection][: spec.bytes_per_expert]
+            weights.append(
+                cpu_avx2.dequantize(
+                    packed,
+                    spec.quant_type,
+                    out_features=spec.out_features,
+                    in_features=spec.in_features,
+                )
+            )
+        value = (weights[0], weights[1], weights[2])
+        self._cpu_expert_weight_put(layer_idx, expert_id, value)
+        return value
+
+    def _moe_cpu_packed_chunk(
+        self,
+        layer_idx: int,
+        expert_ids: Sequence[int],
+        padded_tokens: torch.Tensor,
+    ) -> torch.Tensor:
+        if not expert_ids:
+            raise ValueError("CPU expert chunk must not be empty")
+        if not self.cpu_avx2_available:
+            return self._moe_cpu_fallback(layer_idx, expert_ids, padded_tokens)
+        weights = [
+            self._load_cpu_expert_weights(layer_idx, int(expert_id))
+            for expert_id in expert_ids
+        ]
+        gate_w = torch.stack([weight[0] for weight in weights], dim=0)
+        up_w = torch.stack([weight[1] for weight in weights], dim=0)
+        down_w = torch.stack([weight[2] for weight in weights], dim=0)
+        padded = padded_tokens.float().cpu()
+        gate = torch.bmm(gate_w, padded.transpose(1, 2)).transpose(1, 2)
+        up = torch.bmm(up_w, padded.transpose(1, 2)).transpose(1, 2)
+        hidden = torch.nn.functional.silu(gate) * up
+        output = torch.bmm(down_w, hidden.transpose(1, 2)).transpose(1, 2)
+        del gate_w, up_w, down_w, gate, up, hidden
+        return output.to(padded_tokens.device, dtype=padded_tokens.dtype)
 
     def _moe_cpu_fallback(
         self,
@@ -1730,6 +1944,8 @@ class DeepSeekV2LiteGGUFRuntime:
             fallback_moe_chunks=self.fallback_moe_chunks,
             cpu_moe_layers=len(self.cpu_moe_layer_indices),
             cpu_moe_chunks=self.cpu_moe_chunks,
+            cpu_experts_per_layer=self.requested_cpu_experts_per_layer,
+            cpu_expert_chunks=self.cpu_expert_chunks,
         )
 
     def close(self) -> None:

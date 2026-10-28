@@ -71,6 +71,24 @@ def _parse_args() -> argparse.Namespace:
         help="offload the last N routed-expert layers to the CPU FP32 path",
     )
     parser.add_argument(
+        "--cpu-experts-per-layer",
+        type=int,
+        default=0,
+        help="offload the coldest N routed experts per layer to CPU AVX2",
+    )
+    parser.add_argument(
+        "--cpu-expert-layers",
+        type=int,
+        default=0,
+        help="apply expert-level CPU split only to the last N MoE layers; 0=all",
+    )
+    parser.add_argument(
+        "--cpu-expert-cache-mb",
+        type=int,
+        default=512,
+        help="LRU cache for dequantized CPU expert weights",
+    )
+    parser.add_argument(
         "--expert-cache-mb",
         type=int,
         default=0,
@@ -133,6 +151,9 @@ def main() -> int:
         cpu_threads=args.cpu_threads,
         expert_chunk_size=args.expert_chunk_size,
         cpu_moe_layers=args.cpu_moe_layers,
+        cpu_experts_per_layer=args.cpu_experts_per_layer,
+        cpu_expert_layers=args.cpu_expert_layers,
+        cpu_expert_cache_mb=args.cpu_expert_cache_mb,
         expert_cache_mb=args.expert_cache_mb,
         gpu_expert_cache_mb=args.gpu_expert_cache_mb,
         fused_moe=not args.no_fused_moe,
@@ -199,6 +220,9 @@ def main() -> int:
         "max_cache": args.max_cache,
         "expert_chunk_size": args.expert_chunk_size,
         "cpu_moe_layers": args.cpu_moe_layers,
+        "cpu_experts_per_layer": args.cpu_experts_per_layer,
+        "cpu_expert_layers": args.cpu_expert_layers,
+        "cpu_expert_cache_mb": args.cpu_expert_cache_mb,
         "expert_cache_mb": args.expert_cache_mb,
         "gpu_expert_cache_mb": args.gpu_expert_cache_mb,
         "dense_mlp_device": args.dense_mlp_device,

@@ -29,7 +29,9 @@ engine。当前重点是：
 - DeepSeek MoE 已接入现有 paged scheduler：chunked prefill、batched decode、
   block-level KV 预算、prefix cache 和 CPU KV offload 接口；
 - 新增 `--cpu-moe-layers`：把最后 N 个 routed-expert 层放到 CPU FP32
-  （PyTorch oneDNN/AVX2）路径，GPU 保留 attention/shared/lm_head。
+  （PyTorch oneDNN/AVX2）路径，GPU 保留 attention/shared/lm_head；
+- 新增 `--cpu-experts-per-layer` + `--cpu-expert-layers`：按累计路由频次
+  选 cold experts，CPU 用 AVX2 packed dequant，GPU 保留 hot experts。
 - 同一 runtime 支持 `first_k_dense_replace`、`moe_layer_freq`、dense-only
   层布局，dense MLP 可按显存自动放 GPU 或回退到 CPU FP32。
 
@@ -303,6 +305,7 @@ RTX 3050 Laptop 4 GB + 16 GB RAM，DeepSeek-V2-Lite Q4_K_M：
 | mini 质量回归 | MMLU-style 8/10、GSM8K-style 4/8、长链 3/5；llama.cpp 为 8/10、2/8、1/5 |
 | paged scheduler | 2 请求 batched decode；prefix cache 复用 16 token；token IDs 与单请求一致 |
 | CPU layer offload（1 层） | decode 1.86 t/s；32-token token IDs/text 与 GPU 路径完全一致 |
+| Hot/cold expert split（4 层 × 1 cold） | decode **2.23 t/s**；32-token IDs/text 一致 |
 
 同一份 Q4_K_M 的 llama.cpp CPU 基线约 9–13 tokens/s；本实现的重点是 native
 MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比绝对速度。
@@ -312,7 +315,7 @@ MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比�
 - `tests/moe/` 新增 GGUF 索引、截断拒绝、expert slice、Q4_K/Q5_0/Q8_0
   GPU 反量化、dense/MoE 层布局、CPU MLP fallback、per-expert fused 和
   grouped MoE kernel 对照测试；
-- 全套测试：**82 passed**；
+- 全套测试：**85 passed**；
 - 新增文章：
   `docs/ARTICLE_9_DEEPSEEK_V2_LITE_MOE_CPU_GPU_OFFLOAD.md`；
 - 结构化结果：
@@ -322,7 +325,8 @@ MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比�
   `docs/results/deepseek_v2_lite_q4km_moe_grouped_vs_per_expert.json`（grouped vs per-expert）、
   `docs/results/deepseek_v2_lite_q4km_moe_quality_eval.json`（质量回归）、
   `docs/results/deepseek_v2_lite_q4km_moe_paged_scheduler.json`（paged scheduler）、
-  `docs/results/deepseek_v2_lite_q4km_moe_cpu_layer_offload.json`（CPU layer offload）；
+  `docs/results/deepseek_v2_lite_q4km_moe_cpu_layer_offload.json`（CPU layer offload）、
+  `docs/results/deepseek_v2_lite_q4km_moe_cpu_expert_offload.json`（hot/cold expert split）；
 - 已知边界：
   - paged scheduler 已接入 chunked prefill / batched decode / KV 预算，但
     DeepSeek 暂不支持 prefill/decode stream overlap；
@@ -472,9 +476,35 @@ F:/QwenQLoRA/venv/Scripts/python.exe ^
 | peak GPU allocated | 2259 MiB | 2259 MiB |
 | token IDs / text | 基准 | **完全一致** |
 
-这里 CPU 端是 PyTorch CPU FP32 bmm，使用 oneDNN/AVX2，**不是**手写的
-AVX2 GEMV kernel；优势是验证了层切分、CPU 专家读取和 GPU/CPU 结果一致，
-代价是明显变慢。下一步可做热门/冷门 expert 级切分和手写 AVX2 packed kernel。
+这里 CPU 端是 PyTorch CPU FP32 bmm，使用 oneDNN/AVX2，**不是**完全 fused
+的 AVX2 GEMV kernel；优势是验证了层切分、CPU 专家读取和 GPU/CPU 结果一致，
+代价是明显变慢。下一节进一步做了热门/冷门 expert 级切分。
+
+### 9. Hot/cold expert split + AVX2 packed CPU
+
+在 CPU layer offload 之外，新增 expert 级切分：
+
+- `--cpu-experts-per-layer N`：每层选择 N 个 cold experts；
+- `--cpu-expert-layers N`：只对最后 N 个 MoE 层启用 expert 切分；
+- 每层维护累计路由计数；从当前 selected experts 中选计数最低的 N 个；
+- GPU 计算 hot experts，CPU 计算 cold experts；
+- CPU packed Q4_K/Q5_0/Q8_0 由 `cpu_avx2_packed.cpp` 的 AVX2 dequantizer
+  解码，随后 GEMM 使用 PyTorch CPU oneDNN；
+- CPU expert 权重有 512 MB LRU cache（`--cpu-expert-cache-mb`）；
+- 默认关闭，不影响现有 GPU 路径。
+
+实测：最后 4 层、每层 1 个 cold expert：
+
+| 指标 | 全 GPU | hot/cold split |
+|---|---:|---:|
+| decode | 2.50 t/s | **2.23 t/s** |
+| prefill | 3.19 s | 3.57 s |
+| peak GPU allocated | 2259 MiB | 2260 MiB |
+| 32-token token IDs / text | 基准 | **完全一致** |
+
+这比整层 CPU offload 的 1.86 t/s 好，说明少量 cold expert 放到 CPU 是可行的
+显存/速度折中。注意当前 CPU GEMM 仍是 oneDNN，不是完全 fused 的 AVX2
+packed GEMV；但 packed dequant 已经是 AVX2 C++ kernel。
 
 ## 上一轮更新（2026-10-27）
 
@@ -677,6 +707,8 @@ deepinfer/
   moe/ptr_grouped_moe.py                pointer-array grouped GEMV/GEMM
   moe/paged_adapter.py                  MLA K/V -> generic paged KV pool adapter
   moe/paged_mla_kernel.py               fused FP16 paged MLA attention kernel
+  moe/cpu_avx2.py                       AVX2 packed-dequant runtime loader
+  moe/cpu_avx2_packed.cpp               Q4_K/Q5_0/Q8_0 CPU AVX2 dequant
   moe/layout.py                         dense / MoE / hybrid 层布局判定
   moe/deepseek_v2_runtime.py            DeepSeek-V2-Lite MoE/MLA 流式执行与 offload
   engine/kv_cache.py                    block allocator、paged FP16/INT8/FP8、CPU payload
@@ -752,6 +784,7 @@ tests/
   moe/test_grouped_moe.py               grouped multi-expert kernel 对照
   moe/test_ptr_grouped_moe.py           pointer-array grouped kernel 对照
   moe/test_paged_adapter.py             MLA paged cache 形状/写入测试
+  moe/test_cpu_avx2.py                  AVX2 packed dequant 对照
   moe/test_dense_support.py             dense/MoE 层布局与 CPU MLP fallback
 docs/
   ARTICLE_1_DEEPINFER_SM86_KERNEL.md          上篇：内核与量化工程
@@ -1201,8 +1234,9 @@ python scripts\export_sm86_kernels.py
 - DeepSeek-V2-Lite MoE 已接入 paged scheduler 的 chunked prefill / batched
   decode / block KV 预算；但 stream overlap 关闭，prefill 仍会扫描大量专家，
   冷启动明显慢于稳态 decode；
-- CPU MoE layer offload 已实现，但当前是 PyTorch CPU FP32/oneDNN 路径，
-  不是手写 AVX2 packed kernel；1 层 offload 约 1.86 t/s；
+- CPU MoE layer offload 已实现，1 层整层 offload 约 1.86 t/s；
+- cold-expert split 已实现，最后 4 层 × 1 cold expert 约 2.23 t/s；
+  当前 AVX2 只覆盖 packed dequant，GEMM 仍是 PyTorch CPU oneDNN；
 - dense/hybrid 层布局已实现并有单元测试，但本机没有 dense DeepSeek-V2 GGUF
   做端到端质量基准；dense-only 模型超出显存时会回退 CPU FP32，速度会很慢；
 - DeepSeek MLA paged 模式通过 `DeepSeekPagedCache`/paged forward 直接按
