@@ -1,0 +1,46 @@
+{
+  "model": "DeepSeek-V2-Lite-Chat Q4_K_M",
+  "server": "apps/server.py --backend deepseek --scheduler --scheduler-backend paged",
+  "endpoint_base": "http://127.0.0.1:18001",
+  "checks": {
+    "models": {
+      "ok": true,
+      "model_id": "deepseek-v2-lite-q4km"
+    },
+    "health": {
+      "ok": true,
+      "backend": "deepseek",
+      "architecture": "deepseek_v2_lite_moe",
+      "paged_overlap_supported": true,
+      "device": "cuda"
+    },
+    "chat_nonstream": {
+      "ok": true,
+      "prompt": "只回答数字：5-2=?",
+      "response": " 5-2=3",
+      "finish_reason": "stop",
+      "completion_tokens": 7
+    },
+    "raw_completion": {
+      "ok": true,
+      "prompt": "The capital of France is",
+      "response": " Paris.\n\nThe capital of Spain",
+      "finish_reason": "length",
+      "completion_tokens": 8
+    },
+    "chat_sse": {
+      "ok": true,
+      "prompt": "只回答数字：2+3=?",
+      "response": " 2 + 3 = 5",
+      "finish_reason": "length",
+      "deltas": 9,
+      "done_marker": true
+    }
+  },
+  "notes": [
+    "true token SSE and cancellation use the paged scheduler path",
+    "without --scheduler the adapter falls back to generating once and slicing text for SSE",
+    "raw /v1/completions uses the prompt directly without a chat template",
+    "OpenAI client base URL is http://127.0.0.1:18001/v1"
+  ]
+}

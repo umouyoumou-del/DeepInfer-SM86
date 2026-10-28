@@ -20,12 +20,19 @@ if str(ROOT) not in sys.path:
 
 from apps.paged_scheduler import PagedBatchScheduler
 from apps.runtime import DEFAULT_CHECKPOINT, QwenSm86Runtime
+from deepinfer.moe.deepseek_v2_runtime import DeepSeekV2LiteGGUFRuntime
+from deepinfer.moe.server_adapter import DeepSeekServerRuntime
 from apps.scheduler import DynamicBatchScheduler
 from deepinfer.engine.kv_cache import CacheOutOfMemoryError
 from deepinfer.engine.metrics import EngineMetrics
 
 MODEL_ID = "deepinfer-sm86-7b-mixed"
-RUNTIME: QwenSm86Runtime | None = None
+DEFAULT_DEEPSEEK_CHECKPOINT = Path(
+    r"E:\DeepInfer-MoE\models\DeepSeek-V2-Lite-Chat-GGUF"
+    r"\DeepSeek-V2-Lite-Chat-Q4_K_M.gguf"
+)
+DEFAULT_DEEPSEEK_META = Path(r"E:\DeepInfer-MoE\meta")
+RUNTIME: QwenSm86Runtime | DeepSeekServerRuntime | None = None
 SCHEDULER: DynamicBatchScheduler | PagedBatchScheduler | None = None
 METRICS = EngineMetrics()
 STARTED = time.time()
@@ -728,7 +735,35 @@ def main() -> int:
         description="DeepInfer-SM86 OpenAI-compatible local server"
     )
     parser.add_argument("--checkpoint", type=Path, default=DEFAULT_CHECKPOINT)
-    parser.add_argument("--backend", choices=("mixed", "w4a16"), default="mixed")
+    parser.add_argument(
+        "--backend",
+        choices=("mixed", "w4a16", "deepseek"),
+        default="mixed",
+        help="Qwen mixed/W4A16 or full DeepSeek-V2-Lite MoE runtime",
+    )
+    parser.add_argument(
+        "--meta-dir",
+        type=Path,
+        default=DEFAULT_DEEPSEEK_META,
+        help="DeepSeek tokenizer/config directory",
+    )
+    parser.add_argument(
+        "--expert-chunk-size",
+        type=int,
+        default=8,
+        help="DeepSeek grouped-MoE expert chunk size",
+    )
+    parser.add_argument(
+        "--gpu-expert-cache-mb",
+        type=int,
+        default=0,
+        help="DeepSeek GPU packed-expert cache MiB (0 disables)",
+    )
+    parser.add_argument(
+        "--no-fused-moe",
+        action="store_true",
+        help="debug: disable DeepSeek fused grouped-MoE kernels",
+    )
     parser.add_argument("--model-id", default=None)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=18000)
@@ -784,17 +819,41 @@ def main() -> int:
     args = parser.parse_args()
 
     scheduler_enabled = bool(args.scheduler)
-    RUNTIME = QwenSm86Runtime(
-        args.checkpoint,
-        max_cache=args.max_cache,
-        use_graph=not args.no_graph and not scheduler_enabled,
-        single_request_cache=not scheduler_enabled,
-        backend=args.backend,
-        model_id=args.model_id,
-        allow_extended_context=(
-            scheduler_enabled and args.scheduler_backend == "paged"
-        ),
-    )
+    if args.backend == "deepseek":
+        if args.scheduler and args.scheduler_backend != "paged":
+            raise SystemExit("DeepSeek requires --scheduler-backend paged")
+        checkpoint = (
+            DEFAULT_DEEPSEEK_CHECKPOINT
+            if args.checkpoint == DEFAULT_CHECKPOINT
+            else args.checkpoint
+        )
+        native = DeepSeekV2LiteGGUFRuntime(
+            checkpoint,
+            meta_dir=args.meta_dir,
+            max_cache=args.max_cache,
+            expert_chunk_size=args.expert_chunk_size,
+            gpu_expert_cache_mb=args.gpu_expert_cache_mb,
+            fused_moe=not args.no_fused_moe,
+            verbose=False,
+        )
+        RUNTIME = DeepSeekServerRuntime(
+            native,
+            model_id=args.model_id or "deepseek-v2-lite-q4km",
+            checkpoint=checkpoint,
+        )
+        args.checkpoint = checkpoint
+    else:
+        RUNTIME = QwenSm86Runtime(
+            args.checkpoint,
+            max_cache=args.max_cache,
+            use_graph=not args.no_graph and not scheduler_enabled,
+            single_request_cache=not scheduler_enabled,
+            backend=args.backend,
+            model_id=args.model_id,
+            allow_extended_context=(
+                scheduler_enabled and args.scheduler_backend == "paged"
+            ),
+        )
     MODEL_ID = RUNTIME.model_id
     if scheduler_enabled and args.scheduler_backend == "paged":
         SCHEDULER = PagedBatchScheduler(
@@ -847,6 +906,9 @@ def main() -> int:
         server.server_close()
         if SCHEDULER is not None:
             SCHEDULER.stop()
+        close = getattr(RUNTIME, "close", None)
+        if close is not None:
+            close()
     return 0
 
 

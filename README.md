@@ -313,6 +313,8 @@ RTX 3050 Laptop 4 GB + 16 GB RAM，DeepSeek-V2-Lite Q4_K_M：
 | mini 质量回归 | MMLU-style 8/10、GSM8K-style 4/8、长链 3/5；llama.cpp 为 8/10、2/8、1/5 |
 | full-category 质量回归 | MMLU 27/57（47.4%，57 科各 1 题）、GSM8K 9/32（28.1%）、长链 2/32（6.25%）、PPL 6.59 |
 | paged scheduler | 2 请求 batched decode；prefix cache 复用 16 token；token IDs 与单请求一致 |
+| paged prefill/decode overlap | 已开启；CuPy 跟随 torch stream；token IDs 一致 |
+| DeepSeek OpenAI server | chat/completions、raw completions、SSE、health/models；paged scheduler 接入 |
 | CPU layer offload（1 层） | decode 1.86 t/s；32-token token IDs/text 与 GPU 路径完全一致 |
 | Hot/cold expert split（2 层 × 1 cold） | decode **2.50 t/s**；32-token IDs/text 一致 |
 | prefill copy-stream pipeline | 可选；本机实测 prefill 慢约 6%，默认关闭 |
@@ -328,7 +330,7 @@ MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比�
 - `tests/moe/` 新增 GGUF 索引、截断拒绝、expert slice、Q4_K/Q5_0/Q8_0
   GPU 反量化、dense/MoE 层布局、CPU MLP fallback、per-expert fused 和
   grouped MoE kernel 对照测试；
-- 全套测试：**90 passed**；
+- 全套测试：**93 passed**；
 - 新增文章：
   `docs/ARTICLE_9_DEEPSEEK_V2_LITE_MOE_CPU_GPU_OFFLOAD.md`；
 - 结构化结果：
@@ -339,6 +341,8 @@ MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比�
   `docs/results/deepseek_v2_lite_q4km_moe_quality_eval.json`（mini 质量回归）、
   `docs/results/deepseek_v2_lite_q4km_moe_full_quality.json`（full-category 回归）、
   `docs/results/deepseek_v2_lite_q4km_moe_paged_scheduler.json`（paged scheduler）、
+  `docs/results/deepseek_v2_lite_q4km_moe_paged_overlap.json`（prefill/decode overlap）、
+  `docs/results/deepseek_v2_lite_q4km_moe_openai_server.json`（OpenAI server smoke）、
   `docs/results/deepseek_v2_lite_q4km_moe_cpu_layer_offload.json`（CPU layer offload）、
   `docs/results/deepseek_v2_lite_q4km_moe_cpu_expert_offload.json`（oneDNN 版本）、
   `docs/results/deepseek_v2_lite_q4km_moe_cpu_expert_avx2.json`（fused AVX2 版本）、
@@ -493,12 +497,27 @@ Python block loop/launch 开销。
 | KV pool | 20 blocks，约 106 MB |
 | native paged attention | **开启（27 层）** |
 | 2 请求 + prefix 总耗时 | **11.43 s**（materialize 11.89 s） |
-| prefill/decode stream overlap | 关闭 |
+| prefill/decode stream overlap | **开启** |
+| overlap 后 token IDs | **完全一致** |
 
-DeepSeek 的 expert staging 共用 pinned buffer/copy stream，两个 forward 在
-不同 CUDA stream 上并发会破坏 expert 数据，因此 scheduler 通过
-`runtime.supports_prefill_decode_overlap=False` 自动关闭 stream overlap；
-decode batching 本身仍然工作，只是调度周期内串行执行 prefill/decode。
+prefill/decode overlap 已启用。关键修复不是简单开两个 CUDA stream，而是让
+**CuPy raw kernels 跟随 torch 当前 stream**：scheduler 在 prefill/decode
+stream 上下文里用 `cp.cuda.ExternalStream(torch_stream.cuda_stream)` 设置
+CuPy current stream。否则 PyTorch attention/linear 在非默认 stream，而 MoE/
+paged MLA 的 CuPy kernel 仍落在默认 stream，重叠时会读到未就绪数据并输出
+乱码。
+
+短 smoke A/B（2 请求、prefix cache、max_new=8）：
+
+| 配置 | 总耗时 | overlap steps | token IDs |
+|---|---:|---:|---:|
+| serial | 10.07 s | 0 | 一致 |
+| overlap | **9.73 s** | 1 | 一致 |
+
+24-token 对照为 9.66 s serial vs 9.95 s overlap，说明这个 workload 只有
+一步真实 overlap，收益在噪声内；当前结论是**正确性和 stream 布线已验证**，
+不是宣称大幅吞吐提升。结果文件：
+`docs/results/deepseek_v2_lite_q4km_moe_paged_overlap.json`。
 
 运行：
 
@@ -923,6 +942,7 @@ tests/
   engine/test_kv_cache.py               block/prefix/paged cache 正确性
   apps/test_paged_scheduler.py          chunked prefill / decode / OOM 测试
   apps/test_server_api.py               OpenAI chat/completions API 测试
+  moe/test_server_adapter.py            DeepSeek server adapter 测试
   engine/test_memory_budget.py          KV 显存预算测试
   models/test_model_probe.py            模型目录探测测试
   models/test_qwen2_source_integration.py
@@ -1113,7 +1133,27 @@ python apps\server.py `
   --port 18000
 ```
 
-接口（3B 使用 18001，7B 使用 18000）：
+DeepSeek-V2-Lite OpenAI 网关（推荐 paged scheduler）：
+
+```powershell
+cd D:\DeepInfer-SM86
+python apps\server.py `
+  --backend deepseek `
+  --model-id deepseek-v2-lite-q4km `
+  --scheduler --scheduler-backend paged `
+  --max-cache 256 --max-num-seqs 2 `
+  --block-size 16 --prefill-chunk-tokens 8 `
+  --kv-blocks 20 --prefix-cache-blocks 4 `
+  --port 18002
+```
+
+- DeepSeek 的 `/v1/chat/completions`、`/v1/completions`、`/v1/models`、
+  `/health` 和 `/metrics` 都已接入；
+- `--scheduler` 路径提供 true token SSE、取消和 prefill/decode overlap；
+- 不带 scheduler 时仍可用，但 SSE 是生成完成后按文本切片发送；
+- raw `/v1/completions` 不走 chat template，直接使用原始 prompt。
+
+接口（3B 使用 18001，7B 使用 18000，DeepSeek 使用 18002）：
 
 ```text
 GET  http://127.0.0.1:18000/health
