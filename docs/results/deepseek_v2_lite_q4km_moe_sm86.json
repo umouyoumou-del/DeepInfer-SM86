@@ -1,0 +1,178 @@
+{
+  "created_at": "2026-10-28 09:03:54",
+  "model": "E:\\DeepInfer-MoE\\models\\DeepSeek-V2-Lite-Chat-GGUF\\DeepSeek-V2-Lite-Chat-Q4_K_M.gguf",
+  "meta_dir": "E:\\DeepInfer-MoE\\meta",
+  "load_seconds": 18.11823920000461,
+  "warmup_seconds": 3.5078995999938343,
+  "device": "NVIDIA GeForce RTX 3050 Laptop GPU",
+  "torch": "2.5.1+cu121",
+  "cuda": "12.1",
+  "gpu_total_bytes": 4294443008,
+  "max_cache": 256,
+  "expert_chunk_size": 8,
+  "results": [
+    {
+      "prompt": "用一句话解释什么是混合专家模型（MoE）。",
+      "text": " 混合专家模型（MoE）是一种人工智能模型，它通过结合多个专家系统来提高整体性能，每个",
+      "prompt_tokens": 20,
+      "completion_tokens": 24,
+      "prefill_seconds": 2.1336047000077087,
+      "decode_seconds": 9.412322799995309,
+      "decode_tokens_per_second": 2.4436051003277814,
+      "peak_gpu_allocated_bytes": 2527241216,
+      "peak_gpu_reserved_bytes": 2613051392,
+      "gpu_free_bytes_after_load": 1099379508,
+      "shared_experts_device": "cuda",
+      "lm_head_device": "cuda",
+      "token_ids": [
+        207,
+        28272,
+        10900,
+        39322,
+        63550,
+        23221,
+        36,
+        64471,
+        13950,
+        29680,
+        39322,
+        19304,
+        3352,
+        4341,
+        11271,
+        19036,
+        10900,
+        5804,
+        913,
+        8039,
+        12068,
+        16938,
+        19304,
+        13712
+      ],
+      "timings": {
+        "expert_read_seconds": 4.683753599587362,
+        "expert_h2d_seconds": 0.29504559986526147,
+        "expert_dequant_launch_seconds": 0.4043940004776232,
+        "expert_load_calls": 922.0
+      }
+    },
+    {
+      "prompt": "中国的首都是哪里？请只回答城市名。",
+      "text": " 中国的首都是北京。",
+      "prompt_tokens": 19,
+      "completion_tokens": 7,
+      "prefill_seconds": 2.3198750999872573,
+      "decode_seconds": 2.188366099988343,
+      "decode_tokens_per_second": 2.7417715893295735,
+      "peak_gpu_allocated_bytes": 2527118336,
+      "peak_gpu_reserved_bytes": 2613051392,
+      "gpu_free_bytes_after_load": 1099379508,
+      "shared_experts_device": "cuda",
+      "lm_head_device": "cuda",
+      "token_ids": [
+        207,
+        18467,
+        4090,
+        4148,
+        7196,
+        398,
+        100001
+      ],
+      "timings": {
+        "expert_read_seconds": 6.552971999568399,
+        "expert_h2d_seconds": 0.3939625999191776,
+        "expert_dequant_launch_seconds": 0.4715588007529732,
+        "expert_load_calls": 1235.0
+      }
+    },
+    {
+      "prompt": "把这句话翻译成英文：今天天气很好。",
+      "text": " The weather is beautiful today.",
+      "prompt_tokens": 18,
+      "completion_tokens": 7,
+      "prefill_seconds": 2.1798243999946862,
+      "decode_seconds": 2.2126537000003736,
+      "decode_tokens_per_second": 2.7116760295562683,
+      "peak_gpu_allocated_bytes": 2526645248,
+      "peak_gpu_reserved_bytes": 2613051392,
+      "gpu_free_bytes_after_load": 1099379508,
+      "shared_experts_device": "cuda",
+      "lm_head_device": "cuda",
+      "token_ids": [
+        429,
+        8077,
+        317,
+        4171,
+        3571,
+        13,
+        100001
+      ],
+      "timings": {
+        "expert_read_seconds": 8.39526369975647,
+        "expert_h2d_seconds": 0.49154160008765757,
+        "expert_dequant_launch_seconds": 0.5364855007501319,
+        "expert_load_calls": 1538.0
+      }
+    },
+    {
+      "prompt": "只回答数字：5-2=?",
+      "text": " 5-2=3",
+      "prompt_tokens": 17,
+      "completion_tokens": 7,
+      "prefill_seconds": 2.1443132999993395,
+      "decode_seconds": 2.1855804000224452,
+      "decode_tokens_per_second": 2.7452662001994446,
+      "peak_gpu_allocated_bytes": 2526135296,
+      "peak_gpu_reserved_bytes": 2613051392,
+      "gpu_free_bytes_after_load": 1099379508,
+      "shared_experts_device": "cuda",
+      "lm_head_device": "cuda",
+      "token_ids": [
+        207,
+        20,
+        12,
+        17,
+        28,
+        18,
+        100001
+      ],
+      "timings": {
+        "expert_read_seconds": 10.229854199220426,
+        "expert_h2d_seconds": 0.5873577000165824,
+        "expert_dequant_launch_seconds": 0.6000241008005105,
+        "expert_load_calls": 1838.0
+      }
+    },
+    {
+      "prompt": "9.11和9.9哪个大？只回答更大的数字。",
+      "text": " 9.9大。",
+      "prompt_tokens": 24,
+      "completion_tokens": 7,
+      "prefill_seconds": 2.4836616000102367,
+      "decode_seconds": 2.2096037000010256,
+      "decode_tokens_per_second": 2.7154190590815968,
+      "peak_gpu_allocated_bytes": 2530010112,
+      "peak_gpu_reserved_bytes": 2613051392,
+      "gpu_free_bytes_after_load": 1099379508,
+      "shared_experts_device": "cuda",
+      "lm_head_device": "cuda",
+      "token_ids": [
+        207,
+        24,
+        13,
+        24,
+        748,
+        398,
+        100001
+      ],
+      "timings": {
+        "expert_read_seconds": 12.18957979910192,
+        "expert_h2d_seconds": 0.6947291998367291,
+        "expert_dequant_launch_seconds": 0.671558500820538,
+        "expert_load_calls": 2162.0
+      }
+    }
+  ],
+  "gpu_free_bytes_after_close": 3376886580
+}

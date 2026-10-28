@@ -14,7 +14,9 @@ engine。当前重点是：
 - FP16 / INT8 / FP8 paged KV 与 CPU cold-block swap；
 - Qwen2.5-3B / 7B 的量化、加载和测速；
 - Qwen2 / Llama / Mistral / Gemma / Gemma2 dense 架构适配；
-- 4 GB 显存下的混合精度（Q4/Q3）与整体 Q4 实验数据。
+- 4 GB 显存下的混合精度（Q4/Q3）与整体 Q4 实验数据；
+- DeepSeek-V2-Lite Q4_K_M 的 GGUF routed-expert 流式 MoE、MLA reference
+  路径与 CPU/GPU 混合 offload（单请求，2.4–2.8 tokens/s 稳态）。
 
 ---
 
@@ -34,6 +36,47 @@ engine。当前重点是：
 > 不能把它们写成“完整 DeepInfer engine 已支持 Qwen2.5”。当前新增的是
 > engine-core 原型，不是官方 engine 接入。上表是旧有单请求 / 固定槽位路径的
 > 实测。
+
+### DeepSeek-V2-Lite Q4_K_M 原生 MoE（2026-10-28）
+
+目标不是把 15.7B 参数全部塞进 4 GB，而是让 DeepInfer 自己的执行层在
+**RTX 3050 4 GB + 16 GB RAM** 上流式跑完 DeepSeek-V2-Lite：
+
+- 9.65 GiB Q4_K_M GGUF 不整体加载；routed experts 由 GGUFIndex 按需读取；
+- 每个 expert chunk 最多 8 个专家，Q4_K / Q5_0 / Q8_0 packed bytes 通过
+  pinned staging buffer + 独立 copy stream 异步拷贝到 GPU；
+- SM86 CUDA kernel 在 GPU 上把 packed expert 反量化成 FP16，再做 grouped
+  batched GEMM；GPU 不同时保留 64 个专家；
+- attention / router / dense layer0 / shared experts / lm_head 按可用显存
+  自动放在 GPU 或 CPU；嵌入留在 CPU；
+- 最终 `peak GPU allocated ≈ 2.41 GiB`，加载后仍有约 1.0 GiB 空闲显存。
+
+最终实测（greedy、Q4_K_M、单请求、短 prompt / max_cache=256）：
+
+| 指标 | 结果 |
+|---|---:|
+| 模型加载 | 18.1 s |
+| cold/warmup（4 token） | 3.5–16 s（取决于 OS page cache） |
+| prefill（短 prompt） | 2.13–2.48 s |
+| decode 稳态 | **2.44–2.75 tokens/s** |
+| peak GPU allocated / reserved | **2.41 GiB / 2.43 GiB** |
+| shared experts / lm_head | GPU（auto 放置） |
+| 质量抽检 | MoE 解释、首都、翻译、`5-2=3`、`9.9 > 9.11` 均正确 |
+
+同一份 Q4_K_M 用 llama.cpp CPU 基线约 9–13 tokens/s，因此这条路径不是“最快”；
+它证明的是 **DeepInfer 自己的 MoE/MLA 执行层可以在 4 GB 卡上不 OOM 地跑起来**，
+而速度可以继续通过 fused quantized MoE kernel、专家 prefetch 和多流流水线提高。
+复现：
+
+```powershell
+F:\QwenQLoRA\venv\Scripts\python.exe `
+  scripts\smoke_deepseek_v2_lite_moe.py `
+  --prompt "用一句话解释什么是混合专家模型（MoE）。" `
+  --max-new-tokens 24 --warmup-tokens 4 `
+  --output docs\results\deepseek_v2_lite_q4km_moe_sm86.json
+```
+
+详见 `docs/ARTICLE_9_DEEPSEEK_V2_LITE_MOE_CPU_GPU_OFFLOAD.md`。
 
 ### Paged continuous batching（3B W4A16，4 GB）
 
@@ -282,11 +325,12 @@ lm_head           : 3-bit, group 128
 | KV FP8 paged cache | ✅ | E4M3/E5M2，native paged decode，无 scale sidecar |
 | CPU cold-block offload | ✅ | 请求级 used-block swap，pinned CPU payload |
 | Prometheus / health | ✅ | block/prefix/queue/prefill/decode/swap 指标 |
-| MoE / MLA | ❌ | 未实现执行层 |
+| DeepSeek-V2-Lite MoE | ✅ | Q4_K_M routed-expert 流式执行、grouped bmm、CPU/GPU offload；单请求 |
+| DeepSeek-V2 MLA | ✅ | eager/reference attention + DynamicCache；不是 FlashMLA |
 | GPTQ | ✅ | 2/4/8-bit、group quant、`g_idx`/desc_act -> W4A16 |
 | AWQ | ✅ | AutoAWQ GEMM 4-bit -> W4A16 |
 | GGUF | ✅ | 单文件 + Q4_0/Q4_K 等类型 -> W4A16 |
-| 社区格式零拷贝直跑 | ❌ | 当前采用离线路由转换 |
+| GGUF 直接流式执行 | ⚠️ | DeepSeek-V2-Lite Q4_K_M 已直跑；通用 dense 路径仍需转换 |
 | activation quant / SmoothQuant | ❌ | 仅权重量化 W4A16/W3A16 |
 | tensor / pipeline parallel | ❌ | 单 GPU |
 | 跨厂商后端 | ❌ | 当前 kernel 绑定 NVIDIA SM86 |
@@ -308,6 +352,9 @@ deepinfer/
   quantization/dequant.py                GPTQ/AWQ int32 解包与反量化
   quantization/gguf_source.py            GGUF metadata/tensor 映射
   quantization/convert.py               任意支持格式 -> layered W4A16
+  moe/gguf_index.py                     GGUF header/index、完整性与 expert slice
+  moe/gpu_quant.py                      Q4_K/Q5_0/Q8_0 SM86 GPU dequant
+  moe/deepseek_v2_runtime.py            DeepSeek-V2-Lite MoE/MLA 流式执行与 offload
   engine/kv_cache.py                    block allocator、paged FP16/INT8/FP8、CPU payload
   engine/paged_attention.py             native paged GQA decode（FP16/INT8/FP8）
   engine/memory_budget.py               启动显存预算与 KV block 规划
@@ -360,6 +407,7 @@ scripts/
   validate_sm86_kernels.py              native kernel 数值校验
   import_quantized_checkpoint.py        GPTQ/AWQ/GGUF -> W4A16 CLI
   probe_model.py                        模型目录支持状态探测
+  smoke_deepseek_v2_lite_moe.py         DeepSeek-V2-Lite 原生 MoE 质量/吞吐入口
 tests/
   quantization/test_dequant.py          GPTQ/AWQ 解包与反量化
   quantization/test_convert_hf.py       GPTQ/AWQ 端到端转换
@@ -374,6 +422,8 @@ tests/
   models/test_model_spec_gemma.py
   models/test_qwen2_w4a16_gpu.py
   apps/test_paged_scheduler_gpu.py      双 CUDA stream overlap GPU 测试
+  moe/test_gguf_index.py                GGUF 索引、截断检测和 expert slice
+  moe/test_gpu_quant.py                 Q4_K/Q5_0/Q8_0 GPU 反量化对照
 docs/
   ARTICLE_1_DEEPINFER_SM86_KERNEL.md          上篇：内核与量化工程
   ARTICLE_2_DEEPINFER_SM86_PRODUCTIVITY.md    下篇：生产力、网关与基准
@@ -394,6 +444,8 @@ docs/
   ARTICLE_6_NATIVE_PAGED_KERNEL_AND_4GB_BENCH.md native paged / 4GB 实测
   ARTICLE_7_PREFILL_DECODE_OVERLAP_AND_TILED_PREFILL.md overlap 与 tiled prefill
   ARTICLE_8_KV_FP8_AND_CPU_OFFLOAD.md           FP8 KV 与 CPU swap
+  ARTICLE_9_DEEPSEEK_V2_LITE_MOE_CPU_GPU_OFFLOAD.md
+                                                DeepSeek-V2-Lite MoE 流式 offload 复盘
   PERSONAL_PRODUCTIVITY.md                     从网关到桌面快捷操作
   PRODUCTIVITY_BENCHMARK_3B_7B_OLLAMA.md       3B/7B/Ollama 完整基准
   results/                                     选定的可复现结果
@@ -815,15 +867,22 @@ python scripts\export_sm86_kernels.py
 - GPU harness 在 Python 3.10 下验证；Python 3.12 GPU package 验证未完成；
 - 3-bit MLP/lm_head 是有损量化，短输出可读不代表与 BF16 等价；
 - 4 GB 上整体 Q4 只能作为质量/兼容实验，速度约 8 tokens/s；
-- GPTQ / AWQ / GGUF 已支持**离线转换**为 W4A16；尚不支持原格式零拷贝直跑；
-- AWQ 仅支持 GEMM 布局；GGUF 暂不支持 split shards；MoE/MLA 仍未实现；
+- GPTQ / AWQ 走**离线转换**为 W4A16；DeepSeek-V2-Lite Q4_K_M GGUF 可直接流式执行；
+- AWQ 仅支持 GEMM 布局；GGUF 暂不支持 split shards；
+- DeepSeek-V2-Lite MoE 目前是单请求执行层：未接入 paged scheduler / continuous
+  batching，prefill 会扫描大量专家，冷启动明显慢于稳态 decode；
+- DeepSeek MLA 使用官方 eager/reference attention，不是 FlashMLA；MoE 路径是
+  “GPU 反量化 + cuBLAS grouped GEMM”，还不是 packed-weight fused MoE kernel；
 - 非 tied 的 lm_head 仍以 FP16 dense 保存，7B 转换后体积需要单独评估；
-- 尚未实现 activation quantization、SmoothQuant、MoE 或 MLA 执行层；
+- dense 通用执行层仍未实现 activation quantization、SmoothQuant 或 MoE；
 - 没有 tensor/pipeline parallel 或跨厂商后端抽象；
 - 默认 context 上限仍为 256 token；paged scheduler 可提高 `--max-cache`，
   但 4 GB 物理显存、长 prompt prefill 和 chunk size 仍是硬约束；
 - tenant 前缀隔离是 hash namespace 隔离，不是进程级/加密级隐私隔离；
-- 3B 与 7B 网关不能同时常驻 4 GB；
+- 3B 与 7B 网关不能同时常驻 4 GB；DeepSeek-V2-Lite MoE 使用同一张卡时也会
+  与常驻 dense 网关互斥；
+- DeepSeek-V2-Lite 原生 MoE 的 pinned expert staging 只有一组缓冲区，依赖
+  CUDA event 串行复用；尚未做多缓冲专家 prefetch；
 - 桌面快捷操作依赖 Windows PowerShell 剪贴板和本地 HTTP 网关。
 
 ---
@@ -855,6 +914,8 @@ python scripts\export_sm86_kernels.py
 - tiled W4/W3 prefill 微基准：`scripts/bench_sm86_tiled_prefill.py`
 - P0 低延迟/显存预算说明：
   `docs/P0_CHUNKED_PREFILL_AND_MEMORY_BUDGET.md`
+- DeepSeek-V2-Lite MoE 复盘：
+  `docs/ARTICLE_9_DEEPSEEK_V2_LITE_MOE_CPU_GPU_OFFLOAD.md`
 - GPU TTFT/TPOT/并发 benchmarks：`scripts/bench_paged_scheduler.py`
 - 长文档插入 TPOT 抖动：`scripts/bench_tpot_jitter.py`
 - batched W4 GEMV 微基准：`scripts/bench_w4a16_batched_gemv.py`
