@@ -397,13 +397,27 @@ DeepSeek-V2-Lite 已接到现有 `apps/paged_scheduler.py`：
 
 | 路径 | 耗时 |
 |---|---:|
-| dense materialize | 11.43 s |
+| dense materialize | 11.89 s |
 | PyTorch block loop | 13.25 s |
-| fused FP16 CUDA paged MLA | **12.61 s** |
+| fused FP16 CUDA paged MLA（scalar） | **11.43 s** |
 
-fused kernel 比 PyTorch loop 快约 5%，但仍比 dense materialize 慢约 10%；
-token IDs 在三条路径上完全一致。省掉的是 dense K/V materialize，代价是
-逐 block 的 attention kernel 还没有做到 FlashMLA 级别的访存/并行优化。
+fused kernel 提供三种映射：
+
+- `scalar`（默认）：q 缓存在寄存器，标量 coalesced K/V load；
+- `half2`：half2 向量化；
+- `cta`：4 warp 分摊 key range，再合并 partial softmax。
+
+kernel 微基准（200 次，B2/H16/Q1/seq28）：
+
+| variant | ms/call |
+|---|---:|
+| scalar | **0.0616** |
+| half2 | 0.0676 |
+| cta | 0.0666 |
+
+scalar 变体在这个 smoke 里略快于 dense materialize；token IDs 仍完全一致。
+不过它还不是 FlashMLA：主要收益来自去掉 dense K/V materialize，以及减少
+Python block loop/launch 开销。
 
 实测（2 请求、chunked prefill 8、prefix cache）：
 
@@ -415,7 +429,7 @@ token IDs 在三条路径上完全一致。省掉的是 dense K/V materialize，
 | prefix 后 token IDs | **完全一致** |
 | KV pool | 20 blocks，约 106 MB |
 | native paged attention | **开启（27 层）** |
-| 2 请求 + prefix 总耗时 | **12.61 s**（PyTorch loop 13.25 s；materialize 11.43 s） |
+| 2 请求 + prefix 总耗时 | **11.43 s**（materialize 11.89 s） |
 | prefill/decode stream overlap | 关闭 |
 
 DeepSeek 的 expert staging 共用 pinned buffer/copy stream，两个 forward 在
@@ -1160,9 +1174,9 @@ python scripts\export_sm86_kernels.py
 - dense/hybrid 层布局已实现并有单元测试，但本机没有 dense DeepSeek-V2 GGUF
   做端到端质量基准；dense-only 模型超出显存时会回退 CPU FP32，速度会很慢；
 - DeepSeek MLA paged 模式通过 `DeepSeekPagedCache`/paged forward 直接按
-  block 读取 K/V 并 online softmax；FP16 有 fused CUDA kernel，非 FP16 回退
-  PyTorch block loop/dense materialize；fused kernel 当前仍比 materialize
-  约慢 10%，还没做到 FlashMLA 级别；
+  block 读取 K/V 并 online softmax；FP16 使用 fused scalar-register CUDA
+  kernel，非 FP16 回退 PyTorch block loop/dense materialize；当前 smoke 中
+  fused 11.43 s 略快于 materialize 11.89 s，但仍不是 FlashMLA 级优化；
 - MoE 默认为 grouped fused GEMV/GEMM，`--no-fused-moe` 可回退到 dequant +
   grouped GEMM；block-per-row 通用实现尚未做 Tensor Core tile；
 - 非 tied 的 lm_head 仍以 FP16 dense 保存，7B 转换后体积需要单独评估；

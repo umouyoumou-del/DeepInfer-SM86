@@ -804,9 +804,9 @@ tests/moe/test_dense_support.py
    提升；若要继续，需要把 shared/lm_head 移到 CPU 腾出 1.5–2 GiB VRAM；
 4. **完整 MMLU/GSM8K**：当前 mini suite 已作为 release gate，完整数据集需要
    更长上下文和数小时评测预算；
-5. **继续优化 fused paged MLA kernel**：FP16 fused kernel 已落地，但仍比
-   dense materialize 慢约 10%；下一步是 tile/多 query 复用、减少 block table
-   访存和 CTA 调度开销。
+5. **继续优化 fused paged MLA kernel**：FP16 scalar/CTA/half2 三个映射已落地，
+   scalar 在 smoke 中略快于 materialize；下一步是大 tile/多 query 复用、
+   减少 block table 访存和 CTA 调度开销，朝 FlashMLA 级别靠近。
 
 ---
 
@@ -1220,13 +1220,27 @@ K/V 维度不同（K = qk_nope + qk_rope = 192，V = v_head_dim = 128），而�
 
 | 路径 | 2 请求 + prefix 耗时 |
 |---|---:|
-| dense materialize | 11.43 s |
+| dense materialize | 11.89 s |
 | PyTorch block loop | 13.25 s |
-| fused FP16 CUDA paged MLA | **12.61 s** |
+| fused FP16 CUDA paged MLA（scalar） | **11.43 s** |
 
-fused kernel 比 PyTorch loop 快约 5%，但仍比 dense materialize 慢约 10%；
-三条路径 token IDs 完全一致。省掉的是 dense K/V materialize，代价是逐 block
-attention kernel 还没有做到 FlashMLA 级别的访存/并行优化。
+fused kernel 有三种 mapping：
+
+- `scalar`（默认）：q 缓存在寄存器，标量 coalesced K/V load；
+- `half2`：half2 向量化；
+- `cta`：4 warp 分摊 key range，再合并 partial softmax。
+
+kernel 微基准（B2/H16/Q1/seq28，200 次）：
+
+| variant | ms/call |
+|---|---:|
+| scalar | **0.0616** |
+| half2 | 0.0676 |
+| cta | 0.0666 |
+
+scalar 变体在这个 smoke 中略快于 dense materialize，token IDs 完全一致。
+主要收益仍是去掉 dense K/V materialize 和 Python block loop/launch 开销；
+它还不是 FlashMLA 级访存/CTA 优化。
 
 实测（`max_cache=128`、`block_size=16`、`prefill_chunk_tokens=8`）：
 
@@ -1239,7 +1253,7 @@ attention kernel 还没有做到 FlashMLA 级别的访存/并行优化。
 | prefix 后 token IDs | **完全一致** |
 | KV pool | 20 blocks / 约 106 MB |
 | native paged attention | **开启（27 层 + fused CUDA）** |
-| 2 请求 + prefix 总耗时 | **12.61 s**（PyTorch loop 13.25 s；materialize 11.43 s） |
+| 2 请求 + prefix 总耗时 | **11.43 s**（materialize 11.89 s） |
 | prefill/decode stream overlap | 关闭 |
 
 为什么关闭 overlap：DeepSeek expert staging 共用 pinned buffer 和 copy

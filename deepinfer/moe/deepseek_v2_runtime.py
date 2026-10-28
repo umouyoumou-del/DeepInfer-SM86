@@ -845,7 +845,7 @@ class DeepSeekV2LiteGGUFRuntime:
         )
         self.model.native_paged_attention_kernel = bool(
             self.native_paged_attention_layers
-        )
+        ) and os.environ.get("DEEPINFER_DISABLE_NATIVE_PAGED_MLA") != "1"
         self.gpu_free_bytes_after_load = int(torch.cuda.mem_get_info()[0])
         self._log(
             "loaded: GPU free %.1f MiB, shared=%s, lm_head=%s, "
@@ -1463,6 +1463,7 @@ class DeepSeekV2LiteGGUFRuntime:
             native_attention=(
                 views[0].key_pool.dtype == torch.float16
                 and getattr(self, "native_paged_attention_enabled", True)
+                and os.environ.get("DEEPINFER_DISABLE_NATIVE_PAGED_MLA") != "1"
             ),
         )
         outputs = self.model.model(

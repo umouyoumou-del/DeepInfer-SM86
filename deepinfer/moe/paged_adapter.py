@@ -128,12 +128,20 @@ class DeepSeekPagedCache(Cache):
             from deepinfer.moe.paged_mla_kernel import (
                 cuda_paged_mla_supported,
                 paged_mla_attend,
+                paged_mla_attend_cta,
+                paged_mla_attend_scalar,
             )
 
             if cuda_paged_mla_supported(
                 query_states, view.key_pool, view.value_pool
             ):
-                return paged_mla_attend(
+                variant = os.environ.get("DEEPINFER_MLA_KERNEL", "scalar")
+                attend_kernel = {
+                    "scalar": paged_mla_attend_scalar,
+                    "half2": paged_mla_attend,
+                    "cta": paged_mla_attend_cta,
+                }.get(variant, paged_mla_attend_scalar)
+                return attend_kernel(
                     query_states,
                     view.key_pool,
                     view.value_pool,
