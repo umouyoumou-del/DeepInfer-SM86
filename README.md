@@ -311,6 +311,7 @@ RTX 3050 Laptop 4 GB + 16 GB RAM，DeepSeek-V2-Lite Q4_K_M：
 | 可选 expert cache | 512 MB 时约 11% hit，但长生成 1.61 t/s，默认关闭 |
 | 可选 GPU expert cache | 1 GiB 时 hit 24.8%，长生成 2.69 t/s，peak 3.20 GiB；默认关闭 |
 | mini 质量回归 | MMLU-style 8/10、GSM8K-style 4/8、长链 3/5；llama.cpp 为 8/10、2/8、1/5 |
+| full-category 质量回归 | MMLU 27/57（47.4%，57 科各 1 题）、GSM8K 9/32（28.1%）、长链 2/32（6.25%）、PPL 6.59 |
 | paged scheduler | 2 请求 batched decode；prefix cache 复用 16 token；token IDs 与单请求一致 |
 | CPU layer offload（1 层） | decode 1.86 t/s；32-token token IDs/text 与 GPU 路径完全一致 |
 | Hot/cold expert split（2 层 × 1 cold） | decode **2.50 t/s**；32-token IDs/text 一致 |
@@ -327,7 +328,7 @@ MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比�
 - `tests/moe/` 新增 GGUF 索引、截断拒绝、expert slice、Q4_K/Q5_0/Q8_0
   GPU 反量化、dense/MoE 层布局、CPU MLP fallback、per-expert fused 和
   grouped MoE kernel 对照测试；
-- 全套测试：**87 passed**；
+- 全套测试：**90 passed**；
 - 新增文章：
   `docs/ARTICLE_9_DEEPSEEK_V2_LITE_MOE_CPU_GPU_OFFLOAD.md`；
 - 结构化结果：
@@ -335,7 +336,8 @@ MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比�
   `docs/results/deepseek_v2_lite_q4km_moe_dequant_bmm_sm86.json`（回退基线）、
   `docs/results/deepseek_v2_lite_q4km_moe_fused_vs_dequant.json`（fused vs 回退）、
   `docs/results/deepseek_v2_lite_q4km_moe_grouped_vs_per_expert.json`（grouped vs per-expert）、
-  `docs/results/deepseek_v2_lite_q4km_moe_quality_eval.json`（质量回归）、
+  `docs/results/deepseek_v2_lite_q4km_moe_quality_eval.json`（mini 质量回归）、
+  `docs/results/deepseek_v2_lite_q4km_moe_full_quality.json`（full-category 回归）、
   `docs/results/deepseek_v2_lite_q4km_moe_paged_scheduler.json`（paged scheduler）、
   `docs/results/deepseek_v2_lite_q4km_moe_cpu_layer_offload.json`（CPU layer offload）、
   `docs/results/deepseek_v2_lite_q4km_moe_cpu_expert_offload.json`（oneDNN 版本）、
@@ -393,6 +395,42 @@ mini suite，不是官方完整数据集。
 F:/QwenQLoRA/venv/Scripts/python.exe ^
   scripts/eval_deepseek_moe_quality.py ^
   --output docs/results/deepseek_v2_lite_q4km_moe_quality_eval.json
+```
+
+### 6.1 Full-category 回归（2026-10-28）
+
+新增：
+
+- `scripts/build_deepseek_full_quality_suite.py`：从 MMLU、官方 GSM8K test
+  和 WikiText-2 构建固定抽样 suite；
+- `docs/quality/deepseek_v2_lite_full_quality_suite.json`；
+- `scripts/eval_deepseek_full_quality.py`；
+- `docs/results/deepseek_v2_lite_q4km_moe_full_quality.json`。
+
+这不是完整的 14k MMLU / 1.3k GSM8K 全量跑分，而是一个固定预算的
+**full-category** 回归：MMLU 覆盖全部 57 个 subject，每科 1 题；GSM8K
+固定抽样 32/1319；长链为确定性生成的 32 道 5–7 步整数链；PPL 使用
+WikiText-2 validation 的前 512 token。
+
+| 指标 | native Q4_K_M | 说明 |
+|---|---:|---|
+| MMLU | **27/57（47.4%）** | 57 科各 1 题，zero-shot，Wilson 95% CI 35.0–60.1% |
+| GSM8K | **9/32（28.1%）** | 固定 test 抽样，greedy |
+| 长链推理 | **2/32（6.25%）** | 合成 5–7 步整数链，zero-shot |
+| WikiText-2 PPL | **6.59** | 512 token，native score_text |
+| llama.cpp PPL | 8.04 | llama-perplexity `n_ctx=128` 分块，非严格同口径 |
+
+llama.cpp 生成对照没有跑满：CPU 上 16B Q4 生成耗时过高；PPL 已单独跑了
+同一段文本作为参考。质量结论只应解释为 native 路径的固定预算回归，不应
+宣传成官方 MMLU/GSM8K 全量成绩。
+
+运行：
+
+```powershell
+F:/QwenQLoRA/venv/Scripts/python.exe ^
+  scripts/eval_deepseek_full_quality.py ^
+  --skip-llama ^
+  --output docs/results/deepseek_v2_lite_q4km_moe_full_quality.json
 ```
 
 ### 7. Paged scheduler 接入
@@ -899,6 +937,7 @@ tests/
   moe/test_ptr_grouped_moe.py           pointer-array grouped kernel 对照
   moe/test_paged_adapter.py             MLA paged cache 形状/写入测试
   moe/test_cpu_avx2.py                  AVX2 packed dequant 对照
+  moe/test_full_quality_suite.py        full-category suite 结构与答案校验
   moe/test_dense_support.py             dense/MoE 层布局与 CPU MLP fallback
 docs/
   ARTICLE_1_DEEPINFER_SM86_KERNEL.md          上篇：内核与量化工程

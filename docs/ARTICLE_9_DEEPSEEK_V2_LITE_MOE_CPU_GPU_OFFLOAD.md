@@ -28,6 +28,7 @@ DeepSeek-V2-Lite 的 MoE 路由、专家计算、MLA attention 和自回归 deco
 | 对照 grouped 无 double buffer | decode 2.53–2.95；prefill 2.20–2.88 |
 | 可选 GPU expert cache 1 GiB | decode 2.69；prefill 2.93；peak 3.20 GiB |
 | mini quality gate | MMLU-style 8/10；GSM8K-style 4/8；长链 3/5 |
+| full-category quality | MMLU 27/57（47.4%）；GSM8K 9/32（28.1%）；长链 2/32；PPL 6.59 |
 | paged scheduler | 2 请求 batched decode；native paged MLA；prefix 16 token |
 | CPU layer offload | 最后 1 个 MoE 层 CPU FP32；decode 1.86 t/s；token IDs 一致 |
 | hot/cold expert split | 推荐 2 层 × 1 cold expert；decode 2.50 t/s；token IDs 一致 |
@@ -649,7 +650,8 @@ llama.cpp 有成熟的 AVX2/AVX512 CPU 量化 GEMV、mmap 权重和专门的 MoE
 ### 6.2 没有证明什么
 
 - Q4_K_M 不是 BF16，不能声称“与原始模型完全等价”；
-- 质量回归是 mini suite，不是官方完整 MMLU/GSM8K；perplexity 与
+- 质量回归有 mini suite 和 full-category 固定预算 suite，但还没有跑官方
+  完整 14k MMLU / 1.3k GSM8K split；perplexity 与
   llama.cpp 的 tokenizer/context 口径也不完全相同；
 - 没有和 llama.cpp 做逐 logits 对齐；两者执行顺序和累加精度不同；
 - 4-bit MoE 的 router 对数值误差很敏感，长链推理仍可能出现与 BF16 不同的分支；
@@ -773,6 +775,10 @@ scripts/smoke_deepseek_v2_lite_moe.py
   - 质量/吞吐 CLI，输出结构化 JSON
 scripts/eval_deepseek_moe_quality.py
   - mini quality regression runner
+scripts/build_deepseek_full_quality_suite.py
+  - fixed-budget MMLU/GSM8K/WikiText-2 suite builder
+scripts/eval_deepseek_full_quality.py
+  - full-category quality regression runner
 scripts/smoke_deepseek_v2_lite_moe_paged.py
   - paged scheduler smoke
 docs/quality/...
@@ -785,6 +791,7 @@ tests/moe/test_grouped_moe.py
 tests/moe/test_ptr_grouped_moe.py
 tests/moe/test_paged_adapter.py
 tests/moe/test_cpu_avx2.py
+tests/moe/test_full_quality_suite.py
 tests/moe/test_dense_support.py
 ```
 
@@ -806,7 +813,8 @@ tests/moe/test_dense_support.py
   softmax，不 materialize dense K/V；但它还是 PyTorch block loop，不是 fused
   CUDA/FlashMLA kernel，当前比 materialize 基线约慢 16%；
 - Q4_K_M 是唯一验证过的 DeepSeek-V2-Lite GGUF 量化档；
-- 没有长上下文和官方完整 MMLU/GSM8K；perplexity 已做 mini 回归；
+- 已做 full-category 固定预算质量回归；官方完整 MMLU/GSM8K split 和
+  长上下文仍未跑；
 - CPU MoE layer offload 仍是 PyTorch CPU FP32/oneDNN；1 个整层 CPU 约
   1.86 t/s；
 - cold-expert split 已实现；推荐 2 层 × 1 cold expert，约 2.50 t/s；
@@ -824,7 +832,8 @@ tests/moe/test_dense_support.py
 2. **CUDA Graph / prefill chunk pipeline**：降低 Python/launch 开销，保持确定性；
 3. **更大显存/CPU offload 组合**：GPU cache 已验证可行但 1 GiB 只带来约 2.3%
    提升；若要继续，需要把 shared/lm_head 移到 CPU 腾出 1.5–2 GiB VRAM；
-4. **完整 MMLU/GSM8K**：当前 mini suite 已作为 release gate，完整数据集需要
+4. **完整 MMLU/GSM8K split / 更大样本**：当前 full-category 固定预算已落地，
+   官方完整数据集需要
    更长上下文和数小时评测预算；
 5. **继续优化 fused paged MLA kernel**：FP16 scalar/CTA/half2 三个映射已落地，
    scalar 在 smoke 中略快于 materialize；下一步是大 tile/多 query 复用、
@@ -1018,7 +1027,7 @@ fused 之后 decode 的瓶颈更偏向 packed expert 读取和 H2D，而不是 G
   - 5 个质量 prompt 的 token IDs 完全一致；
   - 64-token 长故事生成 token IDs 完全一致；
   - `--no-fused-moe` 可随时回退到旧路径。
-- 全套测试：**87 passed**。
+- 全套测试：**90 passed**。
 
 ### 11.4 Grouped multi-expert kernel
 
@@ -1125,7 +1134,7 @@ opt-in 实验项保留，默认关闭。
 
 - double-buffer 路径与 grouped、per-expert、dequant+bmm 的 token IDs 一致；
 - 512 MB cache 路径 token IDs 也一致；
-- 全套测试：**87 passed**。
+- 全套测试：**90 passed**。
 
 ## 13. GPU packed cache + pointer-array grouped kernel
 
@@ -1168,7 +1177,7 @@ H2D 进来。
 
 - pointer-array gate/up 和 down 都有独立 GPU 单测；
 - GPU cache 路径与无 cache 路径 token IDs 完全一致；
-- 全套测试：**87 passed**。
+- 全套测试：**90 passed**。
 
 ## 14. 质量回归（mini suite）
 
@@ -1216,6 +1225,37 @@ F:/QwenQLoRA/venv/Scripts/python.exe ^
 ```
 
 结果文件：`docs/results/deepseek_v2_lite_q4km_moe_quality_eval.json`。
+
+### 14.1 Full-category 固定预算回归
+
+为避免把 mini suite 当成完整跑分，2026-10-28 新增了固定预算的
+full-category 回归：
+
+- MMLU：57 个 subject 各抽样 1 题，覆盖全部科目；
+- GSM8K：官方 test split 固定抽样 32/1319；
+- 长链：确定性生成 32 道 5–7 步整数链；
+- PPL：WikiText-2 validation 前 512 token；
+- 同 greedy 参数运行 native，LLM 对照只录 llama.cpp PPL。
+
+| 指标 | native Q4_K_M |
+|---|---:|
+| MMLU | **27/57（47.4%）**，Wilson 95% CI 35.0–60.1% |
+| GSM8K | **9/32（28.1%）** |
+| 长链推理 | **2/32（6.25%）** |
+| WikiText-2 PPL | **6.59**（512 token） |
+| llama.cpp PPL | 8.04（`n_ctx=128` 分块，非严格同口径） |
+
+结论：
+
+- native 路径没有出现崩溃、重复 token 或语言崩坏；
+- MMLU zero-shot 每科 1 题，47.4% 只能作为回归基线，不能替代官方
+  5-shot/full-split 分数；
+- GSM8K 28.1% 和长链 6.25% 暴露出模型在受限输出预算下的算术/多步推理
+  弱项，这是模型能力问题，不是 kernel 路径错误；
+- llama.cpp 生成对照因 CPU 16B Q4 成本过高没有跑满，只保留了 PPL 参考。
+
+结果文件：`docs/results/deepseek_v2_lite_q4km_moe_full_quality.json`。
+Suite：`docs/quality/deepseek_v2_lite_full_quality_suite.json`。
 
 ## 15. Paged scheduler 接入
 
