@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "deepinfer-sm86"
+version = "0.1.0"
+description = "Native streaming DeepSeek-V2-Lite GGUF MoE and paged MLA primitives for memory-constrained CUDA GPUs"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "DeepInfer-SM86 contributors" }]
+keywords = ["deepseek", "moe", "gguf", "paged-attention", "cuda", "sm86"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+  "torch>=2.5",
+  "numpy>=1.24",
+  "transformers>=4.49",
+  "accelerate>=1.3",
+  "gguf>=0.19",
+  "typing-extensions>=4.8",
+]
+
+[project.optional-dependencies]
+cuda = ["cupy-cuda12x[ctk]>=14.2,<15"]
+dev = ["pytest>=8", "build>=1", "wheel>=0.43"]
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["deepinfer*"]
+
+[tool.setuptools.package-data]
+"deepinfer.moe" = ["*.cpp"]
+"deepinfer" = ["py.typed"]

@@ -331,7 +331,7 @@ MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比�
 - `tests/moe/` 新增 GGUF 索引、截断拒绝、expert slice、Q4_K/Q5_0/Q8_0
   GPU 反量化、dense/MoE 层布局、CPU MLP fallback、per-expert fused 和
   grouped MoE kernel 对照测试；
-- 全套测试：**96 passed**；
+- 全套测试：**98 passed**；
 - 新增文章：
   `docs/ARTICLE_9_DEEPSEEK_V2_LITE_MOE_CPU_GPU_OFFLOAD.md`；
 - 结构化结果：
@@ -352,6 +352,8 @@ MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比�
   `docs/results/deepseek_v2_lite_q4km_moe_prefill_prefetch.json`（prefill prefetch）、
   `docs/results/deepseek_v2_lite_q4km_moe_decode_prefetch.json`（decode prefetch）、
   `docs/results/deepseek_v2_lite_q4km_moe_decode_predictive.json`（预测式 prefetch）；
+- PyPI 独立库：`pypi/deepinfer-sm86/`，可构建
+  `deepinfer_sm86-0.1.0-py3-none-any.whl` / `.tar.gz`；
 - 已知边界：
   - paged scheduler 已接入 chunked prefill / batched decode / KV 预算，但
     DeepSeek 暂不支持 prefill/decode stream overlap；
@@ -454,6 +456,61 @@ suite。
 CUDA Graph 仍不接入 DeepSeek decode：top-k 路由会改变 expert 集合、packed
 buffer 地址和 chunk 数，当前不是可安全 capture 的静态图。代码和 server 都
 明确 `use_graph=False`；如果要做，只能限定在固定 routing/buffer 的静态子图。
+
+### 6.2 PyPI 独立库打包
+
+仓库主体是应用/benchmark workspace；可复用库已单独放在
+`pypi/deepinfer-sm86/`，包名 `deepinfer-sm86`，import 名仍为 `deepinfer`。
+
+包含：
+
+- GGUF expert index / packed reader；
+- grouped Q4_K/Q5_0/Q8_0 MoE kernels；
+- FP16 fused paged MLA + INT8/FP8 E4M3/E5M2 native paged MLA；
+- CPU AVX2 packed dequant/GEMV C++ source；
+- paged KV cache、memory budget、metrics；
+- 通用 `PagedBatchScheduler`。
+
+不包含：模型权重、tokenizer 文件、Qwen server、benchmark/application
+workspace。server 仍是仓库 app，不是库 wheel 的一部分。
+
+构建：
+
+```powershell
+python scripts/build_pypi_package.py
+cd pypi\deepinfer-sm86
+python -m build --no-isolation --sdist --wheel
+```
+
+本地已生成：
+
+```text
+pypi/deepinfer-sm86/dist/deepinfer_sm86-0.1.0-py3-none-any.whl
+pypi/deepinfer-sm86/dist/deepinfer_sm86-0.1.0.tar.gz
+pypi/deepinfer-sm86/dist/SHA256SUMS
+```
+
+安装：
+
+```powershell
+pip install deepinfer_sm86-0.1.0-py3-none-any.whl
+# GPU kernels:
+pip install "deepinfer-sm86[cuda]"
+```
+
+Wheel 已在隔离 target 中验证：
+
+- `import deepinfer`；
+- `DeepSeekV2LiteGGUFRuntime`；
+- `PagedBatchScheduler`；
+- `deepinfer.moe.cpu_avx2.available()`；
+- wheel 内包含 two `.cpp` 源文件和 LICENSE/NOTICE。
+
+发布前检查 PyPI 上 `deepinfer-sm86` 名称是否可用，然后：
+
+```powershell
+python -m twine upload dist/*
+```
 
 ### 7. Paged scheduler 接入
 
@@ -939,6 +996,7 @@ kernels/
   qwen2_paged_gqa_decode_fp8.cu
 apps/
   server.py                             OpenAI 兼容网关、/metrics、健康检查
+pypi/deepinfer-sm86/                    standalone PyPI source tree + dist artifacts
   runtime.py                            常驻模型 + dense cache/Graph
   paged_scheduler.py                    分页连续批处理、双 stream overlap、CPU swap
   scheduler.py                          旧固定槽位静态调度器

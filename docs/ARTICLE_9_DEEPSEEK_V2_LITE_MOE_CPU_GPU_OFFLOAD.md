@@ -759,6 +759,9 @@ deepinfer/moe/paged_adapter.py
 deepinfer/moe/server_adapter.py
   - OpenAI server facade over the DeepSeek runtime
 
+pypi/deepinfer-sm86/
+  - standalone PyPI source tree and built wheel/sdist artifacts
+
 deepinfer/moe/paged_mla_kernel.py
   - fused FP16 CUDA paged MLA attention
 deepinfer/moe/paged_mla_quant.py
@@ -1033,7 +1036,7 @@ fused 之后 decode 的瓶颈更偏向 packed expert 读取和 H2D，而不是 G
   - 5 个质量 prompt 的 token IDs 完全一致；
   - 64-token 长故事生成 token IDs 完全一致；
   - `--no-fused-moe` 可随时回退到旧路径。
-- 全套测试：**96 passed**。
+- 全套测试：**98 passed**。
 
 ### 11.4 Grouped multi-expert kernel
 
@@ -1140,7 +1143,7 @@ opt-in 实验项保留，默认关闭。
 
 - double-buffer 路径与 grouped、per-expert、dequant+bmm 的 token IDs 一致；
 - 512 MB cache 路径 token IDs 也一致；
-- 全套测试：**96 passed**。
+- 全套测试：**98 passed**。
 
 ## 13. GPU packed cache + pointer-array grouped kernel
 
@@ -1183,7 +1186,7 @@ H2D 进来。
 
 - pointer-array gate/up 和 down 都有独立 GPU 单测；
 - GPU cache 路径与无 cache 路径 token IDs 完全一致；
-- 全套测试：**96 passed**。
+- 全套测试：**98 passed**。
 
 ## 14. 质量回归（mini suite）
 
@@ -1544,7 +1547,29 @@ match 几乎为 0。实测：
 `--predictive-prefetch` 实验开关，默认关闭；token IDs/text 仍完全一致。
 结果文件：`docs/results/deepseek_v2_lite_q4km_moe_decode_predictive.json`。
 
-## 20. 一句话结论
+## 20. PyPI 独立库
+
+可复用库单独放在 `pypi/deepinfer-sm86/`：
+
+- PyPI 包名：`deepinfer-sm86`；
+- import 名：`deepinfer`；
+- 包含 GGUF reader、grouped MoE、FP16/INT8/FP8 paged MLA、CPU AVX2
+  source、paged KV、memory budget、metrics 和通用 paged scheduler；
+- 不包含模型权重、tokenizer 文件、Qwen server 和 benchmark workspace。
+
+已构建：
+
+```text
+deepinfer_sm86-0.1.0-py3-none-any.whl
+deepinfer_sm86-0.1.0.tar.gz
+SHA256SUMS
+```
+
+隔离 target 安装验证通过：`DeepSeekV2LiteGGUFRuntime`、
+`PagedBatchScheduler`、`deepinfer.moe.cpu_avx2.available()`，且 wheel 内含
+两个 AVX2 `.cpp` 源文件和 LICENSE/NOTICE。
+
+## 21. 一句话结论
 
 这次最重要的不是“4 GB 跑 15.7B”这个标题，而是把 **MoE 的路由、专家流式读取、
 GPU 反量化、pinned H2D、确定性 scatter、MLA attention 和生成循环** 真正接进了

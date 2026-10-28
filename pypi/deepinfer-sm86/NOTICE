@@ -1,0 +1,17 @@
+DeepInfer-SM86
+==============
+
+This repository is an unofficial SM86 backend extension for the DeepInfer
+project. It is not an official DeepInfer release.
+
+Portions of the source, model layout, naming and test structure are derived
+from DeepInfer, which is distributed under the Apache License 2.0.
+
+Original project:
+https://gitee.com/mirrors/DeepInfer
+
+The extension adds SM86-oriented Qwen2/Qwen2.5 W4A16, W3A16, GQA decode,
+static KV-cache and CUDA Graph experiments. It does not claim to be a complete
+DeepInfer engine implementation.
+
+All derived code remains under the Apache License 2.0; see LICENSE.

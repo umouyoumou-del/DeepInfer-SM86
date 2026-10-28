@@ -17,3 +17,5 @@ server.log
 chat*.json
 debug_runtime*
 *.log
+
+*.egg-info/
