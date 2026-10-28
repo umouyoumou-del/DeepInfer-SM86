@@ -111,6 +111,16 @@ def _parse_args() -> argparse.Namespace:
         help="kept for compatibility; pipeline is off by default",
     )
     parser.add_argument(
+        "--prefill-all-experts",
+        action="store_true",
+        help="experimental: coalesce all routed experts into one prefill chunk",
+    )
+    parser.add_argument(
+        "--no-prefill-all-experts",
+        action="store_true",
+        help="kept for compatibility; all-expert coalescing is off by default",
+    )
+    parser.add_argument(
         "--no-fused-moe",
         action="store_true",
         help="disable fused packed-weight MoE GEMV/GEMM and use dequant+bmm",
@@ -166,6 +176,9 @@ def main() -> int:
         cpu_expert_cache_mb=args.cpu_expert_cache_mb,
         prefill_pipeline=(
             args.prefill_pipeline and not args.no_prefill_pipeline
+        ),
+        prefill_all_experts=(
+            args.prefill_all_experts and not args.no_prefill_all_experts
         ),
         expert_cache_mb=args.expert_cache_mb,
         gpu_expert_cache_mb=args.gpu_expert_cache_mb,
@@ -238,6 +251,9 @@ def main() -> int:
         "cpu_expert_cache_mb": args.cpu_expert_cache_mb,
         "prefill_pipeline": (
             args.prefill_pipeline and not args.no_prefill_pipeline
+        ),
+        "prefill_all_experts": (
+            args.prefill_all_experts and not args.no_prefill_all_experts
         ),
         "expert_cache_mb": args.expert_cache_mb,
         "gpu_expert_cache_mb": args.gpu_expert_cache_mb,

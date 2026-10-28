@@ -767,6 +767,7 @@ class DeepSeekV2LiteGGUFRuntime:
         cpu_expert_layers: int = 0,
         cpu_expert_cache_mb: int = 512,
         prefill_pipeline: bool = False,
+        prefill_all_experts: bool = False,
         expert_cache_mb: int = 0,
         gpu_expert_cache_mb: int = 0,
         fused_moe: bool = True,
@@ -801,6 +802,7 @@ class DeepSeekV2LiteGGUFRuntime:
             0, int(cpu_expert_cache_mb)
         )
         self.prefill_pipeline = bool(prefill_pipeline)
+        self.prefill_all_experts = bool(prefill_all_experts)
         self.requested_fused_moe = bool(fused_moe)
         self.dense_mlp_device = dense_mlp_device
         self.verbose = verbose
@@ -1354,9 +1356,23 @@ class DeepSeekV2LiteGGUFRuntime:
             dtype=flat.dtype,
             device=flat.device,
         )
+        chunk_size = self.expert_chunk_size
+        if (
+            self.prefill_all_experts
+            and token_count > 1
+            and layer_idx not in self.cpu_moe_layer_set
+            and self.expert_store is not None
+        ):
+            packed_bytes = sum(
+                self.expert_store._specs[(layer_idx, projection)].bytes_per_expert
+                for projection in ("gate", "up", "down")
+            ) * len(expert_list)
+            free_bytes = int(torch.cuda.mem_get_info()[0]) if torch.cuda.is_available() else 0
+            if packed_bytes < max(64 * _MIB, int(free_bytes * 0.45)):
+                chunk_size = len(expert_list)
         sorted_offset = 0
-        for chunk_start in range(0, len(expert_list), self.expert_chunk_size):
-            chunk_end = min(chunk_start + self.expert_chunk_size, len(expert_list))
+        for chunk_start in range(0, len(expert_list), chunk_size):
+            chunk_end = min(chunk_start + chunk_size, len(expert_list))
             chunk_ids = expert_list[chunk_start:chunk_end]
             chunk_tokens = padded_tokens[chunk_start:chunk_end]
             chunk_counts = counts_list[chunk_start:chunk_end]

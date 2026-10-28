@@ -535,6 +535,9 @@ token IDs / text 两种配置完全一致。由于 Windows/WDDM 上 copy stream 
 调度开销，pipeline 在本机反而让 prefill 慢约 6%，因此默认关闭，仅保留为
 实验开关。
 
+另外试验了 `--prefill-all-experts`（把所有 routed expert 合并成一个 prefill
+chunk）：token IDs 正确，但 prefill 3.59 s，也更慢，所以同样默认关闭。
+
 CUDA Graph 没有强行接入：DeepSeek 的 top-k 路由会改变 expert 集合、tensor
 地址和 chunk 数量，当前不是可安全 capture 的静态图。
 

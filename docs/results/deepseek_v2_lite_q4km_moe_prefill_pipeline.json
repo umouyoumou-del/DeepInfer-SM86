@@ -2,7 +2,7 @@
   "model": "DeepSeek-V2-Lite-Chat Q4_K_M",
   "prompt": "请写一段约150字的中文故事，主题是夜晚的火车站。",
   "max_new_tokens": 32,
-  "prefill_pipeline_off": {
+  "baseline": {
     "decode_tokens_per_second": 2.5845451188503086,
     "prefill_seconds": 3.1136399999959394,
     "decode_seconds": 11.994373699999414,
@@ -86,10 +86,50 @@
     ],
     "text": " 夜幕降临，火车站的灯光显得格外温暖。站台上，旅客们匆匆赶路，有的提着行李，有的抱着孩子，脸上写"
   },
+  "prefill_all_experts": {
+    "decode_tokens_per_second": 2.5193129105490666,
+    "prefill_seconds": 3.589763500029221,
+    "decode_seconds": 12.30494230001932,
+    "peak_gpu_allocated_bytes": 2368312832,
+    "peak_gpu_reserved_bytes": 3013607424,
+    "token_ids": [
+      207,
+      7630,
+      11252,
+      83971,
+      19304,
+      58119,
+      337,
+      44226,
+      19278,
+      51165,
+      22348,
+      398,
+      4737,
+      57955,
+      19304,
+      36948,
+      1077,
+      59097,
+      12461,
+      2412,
+      19304,
+      8876,
+      2002,
+      1649,
+      51252,
+      19304,
+      8876,
+      40664,
+      3397,
+      19304,
+      33436,
+      5830
+    ],
+    "text": " 夜幕降临，火车站的灯光显得格外温暖。站台上，旅客们匆匆赶路，有的提着行李，有的抱着孩子，脸上写"
+  },
   "token_ids_equal": true,
   "text_equal": true,
-  "delta_prefill_seconds": 0.1803568999748677,
-  "delta_decode_tps": -0.020289908380441535,
-  "conclusion": "pipeline is implemented but disabled by default; on this WDDM machine the copy-stream/event overhead made prefill about 6% slower, while token IDs remained identical.",
-  "note": "enable with --prefill-pipeline for experiments; CUDA Graph is not attempted because dynamic top-k routing changes cache/expert addresses."
+  "conclusion": "both experimental prefill paths are token-correct but slower on this WDDM machine: copy-stream pipeline prefill 3.29s vs 3.11s, all-expert coalescing 3.59s; both disabled by default.",
+  "note": "CUDA Graph is not attempted because dynamic top-k routing changes expert sets, addresses and chunk counts."
 }
