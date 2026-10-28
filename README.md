@@ -332,7 +332,7 @@ MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比�
 - `tests/moe/` 新增 GGUF 索引、截断拒绝、expert slice、Q4_K/Q5_0/Q8_0
   GPU 反量化、dense/MoE 层布局、CPU MLP fallback、per-expert fused 和
   grouped MoE kernel 对照测试；
-- 全套测试：**103 passed**；
+- 全套测试：**106 passed**；
 - 新增文章：
   `docs/ARTICLE_9_DEEPSEEK_V2_LITE_MOE_CPU_GPU_OFFLOAD.md`；
 - 结构化结果：
@@ -539,11 +539,11 @@ ECS 是这一轮新增的控制面/数据面分层：
 - 控制面：CPU 侧 `ECSController` + C++ `ecs_core.cpp` 负责 heat、LRU、
   tier placement 和 victim selection；
 - 存储层：L1 GPU packed expert cache、L2 packed CPU cache、L3 GGUF/NVMe
-  文件读取；
-- 批处理：C++ `ecs_plan_chunks` 和现有 paged scheduler 共同完成
-  expert/token chunk packing；
-- 多设备：`ECSRouter` 生成 device-addressed `ExpertPacket`，提供
-  `SimulatedAllToAll` 和可选 `TorchCollectiveAllToAll`。
+  文件读取；C++ victim 现在通过真实回调释放 GPU/CPU tensor；
+- 批处理：C++ `ecs_plan_chunks` 已接入 runtime 的 expert chunk 切分；
+- 多设备：`ECSRouter` 按 queue depth/KV pressure 选设备，支持 hot expert
+  token split；提供模拟 all-to-all、重试/reroute 和可选 torch collective；
+- 状态：ECS heat profile 可持久化；支持 Prometheus text snapshot。
 
 模块：
 
@@ -558,23 +558,29 @@ deepinfer/ecs/ecs_core.cpp     CPU policy core
 
 ```powershell
 python scripts/smoke_deepseek_v2_lite_moe.py `
-  --ecs --ecs-l1-mb 32 --ecs-l2-mb 0 `
+  --ecs --ecs-l1-mb 128 --ecs-l2-mb 512 `
+  --ecs-chunk-max-tokens 128 `
+  --ecs-profile E:\DeepInfer-MoEesults\ecs_profile.json `
   --cpu-experts-per-layer 1 --cpu-expert-layers 2 ...
 ```
 
-实测 smoke：
+实测 cache/profile smoke：
 
 - ECS backend：**cpp**；
 - 输出正确：`5-2=3`；
-- decode 2.36 tok/s（该 smoke 启用了 cold-expert split，不是默认 2.7）；
-- ECS 记录了 3642 次 L3 read、1908 个 placement entries；
+- L1 实际占用约 125 MiB / 128 MiB，L2 约 510 MiB / 512 MiB；
+- `evictions=3048`、`chunk_plans=234`、`l1_hits=1470`、`l2_hits=1722`；
+- ECS heat profile 已成功写盘并可由单测 load；
+- decode 1.42 tok/s（启用了 GPU/CPU cache + cold split，不代表默认路径）；
 - 默认 `--ecs` 关闭，不改变原 GPU 路径。
 
 需要明确：本机只有一张 RTX 3050，因此 **真实 8 卡 P100 / All-to-All 未实机验证**；
 多设备部分目前是 device abstraction + simulated transport + torch distributed
 adapter。ECS 的 Level 2 仍需要多卡硬件和 NCCL/Gloo 环境才能验收。
 
-结果文件：`docs/results/deepseek_v2_lite_q4km_moe_ecs_smoke.json`。
+结果文件：
+`docs/results/deepseek_v2_lite_q4km_moe_ecs_smoke.json`、
+`docs/results/deepseek_v2_lite_q4km_moe_ecs_cache_profile.json`。
 
 ### 7. Paged scheduler 接入
 

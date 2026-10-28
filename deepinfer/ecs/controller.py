@@ -8,12 +8,15 @@ expert, which victim to evict, and how a token batch should be packed.
 from __future__ import annotations
 
 import hashlib
+import json
+import os
 import threading
 import time
 from collections import defaultdict
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Any, Iterable, Sequence
+from pathlib import Path
+from typing import Any, Callable, Iterable, Sequence
 
 from deepinfer.ecs.core import ECSCore, available as _core_available
 
@@ -67,6 +70,11 @@ class ECSController:
         self._device_bytes: dict[int, int] = defaultdict(int)
         self._lock = threading.RLock()
         self._tick = 0
+        self._evictors: dict[Tier, list[Callable[[int], None]]] = {
+            Tier.L1: [],
+            Tier.L2: [],
+            Tier.L3: [],
+        }
         self.metrics: dict[str, float] = {
             "l1_hits": 0.0,
             "l2_hits": 0.0,
@@ -84,6 +92,20 @@ class ECSController:
     @property
     def backend(self) -> str:
         return "cpp" if self._core is not None else "python"
+
+    def register_evictor(
+        self, tier: Tier, callback: Callable[[int], None]
+    ) -> None:
+        """Register a real tensor-cache eviction callback for a tier."""
+
+        self._evictors[Tier(tier)].append(callback)
+
+    def _notify_evict(self, tier: Tier, key: int) -> None:
+        for callback in self._evictors.get(tier, ()):  # type: ignore[arg-type]
+            try:
+                callback(int(key))
+            except Exception:
+                continue
 
     def _next_tick(self) -> int:
         self._tick += 1
@@ -176,6 +198,25 @@ class ECSController:
             if bytes:
                 self.metrics["cross_device_bytes"] += 0.0
 
+    def promote(
+        self,
+        key: ExpertKey | int,
+        *,
+        tier: Tier,
+        device: int = 0,
+        bytes: int = 0,
+        heat_delta: float = 1.0,
+    ) -> bool:
+        """Promote an expert into a tier with real eviction callbacks."""
+
+        return self.place(
+            key,
+            tier=tier,
+            device=device,
+            bytes=bytes,
+            heat_delta=heat_delta,
+        )
+
     def evict(
         self,
         *,
@@ -207,6 +248,7 @@ class ECSController:
                 )
                 victim_key = victim.key
             self._remove_metadata(victim_key)
+            self._notify_evict(tier, victim_key)
             self.metrics["evictions"] += 1.0
             return True
 
@@ -318,6 +360,106 @@ class ECSController:
             chunks.append((start, end - start))
             start = end
         return chunks
+
+    def save_profile(self, path: str | Path) -> None:
+        """Persist heat/LRU policy state without tensor placements."""
+
+        target = Path(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with self._lock:
+            payload = {
+                "version": 1,
+                "tick": self._tick,
+                "entries": [
+                    {
+                        "key": entry.key,
+                        "tier": int(entry.tier),
+                        "device": int(entry.device),
+                        "bytes": int(entry.bytes),
+                        "heat": float(entry.heat),
+                        "last_tick": int(entry.last_tick),
+                    }
+                    for entry in self._entries.values()
+                ],
+                "metrics": dict(self.metrics),
+            }
+        temporary = target.with_suffix(target.suffix + ".tmp")
+        temporary.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        os.replace(temporary, target)
+
+    def load_profile(self, path: str | Path, *, heat_only: bool = True) -> bool:
+        """Load a profile; default keeps only heat/L3 metadata.
+
+        Physical L1/L2 tensors are not serialized, so restoring their
+        placements would create dangling cache references.
+        """
+
+        target = Path(path)
+        if not target.exists():
+            return False
+        payload = json.loads(target.read_text(encoding="utf-8"))
+        with self._lock:
+            self._entries.clear()
+            self._tier_bytes.clear()
+            self._device_bytes.clear()
+            self._tick = int(payload.get("tick", 0))
+            if self._core is not None:
+                self._core.reset()
+            for item in payload.get("entries", []):
+                key_id = int(item["key"])
+                if heat_only:
+                    tier = Tier.L3
+                    device = self.devices[0]
+                    size = 0
+                else:
+                    tier = Tier(int(item["tier"]))
+                    device = int(item.get("device", self.devices[0]))
+                    size = int(item.get("bytes", 0))
+                heat = float(item.get("heat", 0.0))
+                tick = int(item.get("last_tick", 0))
+                placement = Placement(
+                    key=key_id,
+                    tier=tier,
+                    device=device,
+                    bytes=size,
+                    heat=heat,
+                    last_tick=tick,
+                )
+                self._entries[key_id] = placement
+                self._tier_bytes[tier] += size
+                self._device_bytes[device] += size
+                if self._core is not None:
+                    self._core.touch(
+                        key_id,
+                        int(tier),
+                        device,
+                        size,
+                        tick,
+                        heat,
+                    )
+            for name, value in payload.get("metrics", {}).items():
+                if name in self.metrics:
+                    self.metrics[name] = float(value)
+        return True
+
+    def render_prometheus(self, prefix: str = "deepinfer_ecs") -> str:
+        with self._lock:
+            lines = [
+                f"# HELP {prefix}_entries ECS placement entries",
+                f"# TYPE {prefix}_entries gauge",
+                f"{prefix}_entries {len(self._entries)}",
+            ]
+            for tier in (Tier.L1, Tier.L2, Tier.L3):
+                lines.append(
+                    f"{prefix}_tier_bytes{{tier=\"{tier.name}\"}} "
+                    f"{int(self._tier_bytes[tier])}"
+                )
+            for name, value in self.metrics.items():
+                lines.append(f"{prefix}_{name} {float(value)}")
+            return chr(10).join(lines) + chr(10)
 
     def snapshot(self) -> dict[str, Any]:
         with self._lock:

@@ -108,6 +108,18 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--ecs-l1-mb", type=int, default=0)
     parser.add_argument("--ecs-l2-mb", type=int, default=0)
     parser.add_argument(
+        "--ecs-chunk-max-tokens",
+        type=int,
+        default=0,
+        help="ECS token budget per expert chunk; 0 keeps expert-count chunks",
+    )
+    parser.add_argument(
+        "--ecs-profile",
+        type=Path,
+        default=None,
+        help="persist/load ECS heat profile JSON",
+    )
+    parser.add_argument(
         "--prefill-prefetch",
         action="store_true",
         default=True,
@@ -227,6 +239,8 @@ def main() -> int:
         ecs_enabled=args.ecs,
         ecs_l1_mb=args.ecs_l1_mb,
         ecs_l2_mb=args.ecs_l2_mb,
+        ecs_chunk_max_tokens=args.ecs_chunk_max_tokens,
+        ecs_profile=args.ecs_profile,
         prefill_all_experts=(
             args.prefill_all_experts and not args.no_prefill_all_experts
         ),
@@ -313,6 +327,8 @@ def main() -> int:
         "ecs": args.ecs,
         "ecs_l1_mb": args.ecs_l1_mb,
         "ecs_l2_mb": args.ecs_l2_mb,
+        "ecs_chunk_max_tokens": args.ecs_chunk_max_tokens,
+        "ecs_profile": str(args.ecs_profile) if args.ecs_profile else None,
         "prefill_all_experts": (
             args.prefill_all_experts and not args.no_prefill_all_experts
         ),

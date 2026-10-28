@@ -6,6 +6,7 @@ from deepinfer.ecs import (
     ECSController,
     ECSRouter,
     ExpertKey,
+    ResilientAllToAll,
     SimulatedAllToAll,
     Tier,
     decode_packet,
@@ -68,3 +69,71 @@ def test_ecs_router_transport_and_packet_roundtrip() -> None:
     assert sum(len(packets) for packets in inbox.values()) == 2
     packet = plan.packets[0]
     assert decode_packet(encode_packet(packet)).token_ids == packet.token_ids
+
+
+def test_ecs_evictor_callback_and_queue_balancing() -> None:
+    if not cpp_available():
+        pytest.skip("ECS C++ compiler is unavailable")
+    controller = ECSController(
+        devices=(0, 1), l1_capacity_bytes=100, use_cpp=True
+    )
+    evicted: list[int] = []
+    controller.register_evictor(Tier.L1, evicted.append)
+    first = ExpertKey(1, "expert", 1)
+    second = ExpertKey(1, "expert", 2)
+    assert controller.place(first, tier=Tier.L1, bytes=60, heat_delta=10)
+    assert controller.place(second, tier=Tier.L1, bytes=60, heat_delta=1)
+    assert evicted == [first.stable_id]
+    assert controller.lookup(first) is None
+
+    hot = ExpertKey(2, "route", 7)
+    controller.touch(hot, tier=Tier.L3, device=0, heat_delta=20)
+    router = ECSRouter(
+        controller,
+        devices=(0, 1),
+        replicate_hot=True,
+        hot_threshold=8,
+    )
+    plan = router.plan(
+        2,
+        {7: [1, 2, 3, 4], 8: [5]},
+        expert_bytes=100,
+        queue_depths={0: 10.0, 1: 0.0},
+    )
+    assert plan.hot_replications >= 1
+    assert plan.assigned_experts[7] in (0, 1)
+    assert len(plan.packets) >= 3
+    mesh = SimulatedAllToAll((0, 1))
+    inbox = mesh.exchange({0: plan.packets, 1: []})
+    assert sum(len(packets) for packets in inbox.values()) == len(plan.packets)
+
+
+def test_ecs_profile_roundtrip_and_prometheus(tmp_path) -> None:
+    controller = ECSController(use_cpp=cpp_available())
+    controller.observe_routes(4, [1, 2], [10, 2])
+    profile = tmp_path / "ecs_profile.json"
+    controller.save_profile(profile)
+    restored = ECSController(use_cpp=cpp_available())
+    assert restored.load_profile(profile)
+    assert restored.heat(4, 1) == 10.0
+    assert restored.heat(4, 2) == 2.0
+    text = restored.render_prometheus()
+    assert "deepinfer_ecs_entries" in text
+    assert 'tier="L3"' in text
+
+
+def test_resilient_all_to_all_reroutes_failed_worker() -> None:
+    if not cpp_available():
+        pytest.skip("ECS C++ compiler is unavailable")
+    controller = ECSController(devices=(0, 1), use_cpp=True)
+    controller.touch(
+        ExpertKey(1, "route", 3), tier=Tier.L3, device=1, bytes=16
+    )
+    router = ECSRouter(controller, devices=(0, 1), replicate_hot=False)
+    plan = router.plan(1, {3: [1, 2]}, expert_bytes=16, src_device=0)
+    backend = SimulatedAllToAll((0, 1), failed_devices=(1,))
+    resilient = ResilientAllToAll(backend, fallback_device=0)
+    inbox = resilient.exchange({0: plan.packets, 1: []})
+    assert resilient.metrics["failovers"] == 1
+    assert resilient.metrics["retries"] >= 1
+    assert all(packet.dst_device == 0 for packet in inbox[0])

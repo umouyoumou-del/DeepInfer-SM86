@@ -1,0 +1,65 @@
+{
+  "model": "DeepSeek-V2-Lite-Chat Q4_K_M",
+  "config": {
+    "ecs": true,
+    "ecs_l1_mb": 128,
+    "ecs_l2_mb": 512,
+    "ecs_chunk_max_tokens": 128,
+    "cpu_experts_per_layer": 1,
+    "cpu_expert_layers": 2,
+    "profile": "local ecs_profile.json"
+  },
+  "result": {
+    "text": " 5-2=3",
+    "token_ids": [
+      207,
+      20,
+      12,
+      17,
+      28,
+      18,
+      100001
+    ],
+    "decode_tokens_per_second": 1.4234580284172746,
+    "prefill_seconds": 2.186035200022161,
+    "peak_gpu_allocated_bytes": 2501017088
+  },
+  "ecs": {
+    "backend": "cpp",
+    "tier_bytes": {
+      "L1": 131203072,
+      "L2": 535265280,
+      "L3": 1587412992
+    },
+    "device_bytes": {
+      "0": 2253881344
+    },
+    "entries": 1207,
+    "metrics": {
+      "l1_hits": 1470.0,
+      "l2_hits": 1722.0,
+      "l3_reads": 3403.0,
+      "l1_promotions": 486.0,
+      "evictions": 3048.0,
+      "chunk_plans": 234.0,
+      "cross_device_packets": 0.0,
+      "cross_device_bytes": 0.0,
+      "hot_replications": 0.0
+    },
+    "tick": 11624
+  },
+  "validation": {
+    "l1_capacity_bytes": 134217728,
+    "l2_capacity_bytes": 536870912,
+    "l1_within_capacity": true,
+    "l2_within_capacity": true,
+    "actual_cache_evictions": 3048.0,
+    "chunk_plans": 234.0,
+    "profile_persisted": true,
+    "semantic_output_correct": true
+  },
+  "notes": [
+    "This smoke exercises actual L1 GPU/CPU cache callbacks, C++ ECS eviction, ECS chunk planning and profile persistence on a single RTX 3050.",
+    "The 2-device queue-depth/hot-replication transport is covered by tests with a simulated worker failure; P100/NCCL hardware was not available."
+  ]
+}

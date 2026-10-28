@@ -126,6 +126,11 @@ class DeepSeekServerRuntime:
             "paged_overlap_supported": bool(
                 getattr(self.runtime, "supports_prefill_decode_overlap", False)
             ),
+            "ecs": (
+                self.runtime.ecs_controller.snapshot()
+                if getattr(self.runtime, "ecs_controller", None) is not None
+                else None
+            ),
         }
 
     def close(self) -> None:

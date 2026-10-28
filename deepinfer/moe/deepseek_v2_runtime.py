@@ -243,6 +243,8 @@ class GGUFExpertStore:
         self._gpu_cache_bytes_by_layer: dict[int, int] = {}
         self._gpu_expert_access_counts: dict[tuple[int, int], int] = {}
         self._gpu_cache_active = True
+        self._ecs_l1_keys: dict[int, tuple[int, int]] = {}
+        self._ecs_l2_keys: dict[int, tuple[int, str, int]] = {}
         self._specs: dict[tuple[int, str], ExpertTensorSpec] = {}
         for layer_idx in layer_indices:
             for projection in ("gate", "up", "down"):
@@ -281,6 +283,14 @@ class GGUFExpertStore:
             bool(self._copy_streams)
             and os.environ.get("DEEPINFER_DISABLE_EXPERT_COPY_STREAM") != "1"
         )
+        if self.ecs is not None:
+            try:
+                from deepinfer.ecs import Tier
+
+                self.ecs.register_evictor(Tier.L1, self._ecs_evict_l1)
+                self.ecs.register_evictor(Tier.L2, self._ecs_evict_l2)
+            except Exception:
+                pass
         self.timings: dict[str, float] = {
             "expert_read_seconds": 0.0,
             "expert_h2d_seconds": 0.0,
@@ -355,10 +365,10 @@ class GGUFExpertStore:
             return None
         layer_cache.move_to_end(expert_id)
         self.timings["gpu_cache_hits"] += 1.0
-        for projection, tensor in zip(("gate", "up", "down"), entry, strict=True):
-            self._ecs_access(
-                layer_idx, projection, expert_id, 0, tensor.numel()
-            )
+        for projection, _tensor in zip(("gate", "up", "down"), entry, strict=True):
+            # Expert-level L1 key owns capacity accounting; projection keys
+            # are heat telemetry only and must not double-count bytes.
+            self._ecs_access(layer_idx, projection, expert_id, 0, 0)
         return entry
 
     def _gpu_cache_put(
@@ -370,7 +380,7 @@ class GGUFExpertStore:
         if not self.gpu_cache_enabled():
             return False
         size = sum(tensor.numel() for tensor in entry)
-        if size > self._gpu_cache_per_layer:
+        if self.ecs is None and size > self._gpu_cache_per_layer:
             return False
         layer_cache = self._gpu_expert_cache.setdefault(layer_idx, OrderedDict())
         old = layer_cache.pop(expert_id, None)
@@ -378,29 +388,40 @@ class GGUFExpertStore:
             old_size = sum(tensor.numel() for tensor in old)
             self._gpu_cache_bytes -= old_size
             self._gpu_cache_bytes_by_layer[layer_idx] -= old_size
-        while (
-            layer_cache
-            and self._gpu_cache_bytes_by_layer.get(layer_idx, 0) + size
-            > self._gpu_cache_per_layer
-        ):
-            _, evicted = layer_cache.popitem(last=False)
-            evicted_size = sum(tensor.numel() for tensor in evicted)
-            self._gpu_cache_bytes -= evicted_size
-            self._gpu_cache_bytes_by_layer[layer_idx] -= evicted_size
-            self.timings["gpu_cache_evictions"] += 1.0
+        if self.ecs is None:
+            while (
+                layer_cache
+                and self._gpu_cache_bytes_by_layer.get(layer_idx, 0) + size
+                > self._gpu_cache_per_layer
+            ):
+                _, evicted = layer_cache.popitem(last=False)
+                evicted_size = sum(tensor.numel() for tensor in evicted)
+                self._gpu_cache_bytes -= evicted_size
+                self._gpu_cache_bytes_by_layer[layer_idx] -= evicted_size
+                self.timings["gpu_cache_evictions"] += 1.0
         layer_cache[expert_id] = entry
         self._gpu_cache_bytes += size
         self._gpu_cache_bytes_by_layer[layer_idx] = (
             self._gpu_cache_bytes_by_layer.get(layer_idx, 0) + size
         )
         self.timings["gpu_cache_bytes"] = float(self._gpu_cache_bytes)
-        for projection, tensor in zip(("gate", "up", "down"), entry, strict=True):
-            self._ecs_access(
-                layer_idx, projection, expert_id, 0, tensor.numel()
-            )
+        if not self._ecs_place_l1(layer_idx, expert_id, entry):
+            layer_cache.pop(expert_id, None)
+            self._gpu_cache_bytes -= size
+            self._gpu_cache_bytes_by_layer[layer_idx] -= size
+            self.timings["gpu_cache_bytes"] = float(self._gpu_cache_bytes)
+            return False
+        for projection, _tensor in zip(("gate", "up", "down"), entry, strict=True):
+            # Expert-level L1 key owns capacity accounting; projection keys
+            # are heat telemetry only and must not double-count bytes.
+            self._ecs_access(layer_idx, projection, expert_id, 0, 0)
         return True
 
     def clear_gpu_cache(self) -> None:
+        if self.ecs is not None:
+            for key_id in list(self._ecs_l1_keys):
+                self.ecs.remove(key_id)
+        self._ecs_l1_keys.clear()
         self._gpu_expert_cache.clear()
         self._gpu_cache_bytes = 0
         self._gpu_cache_bytes_by_layer.clear()
@@ -480,6 +501,94 @@ class GGUFExpertStore:
             keepalive=keepalive,
         )
 
+    def _ecs_evict_l1(self, key_id: int) -> None:
+        info = self._ecs_l1_keys.pop(int(key_id), None)
+        if info is None:
+            return
+        layer_idx, expert_id = info
+        layer_cache = self._gpu_expert_cache.get(layer_idx)
+        if layer_cache is None:
+            return
+        entry = layer_cache.pop(expert_id, None)
+        if entry is None:
+            return
+        size = sum(tensor.numel() for tensor in entry)
+        self._gpu_cache_bytes -= size
+        self._gpu_cache_bytes_by_layer[layer_idx] = (
+            self._gpu_cache_bytes_by_layer.get(layer_idx, 0) - size
+        )
+        self.timings["gpu_cache_evictions"] += 1.0
+
+    def _ecs_evict_l2(self, key_id: int) -> None:
+        info = self._ecs_l2_keys.pop(int(key_id), None)
+        if info is None:
+            return
+        layer_idx, projection, expert_id = info
+        layer_cache = self._packed_cache.get(layer_idx)
+        if layer_cache is None:
+            return
+        value = layer_cache.pop((projection, expert_id), None)
+        if value is None:
+            return
+        size = value.numel()
+        self._packed_cache_bytes -= size
+        self._packed_cache_bytes_by_layer[layer_idx] = (
+            self._packed_cache_bytes_by_layer.get(layer_idx, 0) - size
+        )
+        self.timings["expert_cache_evictions"] += 1.0
+
+    def _ecs_place_l1(
+        self, layer_idx: int, expert_id: int, entry: tuple[torch.Tensor, ...]
+    ) -> bool:
+        if self.ecs is None:
+            return True
+        try:
+            from deepinfer.ecs import ExpertKey, Tier
+
+            key = ExpertKey(layer_idx, "expert", int(expert_id))
+            size = sum(tensor.numel() for tensor in entry)
+            ok = self.ecs.place(
+                key,
+                tier=Tier.L1,
+                device=self._ecs_device,
+                bytes=size,
+                heat_delta=1.0,
+            )
+            if ok:
+                self._ecs_l1_keys[key.stable_id] = (
+                    int(layer_idx),
+                    int(expert_id),
+                )
+            return ok
+        except Exception:
+            return False
+
+    def _ecs_place_l2(
+        self, layer_idx: int, key: tuple[str, int], value: torch.Tensor
+    ) -> bool:
+        if self.ecs is None:
+            return True
+        try:
+            from deepinfer.ecs import ExpertKey, Tier
+
+            ecs_key = ExpertKey(layer_idx, key[0], int(key[1]))
+            ok = self.ecs.place(
+                ecs_key,
+                tier=Tier.L2,
+                device=self._ecs_device,
+                bytes=value.numel(),
+                heat_delta=1.0,
+            )
+            if ok:
+                self._ecs_l2_keys[ecs_key.stable_id] = (
+                    int(layer_idx),
+                    key[0],
+                    int(key[1]),
+                )
+            return ok
+        except Exception:
+            return False
+
     def _ecs_access(
         self,
         layer_idx: int,
@@ -530,16 +639,17 @@ class GGUFExpertStore:
             self._packed_cache_bytes -= old.numel()
             self._packed_cache_bytes_by_layer[layer_idx] -= old.numel()
         size = value.numel()
-        while (
-            layer_cache
-            and self._packed_cache_bytes_by_layer.get(layer_idx, 0) + size
-            > self._cache_limit_per_layer
-        ):
-            _, evicted = layer_cache.popitem(last=False)
-            self._packed_cache_bytes -= evicted.numel()
-            self._packed_cache_bytes_by_layer[layer_idx] -= evicted.numel()
-            self.timings["expert_cache_evictions"] += 1.0
-        if size > self._cache_limit_per_layer:
+        if self.ecs is None:
+            while (
+                layer_cache
+                and self._packed_cache_bytes_by_layer.get(layer_idx, 0) + size
+                > self._cache_limit_per_layer
+            ):
+                _, evicted = layer_cache.popitem(last=False)
+                self._packed_cache_bytes -= evicted.numel()
+                self._packed_cache_bytes_by_layer[layer_idx] -= evicted.numel()
+                self.timings["expert_cache_evictions"] += 1.0
+        if self.ecs is None and size > self._cache_limit_per_layer:
             return
         layer_cache[key] = value
         self._packed_cache_bytes += size
@@ -547,6 +657,12 @@ class GGUFExpertStore:
             self._packed_cache_bytes_by_layer.get(layer_idx, 0) + size
         )
         self.timings["expert_cache_bytes"] = float(self._packed_cache_bytes)
+        if not self._ecs_place_l2(layer_idx, key, value):
+            layer_cache.pop(key, None)
+            self._packed_cache_bytes -= size
+            self._packed_cache_bytes_by_layer[layer_idx] -= size
+            self.timings["expert_cache_bytes"] = float(self._packed_cache_bytes)
+            return
         self._ecs_access(layer_idx, key[0], key[1], 1, size)
 
     def _predictive_cache_get(
@@ -1104,6 +1220,8 @@ class DeepSeekV2LiteGGUFRuntime:
         ecs_enabled: bool = False,
         ecs_l1_mb: int = 0,
         ecs_l2_mb: int = 0,
+        ecs_chunk_max_tokens: int = 0,
+        ecs_profile: str | Path | None = None,
         expert_cache_mb: int = 0,
         gpu_expert_cache_mb: int = 0,
         fused_moe: bool = True,
@@ -1144,17 +1262,25 @@ class DeepSeekV2LiteGGUFRuntime:
         self.predictive_cache_mb = max(0, int(predictive_cache_mb))
         self._predictive_cache_limit = self.predictive_cache_mb * _MIB
         self.prefill_all_experts = bool(prefill_all_experts)
+        self.ecs_chunk_max_tokens = max(0, int(ecs_chunk_max_tokens))
+        self.ecs_profile_path = Path(ecs_profile) if ecs_profile else None
         self.ecs_controller = None
         if ecs_enabled:
             from deepinfer.ecs import ECSController
 
             self.ecs_controller = ECSController(
-                l1_capacity_bytes=max(0, int(ecs_l1_mb)) * _MIB,
-                l2_capacity_bytes=max(0, int(ecs_l2_mb)) * _MIB,
+                l1_capacity_bytes=max(
+                    0, max(int(ecs_l1_mb), int(gpu_expert_cache_mb))
+                ) * _MIB,
+                l2_capacity_bytes=max(
+                    0, max(int(ecs_l2_mb), int(expert_cache_mb))
+                ) * _MIB,
                 devices=(int(self.device.index or 0),)
                 if self.device.index is not None
                 else (0,),
             )
+            if self.ecs_profile_path is not None:
+                self.ecs_controller.load_profile(self.ecs_profile_path)
         self.requested_fused_moe = bool(fused_moe)
         self.dense_mlp_device = dense_mlp_device
         self.verbose = verbose
@@ -1251,13 +1377,23 @@ class DeepSeekV2LiteGGUFRuntime:
 
         self.shared_experts_device = "n/a" if not self.has_moe else "cpu"
         self.lm_head_device = "cpu"
+        effective_expert_cache_mb = (
+            max(int(expert_cache_mb), int(ecs_l2_mb))
+            if self.ecs_controller is not None
+            else int(expert_cache_mb)
+        )
+        effective_gpu_expert_cache_mb = (
+            max(int(gpu_expert_cache_mb), int(ecs_l1_mb))
+            if self.ecs_controller is not None
+            else int(gpu_expert_cache_mb)
+        )
         self.expert_store = (
             GGUFExpertStore(
                 self.index,
                 layer_indices=self.moe_layer_indices,
                 device=self.device,
-                expert_cache_mb=expert_cache_mb,
-                gpu_expert_cache_mb=gpu_expert_cache_mb,
+                expert_cache_mb=effective_expert_cache_mb,
+                gpu_expert_cache_mb=effective_gpu_expert_cache_mb,
                 predictive_cache_mb=self.predictive_cache_mb,
                 ecs=self.ecs_controller,
             )
@@ -1773,6 +1909,25 @@ class DeepSeekV2LiteGGUFRuntime:
             free_bytes = int(torch.cuda.mem_get_info()[0]) if torch.cuda.is_available() else 0
             if packed_bytes < max(64 * _MIB, int(free_bytes * 0.45)):
                 chunk_size = len(expert_list)
+        if self.ecs_controller is not None:
+            planned = self.ecs_controller.plan_chunks(
+                expert_list,
+                counts_list,
+                max_experts=chunk_size,
+                max_tokens=(
+                    self.ecs_chunk_max_tokens
+                    if self.ecs_chunk_max_tokens > 0
+                    else 1_000_000_000
+                ),
+            )
+            chunk_ranges = [
+                (start, start + length) for start, length in planned
+            ]
+        else:
+            chunk_ranges = [
+                (start, min(start + chunk_size, len(expert_list)))
+                for start in range(0, len(expert_list), chunk_size)
+            ]
         use_prefetch = (
             self.prefill_prefetch
             and token_count > 1
@@ -1783,19 +1938,18 @@ class DeepSeekV2LiteGGUFRuntime:
             and not cpu_expert_set
         )
         current_prefetch: ExpertPrefetch | None = decode_prefetch
-        if use_prefetch:
-            first_end = min(chunk_size, len(expert_list))
+        if use_prefetch and chunk_ranges:
+            first_start, first_end = chunk_ranges[0]
             current_prefetch = self.expert_store.prefetch_experts(
-                layer_idx, expert_list[:first_end]
+                layer_idx, expert_list[first_start:first_end]
             )
         sorted_offset = 0
-        for chunk_start in range(0, len(expert_list), chunk_size):
-            chunk_end = min(chunk_start + chunk_size, len(expert_list))
+        for chunk_index, (chunk_start, chunk_end) in enumerate(chunk_ranges):
             next_prefetch: ExpertPrefetch | None = None
-            if use_prefetch and chunk_end < len(expert_list):
-                next_end = min(chunk_end + chunk_size, len(expert_list))
+            if use_prefetch and chunk_index + 1 < len(chunk_ranges):
+                next_start, next_end = chunk_ranges[chunk_index + 1]
                 next_prefetch = self.expert_store.prefetch_experts(
-                    layer_idx, expert_list[chunk_end:next_end]
+                    layer_idx, expert_list[next_start:next_end]
                 )
             chunk_ids = expert_list[chunk_start:chunk_end]
             chunk_tokens = padded_tokens[chunk_start:chunk_end]
@@ -2486,6 +2640,11 @@ class DeepSeekV2LiteGGUFRuntime:
         text = self.tokenizer.decode(output_ids, skip_special_tokens=True)
         decode_tokens = max(0, len(generated) - 1)
         decode_tps = decode_tokens / decode_seconds if decode_seconds > 0 else 0.0
+        if self.ecs_controller is not None and self.ecs_profile_path is not None:
+            try:
+                self.ecs_controller.save_profile(self.ecs_profile_path)
+            except Exception:
+                pass
         return GenerationResult(
             text=text,
             prompt_tokens=prompt_tokens,

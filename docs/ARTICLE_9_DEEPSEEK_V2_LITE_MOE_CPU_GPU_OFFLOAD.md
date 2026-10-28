@@ -1046,7 +1046,7 @@ fused 之后 decode 的瓶颈更偏向 packed expert 读取和 H2D，而不是 G
   - 5 个质量 prompt 的 token IDs 完全一致；
   - 64-token 长故事生成 token IDs 完全一致；
   - `--no-fused-moe` 可随时回退到旧路径。
-- 全套测试：**103 passed**。
+- 全套测试：**106 passed**。
 
 ### 11.4 Grouped multi-expert kernel
 
@@ -1153,7 +1153,7 @@ opt-in 实验项保留，默认关闭。
 
 - double-buffer 路径与 grouped、per-expert、dequant+bmm 的 token IDs 一致；
 - 512 MB cache 路径 token IDs 也一致；
-- 全套测试：**103 passed**。
+- 全套测试：**106 passed**。
 
 ## 13. GPU packed cache + pointer-array grouped kernel
 
@@ -1196,7 +1196,7 @@ H2D 进来。
 
 - pointer-array gate/up 和 down 都有独立 GPU 单测；
 - GPU cache 路径与无 cache 路径 token IDs 完全一致；
-- 全套测试：**103 passed**。
+- 全套测试：**106 passed**。
 
 ## 14. 质量回归（mini suite）
 
@@ -1585,28 +1585,35 @@ SHA256SUMS
 
 - `ECSController`：heat、tier placement、LRU victim、cold expert 选择；
 - `ecs_core.cpp`：C++ CPU 控制面，负责 heat/LRU/victim 和 chunk packing；
-- `ECSRouter`：把 expert→token assignment 打成 device-addressed packet；
-- `SimulatedAllToAll`：双设备确定性仿真；
-- `TorchCollectiveAllToAll`：可选真实 `torch.distributed` transport；
-- runtime 集成：ECS 开启时，路由 heat 和 L3/L2/L1 访问会进入控制面，
-  cold expert 选择可由 ECS heat 驱动。
+- 真实 cache callback：C++ victim 会释放实际 GPU/CPU cache tensor；
+- ECS chunk planner 已接入 runtime 的 expert chunk 切分；
+- `ECSRouter`：queue depth/KV pressure 选设备，hot expert 可拆 token 到多卡；
+- `ResilientAllToAll`：worker 失败后 retry/reroute；
+- heat profile 可持久化，支持 Prometheus text snapshot。
 
-smoke 实测：
+cache/profile smoke 实测：
 
 | 指标 | 结果 |
 |---|---:|
 | ECS backend | C++ |
 | 输出 | `5-2=3` 正确 |
-| decode | 2.36 tok/s（启用 cold split 的 smoke） |
-| ECS entries | 1908 |
-| L3 reads | 3642 |
+| L1 占用 | 约 125 MiB / 128 MiB |
+| L2 占用 | 约 510 MiB / 512 MiB |
+| evictions | 3048 |
+| chunk plans | 234 |
+| L1 hits | 1470 |
+| L2 hits | 1722 |
+| decode | 1.42 tok/s（cache + cold split smoke） |
+| heat profile | 已写盘并可 load |
 | 默认 ECS | 关闭 |
 
 多设备部分必须说清楚：本机只有一张 RTX 3050，本轮实现了 device
 abstraction、packet encoding、模拟 all-to-all 和 torch collective adapter，
 但没有 8 卡 P100/NCCL 实机验收；Level 2 仍需多卡环境。
 
-结果文件：`docs/results/deepseek_v2_lite_q4km_moe_ecs_smoke.json`。
+结果文件：
+`docs/results/deepseek_v2_lite_q4km_moe_ecs_smoke.json`、
+`docs/results/deepseek_v2_lite_q4km_moe_ecs_cache_profile.json`。
 PyPI 库本地0.2.0已构建，正式 PyPI 仍为0.1.0，待上传。
 
 ## 22. 一句话结论
