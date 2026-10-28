@@ -30,6 +30,7 @@ DeepSeek-V2-Lite 的 MoE 路由、专家计算、MLA attention 和自回归 deco
 | mini quality gate | MMLU-style 8/10；GSM8K-style 4/8；长链 3/5 |
 | full-category quality | MMLU 27/57（47.4%）；GSM8K 9/32（28.1%）；长链 2/32；PPL 6.59 |
 | OpenAI server | chat/completions、raw completions、SSE、health/models、paged scheduler |
+| INT8/FP8 paged MLA | native quant kernel；KV 106→约 53 MiB；INT8/FP8/E5M2 单测通过 |
 | paged scheduler | 2 请求 batched decode；native paged MLA；prefix 16 token |
 | CPU layer offload | 最后 1 个 MoE 层 CPU FP32；decode 1.86 t/s；token IDs 一致 |
 | hot/cold expert split | 推荐 2 层 × 1 cold expert；decode 2.50 t/s；token IDs 一致 |
@@ -760,6 +761,8 @@ deepinfer/moe/server_adapter.py
 
 deepinfer/moe/paged_mla_kernel.py
   - fused FP16 CUDA paged MLA attention
+deepinfer/moe/paged_mla_quant.py
+  - native INT8/FP8 E4M3/E5M2 paged MLA
   - one warp per (batch, head, query-token)
 
 deepinfer/moe/cpu_avx2_packed.cpp
@@ -1032,7 +1035,7 @@ fused 之后 decode 的瓶颈更偏向 packed expert 读取和 H2D，而不是 G
   - 5 个质量 prompt 的 token IDs 完全一致；
   - 64-token 长故事生成 token IDs 完全一致；
   - `--no-fused-moe` 可随时回退到旧路径。
-- 全套测试：**93 passed**。
+- 全套测试：**96 passed**。
 
 ### 11.4 Grouped multi-expert kernel
 
@@ -1139,7 +1142,7 @@ opt-in 实验项保留，默认关闭。
 
 - double-buffer 路径与 grouped、per-expert、dequant+bmm 的 token IDs 一致；
 - 512 MB cache 路径 token IDs 也一致；
-- 全套测试：**93 passed**。
+- 全套测试：**96 passed**。
 
 ## 13. GPU packed cache + pointer-array grouped kernel
 
@@ -1182,7 +1185,7 @@ H2D 进来。
 
 - pointer-array gate/up 和 down 都有独立 GPU 单测；
 - GPU cache 路径与无 cache 路径 token IDs 完全一致；
-- 全套测试：**93 passed**。
+- 全套测试：**96 passed**。
 
 ## 14. 质量回归（mini suite）
 
@@ -1308,6 +1311,19 @@ kernel 微基准（B2/H16/Q1/seq28，200 次）：
 scalar 变体在这个 smoke 中略快于 dense materialize，token IDs 完全一致。
 主要收益仍是去掉 dense K/V materialize 和 Python block loop/launch 开销；
 它还不是 FlashMLA 级访存/CTA 优化。
+
+INT8/FP8 native quant paged MLA（2 请求、prefix cache、20 blocks）：
+
+| KV dtype | KV memory | token IDs vs FP16 | 说明 |
+|---|---:|---:|---|
+| FP16 | 106.2 MB | 基准 | fused FP16 kernel |
+| INT8 | **53.6 MB** | 语义正确，算术输出空格/tokenization 改变 | per-head/token scale |
+| FP8 E4M3 | **53.1 MB** | **完全一致** | 直接 FP8 byte decode |
+
+INT8/FP8/E5M2 三条 storage 路径都有单元测试，与 materialize/dequant 后的
+PyTorch reference 对比通过。INT8 在 smoke 中输出 `5 - 2 = 3` 而不是
+`5-2=3`，是量化后 logits 改变导致的 tokenization 差异，不是 kernel 崩溃。
+结果文件：`docs/results/deepseek_v2_lite_q4km_moe_paged_quantized.json`。
 
 实测（`max_cache=128`、`block_size=16`、`prefill_chunk_tokens=8`）：
 

@@ -131,7 +131,29 @@ class DeepSeekPagedCache(Cache):
                 paged_mla_attend_cta,
                 paged_mla_attend_scalar,
             )
+            from deepinfer.moe.paged_mla_quant import (
+                cuda_paged_mla_quant_supported,
+                paged_mla_attend_quantized,
+            )
 
+            if cuda_paged_mla_quant_supported(
+                query_states, view.key_pool, view.value_pool
+            ):
+                return paged_mla_attend_quantized(
+                    query_states,
+                    view.key_pool,
+                    view.value_pool,
+                    view.block_table,
+                    valid_lengths,
+                    positions,
+                    block_size=int(view.block_size),
+                    max_blocks=int(view.block_table.shape[1]),
+                    scale=float(scale),
+                    key_scale_pool=view.key_scale_pool,
+                    value_scale_pool=view.value_scale_pool,
+                    key_dim=self.key_dim,
+                    value_dim=self.value_dim,
+                )
             if cuda_paged_mla_supported(
                 query_states, view.key_pool, view.value_pool
             ):

@@ -1,0 +1,57 @@
+{
+  "model": "DeepSeek-V2-Lite-Chat Q4_K_M",
+  "kernel": "deepinfer/moe/paged_mla_quant.py: fused paged MLA over INT8/FP8 storage",
+  "config": {
+    "max_num_seqs": 2,
+    "block_size": 16,
+    "prefill_chunk_tokens": 8,
+    "num_gpu_blocks": 20,
+    "prefix_cache_blocks": 4,
+    "prefill_decode_overlap": true
+  },
+  "fp16": {
+    "elapsed_seconds": 9.729296699981205,
+    "kv_cache_dtype": "fp16",
+    "kv_memory_bytes": 106168320,
+    "num_blocks": 20,
+    "token_ids_equal": true,
+    "text_equal": true,
+    "responses": [
+      " 5-2=3",
+      " 中国的首都是北京。"
+    ],
+    "prefix_reuse_equal": true
+  },
+  "int8": {
+    "elapsed_seconds": 11.806848600041121,
+    "kv_cache_dtype": "int8",
+    "kv_memory_bytes": 53637120,
+    "num_blocks": 20,
+    "token_ids_equal": false,
+    "text_equal": false,
+    "responses": [
+      " 5 - 2 = 3",
+      " 中国的首都是北京。"
+    ],
+    "prefix_reuse_equal": false
+  },
+  "fp8_e4m3": {
+    "elapsed_seconds": 9.98185449995799,
+    "kv_cache_dtype": "fp8",
+    "kv_memory_bytes": 53084160,
+    "num_blocks": 20,
+    "token_ids_equal": true,
+    "text_equal": true,
+    "responses": [
+      " 5-2=3",
+      " 中国的首都是北京。"
+    ],
+    "prefix_reuse_equal": true
+  },
+  "kernel_unit_validation": {
+    "int8": "matches dequantized PyTorch reference",
+    "fp8_e4m3": "matches dequantized PyTorch reference",
+    "fp8_e5m2": "matches dequantized PyTorch reference"
+  },
+  "conclusion": "The fused quantized paged MLA kernel reads INT8 scales and FP8 E4M3/E5M2 bytes directly. KV memory drops from ~106 MiB to ~53 MiB at 20 blocks. FP8 keeps token IDs in this smoke; INT8 is semantically correct but changes spacing/tokenization in the arithmetic response, which is expected from lossy KV quantization rather than a kernel failure."
+}

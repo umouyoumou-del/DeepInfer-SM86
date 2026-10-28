@@ -315,6 +315,7 @@ RTX 3050 Laptop 4 GB + 16 GB RAM，DeepSeek-V2-Lite Q4_K_M：
 | paged scheduler | 2 请求 batched decode；prefix cache 复用 16 token；token IDs 与单请求一致 |
 | paged prefill/decode overlap | 已开启；CuPy 跟随 torch stream；token IDs 一致 |
 | DeepSeek OpenAI server | chat/completions、raw completions、SSE、health/models；paged scheduler 接入 |
+| INT8/FP8 paged MLA | native quant kernel；KV 106→约 53 MiB；INT8/FP8/E5M2 单测通过 |
 | CPU layer offload（1 层） | decode 1.86 t/s；32-token token IDs/text 与 GPU 路径完全一致 |
 | Hot/cold expert split（2 层 × 1 cold） | decode **2.50 t/s**；32-token IDs/text 一致 |
 | prefill copy-stream pipeline | 可选；本机实测 prefill 慢约 6%，默认关闭 |
@@ -330,7 +331,7 @@ MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比�
 - `tests/moe/` 新增 GGUF 索引、截断拒绝、expert slice、Q4_K/Q5_0/Q8_0
   GPU 反量化、dense/MoE 层布局、CPU MLP fallback、per-expert fused 和
   grouped MoE kernel 对照测试；
-- 全套测试：**93 passed**；
+- 全套测试：**96 passed**；
 - 新增文章：
   `docs/ARTICLE_9_DEEPSEEK_V2_LITE_MOE_CPU_GPU_OFFLOAD.md`；
 - 结构化结果：
@@ -343,6 +344,7 @@ MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比�
   `docs/results/deepseek_v2_lite_q4km_moe_paged_scheduler.json`（paged scheduler）、
   `docs/results/deepseek_v2_lite_q4km_moe_paged_overlap.json`（prefill/decode overlap）、
   `docs/results/deepseek_v2_lite_q4km_moe_openai_server.json`（OpenAI server smoke）、
+  `docs/results/deepseek_v2_lite_q4km_moe_paged_quantized.json`（INT8/FP8 paged MLA）、
   `docs/results/deepseek_v2_lite_q4km_moe_cpu_layer_offload.json`（CPU layer offload）、
   `docs/results/deepseek_v2_lite_q4km_moe_cpu_expert_offload.json`（oneDNN 版本）、
   `docs/results/deepseek_v2_lite_q4km_moe_cpu_expert_avx2.json`（fused AVX2 版本）、
@@ -458,7 +460,10 @@ DeepSeek-V2-Lite 已接到现有 `apps/paged_scheduler.py`：
 - FP16 路径新增 `deepinfer/moe/paged_mla_kernel.py`：一个 warp 负责一个
   `(batch, head, query-token)`，直接在 CUDA 里读 block table + online
   softmax，不再经过 Python block loop；
-- 非 FP16/不支持形状回退 PyTorch block loop 或 dense materialize。
+- INT8 使用 native quant paged MLA：按 block/head/token 的 K/V FP16 scale
+  直接反量化，不 materialize dense K/V；
+- FP8 E4M3/E5M2 使用 native byte kernel，直接读取 FP8 storage；
+- 只有不支持的形状/dtype 才回退 PyTorch block loop 或 dense materialize。
 
 同一组 2 请求 + prefix cache smoke：
 
@@ -483,6 +488,18 @@ kernel 微基准（200 次，B2/H16/Q1/seq28）：
 | cta | 0.0666 |
 
 scalar 变体在这个 smoke 里略快于 dense materialize；token IDs 仍完全一致。
+
+INT8/FP8 native quant MLA（2 请求、prefix cache、20 blocks）：
+
+| KV dtype | KV memory | token IDs vs FP16 | 说明 |
+|---|---:|---:|---|
+| FP16 | 106.2 MB | 基准 | fused FP16 kernel |
+| INT8 | **53.6 MB** | 语义正确，算术输出空格/tokenization 改变 | per-head/token scale |
+| FP8 E4M3 | **53.1 MB** | **完全一致** | 直接 FP8 byte decode |
+
+INT8/FP8/E5M2 三种 storage 都有单元测试，与 materialize/dequant 后的 PyTorch
+reference 对比通过。结果文件：
+`docs/results/deepseek_v2_lite_q4km_moe_paged_quantized.json`。
 不过它还不是 FlashMLA：主要收益来自去掉 dense K/V materialize，以及减少
 Python block loop/launch 开销。
 
