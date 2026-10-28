@@ -1,5 +1,5 @@
 {
-  "elapsed_seconds": 11.432300099986605,
+  "elapsed_seconds": 13.250750400009565,
   "baseline": [
     {
       "text": " 5-2=3",
@@ -102,7 +102,7 @@
     "prefix_cached_tokens": 16
   },
   "metrics": {
-    "uptime_seconds": 13.914,
+    "uptime_seconds": 15.955,
     "counters": {
       "requests_total": 3.0,
       "prefill_steps_total": 7.0,
@@ -134,32 +134,32 @@
     },
     "summaries": {
       "prefill_chunk_seconds": {
-        "sum": 7.806746599962935,
+        "sum": 9.191005100030452,
         "count": 7,
-        "avg": 1.1152495142804193
+        "avg": 1.3130007285757788
       },
       "ttft_seconds": {
-        "sum": 15.233188900048845,
+        "sum": 17.965939299960155,
         "count": 3,
-        "avg": 5.077729633349615
+        "avg": 5.988646433320052
       },
       "decode_step_seconds": {
-        "sum": 6.5441233000019565,
+        "sum": 7.248645900108386,
         "count": 13,
-        "avg": 0.5033941000001505
+        "avg": 0.5575881461621836
       },
       "tpot_seconds": {
-        "sum": 9.70589799998561,
+        "sum": 10.816751500009559,
         "count": 18,
-        "avg": 0.5392165555547561
+        "avg": 0.60093063888942
       }
     },
     "requests_finished": 3.0,
     "requests_failed": 0.0,
     "generated_tokens": 21.0,
-    "decode_tokens_per_second": 3.209,
-    "avg_ttft_seconds": 5.07773,
-    "avg_tpot_seconds": 0.539217,
+    "decode_tokens_per_second": 2.897,
+    "avg_ttft_seconds": 5.988646,
+    "avg_tpot_seconds": 0.600931,
     "kv_cache_usage_ratio": 0.1
   },
   "status": {
@@ -185,7 +185,7 @@
     "paged_kv_cache": true,
     "prefill_decode_overlap": false,
     "prefill_decode_stream_overlap_steps": 0,
-    "native_paged_attention": false,
+    "native_paged_attention": true,
     "native_batched_w4_gemv": false,
     "memory_budget": {
       "mode": "cuda",
@@ -247,8 +247,14 @@
     "num_gpu_blocks": 20,
     "prefix_cache_blocks": 4,
     "kv_cache_dtype": "fp16",
-    "prefill_decode_overlap": "disabled for DeepSeek because expert staging shares pinned buffers/copy streams",
-    "attention": "DeepSeekPagedCache writes MLA K/V into the generic paged pool, then materializes dense K/V for the unmodified official eager attention"
+    "attention": "native blockwise paged MLA attention with online softmax; no dense K/V materialization",
+    "prefill_decode_overlap": "disabled because expert staging shares pinned buffers/copy streams"
+  },
+  "materialize_baseline": {
+    "elapsed_seconds": 11.432300099986605,
+    "token_ids_equal": true,
+    "prefix_reuse_tokens": 16,
+    "native_paged_attention": false
   },
   "summary": {
     "two_request_token_ids_equal_baseline": true,
@@ -257,6 +263,9 @@
     "prefix_reuse_tokens": 16,
     "prefix_reuse_token_ids_equal": true,
     "kv_pool_bytes": 106168320,
-    "kv_blocks": 20
+    "kv_blocks": 20,
+    "native_paged_attention": true,
+    "elapsed_seconds": 13.250750400009565,
+    "materialize_elapsed_seconds": 11.432300099986605
   }
 }

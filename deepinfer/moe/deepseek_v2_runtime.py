@@ -756,6 +756,7 @@ class DeepSeekV2LiteGGUFRuntime:
         # concurrent forwards (e.g. prefill/decode stream overlap) are not
         # safe.  The paged scheduler serializes them for this runtime.
         self.supports_prefill_decode_overlap = False
+        self.native_paged_attention_enabled = True
         self._closed = False
 
         if self.device.type != "cuda":
@@ -837,6 +838,14 @@ class DeepSeekV2LiteGGUFRuntime:
         self.fused_moe_chunks = 0
         self.fallback_moe_chunks = 0
         self._load_weights(shared_experts_device, lm_head_device)
+        from deepinfer.moe.paged_adapter import install_native_paged_attention
+
+        self.native_paged_attention_layers = install_native_paged_attention(
+            self.model
+        )
+        self.model.native_paged_attention_kernel = bool(
+            self.native_paged_attention_layers
+        )
         self.gpu_free_bytes_after_load = int(torch.cuda.mem_get_info()[0])
         self._log(
             "loaded: GPU free %.1f MiB, shared=%s, lm_head=%s, "
@@ -1451,6 +1460,10 @@ class DeepSeekV2LiteGGUFRuntime:
             key_dim=key_dim,
             value_dim=value_dim,
             head_dim=max(key_dim, value_dim),
+            native_attention=(
+                views[0].key_pool.dtype == torch.float16
+                and getattr(self, "native_paged_attention_enabled", True)
+            ),
         )
         outputs = self.model.model(
             inputs_embeds=self._embed_tokens(input_ids),
