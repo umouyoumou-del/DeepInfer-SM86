@@ -860,6 +860,7 @@ class DeepSeekV2LiteGGUFRuntime:
         cpu_expert_cache_mb: int = 512,
         prefill_pipeline: bool = False,
         prefill_prefetch: bool = True,
+        decode_prefetch: bool = True,
         prefill_all_experts: bool = False,
         expert_cache_mb: int = 0,
         gpu_expert_cache_mb: int = 0,
@@ -896,6 +897,7 @@ class DeepSeekV2LiteGGUFRuntime:
         )
         self.prefill_pipeline = bool(prefill_pipeline)
         self.prefill_prefetch = bool(prefill_prefetch)
+        self.decode_prefetch = bool(decode_prefetch)
         self.prefill_all_experts = bool(prefill_all_experts)
         self.requested_fused_moe = bool(fused_moe)
         self.dense_mlp_device = dense_mlp_device
@@ -1396,6 +1398,24 @@ class DeepSeekV2LiteGGUFRuntime:
         token_count, top_k = topk_idx.shape
         expert_ids = torch.unique(topk_idx.reshape(-1), sorted=True)
         expert_count = expert_ids.numel()
+        # Materialize the small routing list before the sort/padding setup so
+        # decode can start pinned expert reads while the GPU prepares the
+        # assignment layout.
+        expert_list = expert_ids.cpu().tolist()
+        decode_prefetch: ExpertPrefetch | None = None
+        if (
+            self.decode_prefetch
+            and token_count == 1
+            and self.fused_moe_enabled
+            and self.expert_store is not None
+            and not self.expert_store.gpu_cache_enabled()
+            and layer_idx not in self.cpu_moe_layer_set
+            and self.requested_cpu_experts_per_layer == 0
+            and len(expert_list) <= self.expert_chunk_size
+        ):
+            decode_prefetch = self.expert_store.prefetch_experts(
+                layer_idx, expert_list
+            )
         group_index = torch.searchsorted(expert_ids, topk_idx.reshape(-1))
         token_ids = torch.arange(topk_idx.numel(), device=flat.device) // top_k
         assignment_weights = topk_weight.reshape(-1)
@@ -1423,7 +1443,6 @@ class DeepSeekV2LiteGGUFRuntime:
         padded_flat.index_copy_(0, padded_flat_index, sorted_tokens)
         padded_tokens = padded_flat.view(expert_count, max_count, flat.shape[-1])
 
-        expert_list = expert_ids.cpu().tolist()
         counts_list = counts.cpu().tolist()
         cpu_expert_set: set[int] = set()
         if (
@@ -1473,7 +1492,7 @@ class DeepSeekV2LiteGGUFRuntime:
             and layer_idx not in self.cpu_moe_layer_set
             and not cpu_expert_set
         )
-        current_prefetch: ExpertPrefetch | None = None
+        current_prefetch: ExpertPrefetch | None = decode_prefetch
         if use_prefetch:
             first_end = min(chunk_size, len(expert_list))
             current_prefetch = self.expert_store.prefetch_experts(

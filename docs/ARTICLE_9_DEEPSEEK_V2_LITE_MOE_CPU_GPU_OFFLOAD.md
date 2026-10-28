@@ -33,6 +33,7 @@ DeepSeek-V2-Lite 的 MoE 路由、专家计算、MLA attention 和自回归 deco
 | hot/cold expert split | 推荐 2 层 × 1 cold expert；decode 2.50 t/s；token IDs 一致 |
 | prefill pipeline | 可选；本机实测 prefill 慢约 6%，默认关闭 |
 | prefill background prefetch | 默认开启；prefill 3.43→2.03 s，token IDs 一致 |
+| decode background prefetch | 默认开启；decode 2.52→2.70 t/s，token IDs 一致 |
 | 对照 per-expert fused | decode 2.56–3.05；64-token 2.63 |
 | 对照 dequant+bmm | decode 2.43–2.77；64-token 2.43 |
 | GPU 加载后空闲 | 约 1.0 GiB |
@@ -810,8 +811,8 @@ tests/moe/test_dense_support.py
 - cold-expert split 已实现；推荐 2 层 × 1 cold expert，约 2.50 t/s；
   CPU 路径已有 fused AVX2 packed gate/up/down，oneDNN 仅作 fallback；
 - prefill copy-stream pipeline 已实现但默认关闭；本机 WDDM 上 prefill 慢约
-  6%；background prefetch 默认开启，把 prefill 从 3.43 s 降到 2.03 s；
-  CUDA Graph 受动态 MoE 路由限制；
+  6%；prefill/decode background prefetch 默认开启，prefill 3.43→2.03 s、
+  decode 2.52→2.70 t/s；CUDA Graph 受动态 MoE 路由限制；
 - 只验证 Windows + Python 3.10 + torch 2.5.1+cu121。
 
 ### 下一步优先级
@@ -1397,6 +1398,28 @@ prefill chunk 的显式预取，而不是 graph capture。
 
 prefill 降低约 **41%**，decode 在噪声范围内。结果文件：
 `docs/results/deepseek_v2_lite_q4km_moe_prefill_prefetch.json`。
+
+### 19.1 Decode prefetch / double-buffered weights
+
+decode 无法预知下一层路由，但可以在 **router 产出当前层 expert IDs 后**立即
+启动后台预读：
+
+- router → `expert_ids.cpu().tolist()`；
+- 立即后台读取这 6 个 expert 的 packed gate/up/down；
+- 主线程同时完成 GPU sort / padding / assignment layout；
+- 读取完成后只做 H2D + grouped kernels；
+- 双 pinned prefetch slot + Event 保护源 buffer。
+
+32-token decode：
+
+| 配置 | decode | token IDs |
+|---|---:|---:|
+| prefetch off | 2.52 t/s | 基准 |
+| prefetch on | **2.70 t/s** | **完全一致** |
+
+paged scheduler 2 请求 + prefix cache smoke 也从 11.07 s 降到 9.70 s，token
+IDs 一致。该路径默认开启，`--no-decode-prefetch` 可关闭。结果文件：
+`docs/results/deepseek_v2_lite_q4km_moe_decode_prefetch.json`。
 
 ## 20. 一句话结论
 

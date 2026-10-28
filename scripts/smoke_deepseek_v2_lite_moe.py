@@ -117,6 +117,11 @@ def _parse_args() -> argparse.Namespace:
         help="experimental copy-stream pipeline for multi-token prefill chunks",
     )
     parser.add_argument(
+        "--no-decode-prefetch",
+        action="store_true",
+        help="disable early background reads for the single decode expert chunk",
+    )
+    parser.add_argument(
         "--no-prefill-pipeline",
         action="store_true",
         help="kept for compatibility; pipeline is off by default",
@@ -191,6 +196,7 @@ def main() -> int:
         prefill_prefetch=(
             args.prefill_prefetch and not args.no_prefill_prefetch
         ),
+        decode_prefetch=not args.no_decode_prefetch,
         prefill_all_experts=(
             args.prefill_all_experts and not args.no_prefill_all_experts
         ),
@@ -269,6 +275,7 @@ def main() -> int:
         "prefill_prefetch": (
             args.prefill_prefetch and not args.no_prefill_prefetch
         ),
+        "decode_prefetch": not args.no_decode_prefetch,
         "prefill_all_experts": (
             args.prefill_all_experts and not args.no_prefill_all_experts
         ),
