@@ -1398,6 +1398,65 @@ class DeepSeekV2LiteGGUFRuntime:
             return F.linear(last.to(dtype=weight.dtype), weight).float()
         return F.linear(last.float().cpu(), weight.float())
 
+    def _all_logits(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        weight = self.model.lm_head.weight
+        if weight.device.type == "cuda":
+            return F.linear(hidden_states.to(dtype=weight.dtype), weight).float()
+        return F.linear(hidden_states.float().cpu(), weight.float()).to(
+            hidden_states.device
+        )
+
+    @torch.inference_mode()
+    def score_text(self, text: str) -> dict[str, float | int]:
+        """Compute next-token perplexity for a raw text string."""
+
+        encoded = self.tokenizer(
+            text,
+            return_tensors="pt",
+            add_special_tokens=True,
+        )
+        input_ids = encoded["input_ids"].to(torch.long)
+        token_count = int(input_ids.shape[1])
+        if token_count < 2:
+            raise ValueError("score_text requires at least two tokens")
+        if token_count > self.max_cache:
+            raise ValueError(
+                f"score_text length {token_count} exceeds max_cache={self.max_cache}"
+            )
+        attention_mask = torch.ones(
+            (1, token_count), dtype=torch.long, device=self.device
+        )
+        outputs = self.model.model(
+            inputs_embeds=self._embed_tokens(input_ids),
+            attention_mask=attention_mask,
+            position_ids=torch.arange(
+                token_count, device=self.device
+            ).unsqueeze(0),
+            past_key_values=DynamicCache(),
+            use_cache=False,
+            return_dict=True,
+        )
+        hidden = outputs.last_hidden_state
+        total_nll = 0.0
+        chunk = 8
+        for start in range(0, token_count - 1, chunk):
+            end = min(start + chunk, token_count - 1)
+            logits = self._all_logits(hidden[:, start:end, :])
+            targets = input_ids[:, start + 1 : end + 1].to(logits.device)
+            loss = F.cross_entropy(
+                logits.reshape(-1, logits.shape[-1]),
+                targets.reshape(-1),
+                reduction="sum",
+            )
+            total_nll += float(loss.item())
+        scored = token_count - 1
+        return {
+            "tokens": token_count,
+            "scored_tokens": scored,
+            "nll": total_nll,
+            "perplexity": float(torch.exp(torch.tensor(total_nll / scored))),
+        }
+
     @staticmethod
     def _sample(
         logits: torch.Tensor,

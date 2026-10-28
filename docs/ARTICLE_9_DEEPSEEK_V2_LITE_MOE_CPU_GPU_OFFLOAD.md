@@ -27,6 +27,7 @@ DeepSeek-V2-Lite 的 MoE 路由、专家计算、MLA attention 和自回归 deco
 | peak GPU reserved | **2.31 GiB** |
 | 对照 grouped 无 double buffer | decode 2.53–2.95；prefill 2.20–2.88 |
 | 可选 GPU expert cache 1 GiB | decode 2.69；prefill 2.93；peak 3.20 GiB |
+| mini quality gate | MMLU-style 8/10；GSM8K-style 4/8；长链 3/5 |
 | 对照 per-expert fused | decode 2.56–3.05；64-token 2.63 |
 | 对照 dequant+bmm | decode 2.43–2.77；64-token 2.43 |
 | GPU 加载后空闲 | 约 1.0 GiB |
@@ -641,7 +642,8 @@ llama.cpp 有成熟的 AVX2/AVX512 CPU 量化 GEMV、mmap 权重和专门的 MoE
 ### 6.2 没有证明什么
 
 - Q4_K_M 不是 BF16，不能声称“与原始模型完全等价”；
-- 只做了少量短 prompt 抽检，没有跑 MMLU、GSM8K、perplexity 或长链推理；
+- 质量回归是 mini suite，不是官方完整 MMLU/GSM8K；perplexity 与
+  llama.cpp 的 tokenizer/context 口径也不完全相同；
 - 没有和 llama.cpp 做逐 logits 对齐；两者执行顺序和累加精度不同；
 - 4-bit MoE 的 router 对数值误差很敏感，长链推理仍可能出现与 BF16 不同的分支；
 - “9.11 vs 9.9”这类诱导性长解释，模型中间句可能不严谨；本次直接问“只回答
@@ -747,6 +749,10 @@ deepinfer/moe/deepseek_v2_runtime.py
 
 scripts/smoke_deepseek_v2_lite_moe.py
   - 质量/吞吐 CLI，输出结构化 JSON
+scripts/eval_deepseek_moe_quality.py
+  - mini quality regression runner
+docs/quality/...
+  - Q4_K_M quality suite
 
 tests/moe/test_gguf_index.py
 tests/moe/test_gpu_quant.py
@@ -771,19 +777,19 @@ tests/moe/test_dense_support.py
 - pinned staging 单缓冲，依赖 Event 串行复用；还没有双缓冲/多缓冲预取；
 - MLA 是官方 eager/reference attention，不是 FlashMLA；
 - Q4_K_M 是唯一验证过的 DeepSeek-V2-Lite GGUF 量化档；
-- 没有长上下文、批量并发和严格 perplexity 回归；
+- 没有长上下文、批量并发和官方完整 MMLU/GSM8K；perplexity 已做 mini 回归；
 - 只验证 Windows + Python 3.10 + torch 2.5.1+cu121。
 
 ### 下一步优先级
 
 1. **接入 paged scheduler**：把 MoE 层接入已有 continuous batching / KV 预算；
-2. **量化质量回归**：perplexity、MMLU、GSM8K、长链推理，与 llama.cpp 同
-   prompt / 同采样设置对照；
-3. **更激进的 CPU/GPU 切分**：把部分层或部分 expert 放在 CPU AVX2 kernel，
+2. **更激进的 CPU/GPU 切分**：把部分层或部分 expert 放在 CPU AVX2 kernel，
    GPU 只算 attention + 热门 expert；
-4. **CUDA Graph / prefill chunk pipeline**：降低 Python/launch 开销，保持确定性；
-5. **更大显存/CPU offload 组合**：GPU cache 已验证可行但 1 GiB 只带来约 2.3%
-   提升；若要继续，需要把 shared/lm_head 移到 CPU 腾出 1.5–2 GiB VRAM。
+3. **CUDA Graph / prefill chunk pipeline**：降低 Python/launch 开销，保持确定性；
+4. **更大显存/CPU offload 组合**：GPU cache 已验证可行但 1 GiB 只带来约 2.3%
+   提升；若要继续，需要把 shared/lm_head 移到 CPU 腾出 1.5–2 GiB VRAM；
+5. **完整 MMLU/GSM8K**：当前 mini suite 已作为 release gate，完整数据集需要
+   更长上下文和数小时评测预算。
 
 ---
 
@@ -1125,7 +1131,54 @@ H2D 进来。
 - GPU cache 路径与无 cache 路径 token IDs 完全一致；
 - 全套测试：**79 passed**。
 
-## 14. 一句话结论
+## 14. 质量回归（mini suite）
+
+完整 MMLU/GSM8K 在 2.6 tok/s 的 native 路径上耗时不可接受，因此先落一个
+可重复的 release gate：
+
+- `docs/quality/deepseek_v2_lite_quality_suite.json`
+  - 4 段 raw text perplexity；
+  - 10 道 MMLU-style 四选一；
+  - 8 道 GSM8K-style 数学应用题；
+  - 5 道多步长链推理。
+- `scripts/eval_deepseek_moe_quality.py`
+  - 同 prompt、同 greedy 采样跑 native；
+  - 可选调用 llama.cpp CPU 的 `llama-cli` + `llama-perplexity`；
+  - 支持 `--skip-llama`、`--limit`、`--no-fused-moe`。
+
+64-token 前的完整 mini suite 结果：
+
+| 指标 | DeepInfer native | llama.cpp CPU |
+|---|---:|---:|
+| MMLU-style | **8/10（80%）** | 8/10（80%） |
+| GSM8K-style | **4/8（50%）** | 2/8（25%） |
+| 长链推理 | **3/5（60%）** | 1/5（20%） |
+| raw-text PPL | 4.97 | 3.19 |
+
+不能把这个表宣传成完整 MMLU/GSM8K。两个 MMLU-style 失败是模型回答冗长、
+在 64-token 内没有给出选项，或者算错 `2^10`；GSM8K-style 的失败多数是模型
+算术错误，llama.cpp 同样错，且 native 在 GSM8K-style / 长链上高于 llama.cpp。
+PPL 的 4.97 vs 3.19 也不是严格同口径：native 是每段文本从 BOS 开始独立打分
+后按 token 加权，llama.cpp 是对拼接语料按 `n_ctx=128` 分 chunk。
+
+质量路径验证：
+
+- fused 与 `--no-fused-moe` 在 3 个代表性 prompt 上 token IDs 完全一致；
+- mini suite 中没有出现 kernel 崩溃、重复 token 或明显语言崩坏；
+- 结果 JSON 保留每个任务的 prompt、response、token IDs 和通过/失败标记，
+  便于下次逐项 diff。
+
+运行：
+
+```powershell
+F:/QwenQLoRA/venv/Scripts/python.exe ^
+  scripts/eval_deepseek_moe_quality.py ^
+  --output docs/results/deepseek_v2_lite_q4km_moe_quality_eval.json
+```
+
+结果文件：`docs/results/deepseek_v2_lite_q4km_moe_quality_eval.json`。
+
+## 15. 一句话结论
 
 这次最重要的不是“4 GB 跑 15.7B”这个标题，而是把 **MoE 的路由、专家流式读取、
 GPU 反量化、pinned H2D、确定性 scatter、MLA attention 和生成循环** 真正接进了

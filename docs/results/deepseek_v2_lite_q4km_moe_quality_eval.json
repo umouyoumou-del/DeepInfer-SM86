@@ -1,0 +1,911 @@
+{
+  "created_at": "2026-10-28 15:28:37",
+  "suite": "D:\\DeepInfer-SM86\\docs\\quality\\deepseek_v2_lite_quality_suite.json",
+  "model": "E:\\DeepInfer-MoE\\models\\DeepSeek-V2-Lite-Chat-GGUF\\DeepSeek-V2-Lite-Chat-Q4_K_M.gguf",
+  "fused_moe": true,
+  "device": "NVIDIA GeForce RTX 3050 Laptop GPU",
+  "native": {
+    "scores": {
+      "mmlu_style": {
+        "correct": 8,
+        "total": 10,
+        "accuracy": 0.8
+      },
+      "gsm8k_style": {
+        "correct": 4,
+        "total": 8,
+        "accuracy": 0.5
+      },
+      "long_chain": {
+        "correct": 3,
+        "total": 5,
+        "accuracy": 0.6
+      }
+    },
+    "perplexity": {
+      "perplexity": 4.969624607693624,
+      "nll": 577.2039500176907,
+      "scored_tokens": 360,
+      "seconds": 19.16311520000454,
+      "per_text": [
+        {
+          "id": "ppl_zh_moe",
+          "tokens": 81,
+          "scored_tokens": 80,
+          "nll": 296.8211135864258,
+          "perplexity": 40.864593505859375
+        },
+        {
+          "id": "ppl_en_math",
+          "tokens": 83,
+          "scored_tokens": 82,
+          "nll": 124.53022980690002,
+          "perplexity": 4.566108703613281
+        },
+        {
+          "id": "ppl_code",
+          "tokens": 96,
+          "scored_tokens": 95,
+          "nll": 36.459970876574516,
+          "perplexity": 1.4678359031677246
+        },
+        {
+          "id": "ppl_zh_reasoning",
+          "tokens": 104,
+          "scored_tokens": 103,
+          "nll": 119.39263574779034,
+          "perplexity": 3.1872286796569824
+        }
+      ]
+    },
+    "tasks": [
+      {
+        "category": "mmlu_style",
+        "id": "mmlu_capital_australia",
+        "prompt": "Answer the following multiple-choice question. Reply with only one letter: A, B, C, or D.\nQuestion: What is the capital city of Australia?\nA. Sydney\nB. Canberra\nC. Melbourne\nD. Perth\nAnswer:",
+        "expected": "b",
+        "response": " B. Canberra",
+        "parsed": "B",
+        "correct": true,
+        "token_ids": [
+          380,
+          13,
+          80177,
+          100001
+        ],
+        "prefill_seconds": 10.917412500013597,
+        "decode_seconds": 1.3917379999766126
+      },
+      {
+        "category": "mmlu_style",
+        "id": "mmlu_gold_symbol",
+        "prompt": "Answer the following multiple-choice question. Reply with only one letter: A, B, C, or D.\nQuestion: Which chemical symbol represents gold?\nA. Ag\nB. Au\nC. Gd\nD. Go\nAnswer:",
+        "expected": "b",
+        "response": " B. Au",
+        "parsed": "B",
+        "correct": true,
+        "token_ids": [
+          380,
+          13,
+          37236,
+          100001
+        ],
+        "prefill_seconds": 2.984937200031709,
+        "decode_seconds": 0.9865244000102393
+      },
+      {
+        "category": "mmlu_style",
+        "id": "mmlu_power_two",
+        "prompt": "Answer the following multiple-choice question. Reply with only one letter: A, B, C, or D.\nQuestion: What is 2 raised to the power of 10?\nA. 512\nB. 1024\nC. 2048\nD. 4096\nAnswer:",
+        "expected": "b",
+        "response": " To solve this problem, we need to calculate 2 raised to the power of 10.\n\n2^10 = 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2\n\nNow, let's calculate",
+        "parsed": null,
+        "correct": false,
+        "token_ids": [
+          2158,
+          8708,
+          437,
+          2066,
+          11,
+          395,
+          933,
+          276,
+          11462,
+          207,
+          17,
+          8473,
+          276,
+          254,
+          1823,
+          280,
+          207,
+          16,
+          15,
+          13,
+          185,
+          185,
+          17,
+          61,
+          16,
+          15,
+          403,
+          207,
+          17,
+          575,
+          207,
+          17,
+          575,
+          207,
+          17,
+          575,
+          207,
+          17,
+          575,
+          207,
+          17,
+          575,
+          207,
+          17,
+          575,
+          207,
+          17,
+          575,
+          207,
+          17,
+          575,
+          207,
+          17,
+          575,
+          207,
+          17,
+          185,
+          185,
+          4388,
+          11,
+          1632,
+          6,
+          82,
+          11462
+        ],
+        "prefill_seconds": 3.7771333000273444,
+        "decode_seconds": 23.147675900021568
+      },
+      {
+        "category": "mmlu_style",
+        "id": "mmlu_planet_largest",
+        "prompt": "Answer the following multiple-choice question. Reply with only one letter: A, B, C, or D.\nQuestion: Which planet in the Solar System has the largest mass?\nA. Earth\nB. Saturn\nC. Jupiter\nD. Neptune\nAnswer:",
+        "expected": "c",
+        "response": " C. Jupiter",
+        "parsed": "C",
+        "correct": true,
+        "token_ids": [
+          339,
+          13,
+          39048,
+          100001
+        ],
+        "prefill_seconds": 3.2001728999894112,
+        "decode_seconds": 0.9855521999998018
+      },
+      {
+        "category": "mmlu_style",
+        "id": "mmlu_photosynthesis",
+        "prompt": "Answer the following multiple-choice question. Reply with only one letter: A, B, C, or D.\nQuestion: Which gas do plants primarily absorb during photosynthesis?\nA. Oxygen\nB. Nitrogen\nC. Carbon dioxide\nD. Hydrogen\nAnswer:",
+        "expected": "c",
+        "response": " C. Carbon dioxide",
+        "parsed": "C",
+        "correct": true,
+        "token_ids": [
+          339,
+          13,
+          32601,
+          54188,
+          100001
+        ],
+        "prefill_seconds": 3.743659999978263,
+        "decode_seconds": 1.3211193999741226
+      },
+      {
+        "category": "mmlu_style",
+        "id": "mmlu_boolean",
+        "prompt": "Answer the following multiple-choice question. Reply with only one letter: A, B, C, or D.\nQuestion: In Python, what is the value of `True and not False`?\nA. True\nB. False\nC. None\nD. Raises an error\nAnswer:",
+        "expected": "a",
+        "response": " A. True",
+        "parsed": "A",
+        "correct": true,
+        "token_ids": [
+          338,
+          13,
+          10491,
+          100001
+        ],
+        "prefill_seconds": 3.8340973000158556,
+        "decode_seconds": 0.9752079999889247
+      },
+      {
+        "category": "mmlu_style",
+        "id": "mmlu_renaissance",
+        "prompt": "Answer the following multiple-choice question. Reply with only one letter: A, B, C, or D.\nQuestion: The Renaissance began in which country?\nA. France\nB. Italy\nC. England\nD. Spain\nAnswer:",
+        "expected": "b",
+        "response": " B. Italy",
+        "parsed": "B",
+        "correct": true,
+        "token_ids": [
+          380,
+          13,
+          13460,
+          100001
+        ],
+        "prefill_seconds": 3.3119968000100926,
+        "decode_seconds": 0.9711862000403926
+      },
+      {
+        "category": "mmlu_style",
+        "id": "mmlu_speed",
+        "prompt": "Answer the following multiple-choice question. Reply with only one letter: A, B, C, or D.\nQuestion: A car travels 120 kilometers in 2 hours. What is its average speed?\nA. 40 km/h\nB. 50 km/h\nC. 60 km/h\nD. 80 km/h\nAnswer:",
+        "expected": "c",
+        "response": " To find the average speed, we need to divide the total distance traveled by the total time taken.\n\nStep 1: Convert the distance from kilometers to meters.\n120 kilometers * 1000 meters/kilometer = 120,000 meters\n\nStep 2",
+        "parsed": null,
+        "correct": false,
+        "token_ids": [
+          2158,
+          1275,
+          254,
+          5137,
+          4583,
+          11,
+          395,
+          933,
+          276,
+          18598,
+          254,
+          3223,
+          5013,
+          32339,
+          457,
+          254,
+          3223,
+          766,
+          3443,
+          13,
+          185,
+          185,
+          11145,
+          207,
+          16,
+          25,
+          23225,
+          254,
+          5013,
+          473,
+          49785,
+          276,
+          21471,
+          13,
+          185,
+          16,
+          17,
+          15,
+          49785,
+          575,
+          207,
+          16,
+          15,
+          15,
+          15,
+          21471,
+          14,
+          69892,
+          17377,
+          403,
+          207,
+          16,
+          17,
+          15,
+          11,
+          15,
+          15,
+          15,
+          21471,
+          185,
+          185,
+          11145,
+          207,
+          17
+        ],
+        "prefill_seconds": 4.215866099984851,
+        "decode_seconds": 21.521155399968848
+      },
+      {
+        "category": "mmlu_style",
+        "id": "mmlu_dna",
+        "prompt": "Answer the following multiple-choice question. Reply with only one letter: A, B, C, or D.\nQuestion: Which molecule stores genetic information in most living cells?\nA. RNA\nB. DNA\nC. ATP\nD. Protein\nAnswer:",
+        "expected": "b",
+        "response": " B. DNA",
+        "parsed": "B",
+        "correct": true,
+        "token_ids": [
+          380,
+          13,
+          22046,
+          100001
+        ],
+        "prefill_seconds": 3.3643684000126086,
+        "decode_seconds": 1.023042299959343
+      },
+      {
+        "category": "mmlu_style",
+        "id": "mmlu_fraction",
+        "prompt": "Answer the following multiple-choice question. Reply with only one letter: A, B, C, or D.\nQuestion: Which fraction is equal to 0.75?\nA. 1/2\nB. 2/3\nC. 3/4\nD. 4/5\nAnswer:",
+        "expected": "c",
+        "response": " C. 3/4",
+        "parsed": "C",
+        "correct": true,
+        "token_ids": [
+          339,
+          13,
+          207,
+          18,
+          14,
+          19,
+          100001
+        ],
+        "prefill_seconds": 4.131653199961875,
+        "decode_seconds": 2.017392400011886
+      },
+      {
+        "category": "gsm8k_style",
+        "id": "gsm_apples",
+        "prompt": "Solve the following multi-step reasoning problem. Reply with only the final answer, no explanation.\nProblem: Maria has 12 apples. She gives 3 apples to her brother and then buys 5 more. How many apples does she have now?\nAnswer:",
+        "expected": "14",
+        "response": " 12 - 3 + 5 = 14",
+        "parsed": "14",
+        "correct": true,
+        "token_ids": [
+          207,
+          16,
+          17,
+          570,
+          207,
+          18,
+          919,
+          207,
+          20,
+          403,
+          207,
+          16,
+          19,
+          100001
+        ],
+        "prefill_seconds": 3.8417100999504328,
+        "decode_seconds": 4.309949800022878
+      },
+      {
+        "category": "gsm8k_style",
+        "id": "gsm_tickets",
+        "prompt": "Solve the following multi-step reasoning problem. Reply with only the final answer, no explanation.\nProblem: A theater sells adult tickets for 8 dollars and child tickets for 5 dollars. If 3 adults and 4 children attend, what is the total ticket cost in dollars?\nAnswer:",
+        "expected": "44",
+        "response": " 38",
+        "parsed": "38",
+        "correct": false,
+        "token_ids": [
+          207,
+          18,
+          23,
+          100001
+        ],
+        "prefill_seconds": 3.830751000030432,
+        "decode_seconds": 1.0230089999968186
+      },
+      {
+        "category": "gsm8k_style",
+        "id": "gsm_train",
+        "prompt": "Solve the following multi-step reasoning problem. Reply with only the final answer, no explanation.\nProblem: A train travels 60 kilometers per hour for 3 hours and then 80 kilometers per hour for 2 hours. How many kilometers does it travel in total?\nAnswer:",
+        "expected": "340",
+        "response": " 360",
+        "parsed": "360",
+        "correct": false,
+        "token_ids": [
+          207,
+          18,
+          21,
+          15,
+          100001
+        ],
+        "prefill_seconds": 4.20693799998844,
+        "decode_seconds": 1.341793500003405
+      },
+      {
+        "category": "gsm8k_style",
+        "id": "gsm_work",
+        "prompt": "Solve the following multi-step reasoning problem. Reply with only the final answer, no explanation.\nProblem: Tom can paint a fence in 6 hours. Jerry can paint the same fence in 3 hours. If they work together, how many hours will they take?\nAnswer:",
+        "expected": "2",
+        "response": " 2",
+        "parsed": "2",
+        "correct": true,
+        "token_ids": [
+          207,
+          17,
+          100001
+        ],
+        "prefill_seconds": 4.090916899964213,
+        "decode_seconds": 0.6759997000335716
+      },
+      {
+        "category": "gsm8k_style",
+        "id": "gsm_discount",
+        "prompt": "Solve the following multi-step reasoning problem. Reply with only the final answer, no explanation.\nProblem: A jacket costs 80 dollars. It is discounted by 25 percent. What is the sale price in dollars?\nAnswer:",
+        "expected": "60",
+        "response": " 60",
+        "parsed": "60",
+        "correct": true,
+        "token_ids": [
+          207,
+          21,
+          15,
+          100001
+        ],
+        "prefill_seconds": 4.09591430000728,
+        "decode_seconds": 1.0144694999908097
+      },
+      {
+        "category": "gsm8k_style",
+        "id": "gsm_age",
+        "prompt": "Solve the following multi-step reasoning problem. Reply with only the final answer, no explanation.\nProblem: Alice is 12 years old. Her father is 3 times as old as Alice. How old was her father when Alice was born?\nAnswer:",
+        "expected": "24",
+        "response": " 12 years",
+        "parsed": "12",
+        "correct": false,
+        "token_ids": [
+          207,
+          16,
+          17,
+          1555,
+          100001
+        ],
+        "prefill_seconds": 4.0459168999805115,
+        "decode_seconds": 1.3609690999728628
+      },
+      {
+        "category": "gsm8k_style",
+        "id": "gsm_sequence",
+        "prompt": "Solve the following multi-step reasoning problem. Reply with only the final answer, no explanation.\nProblem: What is the sum of the first 10 positive even integers?\nAnswer:",
+        "expected": "110",
+        "response": " 110",
+        "parsed": "110",
+        "correct": true,
+        "token_ids": [
+          207,
+          16,
+          16,
+          15,
+          100001
+        ],
+        "prefill_seconds": 3.7002823000075296,
+        "decode_seconds": 1.33839910000097
+      },
+      {
+        "category": "gsm8k_style",
+        "id": "gsm_water",
+        "prompt": "Solve the following multi-step reasoning problem. Reply with only the final answer, no explanation.\nProblem: A tank holds 240 liters of water. If 3/8 of the tank is emptied, how many liters remain?\nAnswer:",
+        "expected": "150",
+        "response": " 180",
+        "parsed": "180",
+        "correct": false,
+        "token_ids": [
+          207,
+          16,
+          23,
+          15,
+          100001
+        ],
+        "prefill_seconds": 4.033603499992751,
+        "decode_seconds": 1.3437300000223331
+      },
+      {
+        "category": "long_chain",
+        "id": "long_chain_1",
+        "prompt": "Solve the following multi-step reasoning problem. Reply with only the final answer, no explanation.\nProblem: Start with 17. Add 8, multiply the result by 3, subtract 15, and then divide by 6. What is the final integer result?\nAnswer:",
+        "expected": "10",
+        "response": " 10",
+        "parsed": "10",
+        "correct": true,
+        "token_ids": [
+          207,
+          16,
+          15,
+          100001
+        ],
+        "prefill_seconds": 3.991850499995053,
+        "decode_seconds": 1.0038536999491043
+      },
+      {
+        "category": "long_chain",
+        "id": "long_chain_2",
+        "prompt": "Solve the following multi-step reasoning problem. Reply with only the final answer, no explanation.\nProblem: A box contains red, blue, and green balls. There are twice as many red balls as blue balls, and 3 more green balls than red balls. If there are 5 blue balls, how many balls are in the box in total?\nAnswer:",
+        "expected": "28",
+        "response": " 15",
+        "parsed": "15",
+        "correct": false,
+        "token_ids": [
+          207,
+          16,
+          20,
+          100001
+        ],
+        "prefill_seconds": 4.374418699997477,
+        "decode_seconds": 1.0025375000550412
+      },
+      {
+        "category": "long_chain",
+        "id": "long_chain_3",
+        "prompt": "Solve the following multi-step reasoning problem. Reply with only the final answer, no explanation.\nProblem: Find the next number in the sequence: 2, 6, 12, 20, 30, ?. The pattern is n multiplied by n+1 for n = 1, 2, 3, ...\nAnswer:",
+        "expected": "42",
+        "response": " 42",
+        "parsed": "42",
+        "correct": true,
+        "token_ids": [
+          207,
+          19,
+          17,
+          100001
+        ],
+        "prefill_seconds": 4.271105899999384,
+        "decode_seconds": 1.0256821000366472
+      },
+      {
+        "category": "long_chain",
+        "id": "long_chain_4",
+        "prompt": "Solve the following multi-step reasoning problem. Reply with only the final answer, no explanation.\nProblem: A farmer has chickens and rabbits. There are 20 heads and 56 legs. How many rabbits are there?\nAnswer:",
+        "expected": "8",
+        "response": " 12",
+        "parsed": "12",
+        "correct": false,
+        "token_ids": [
+          207,
+          16,
+          17,
+          100001
+        ],
+        "prefill_seconds": 3.9794880999834277,
+        "decode_seconds": 0.9913437999784946
+      },
+      {
+        "category": "long_chain",
+        "id": "long_chain_5",
+        "prompt": "Solve the following multi-step reasoning problem. Reply with only the final answer, no explanation.\nProblem: If it takes 4 machines 4 minutes to make 4 widgets, how many minutes does it take 8 machines to make 8 widgets at the same rate?\nAnswer:",
+        "expected": "4",
+        "response": " 4",
+        "parsed": "4",
+        "correct": true,
+        "token_ids": [
+          207,
+          19,
+          100001
+        ],
+        "prefill_seconds": 4.171529799990822,
+        "decode_seconds": 0.6803099000244401
+      }
+    ]
+  },
+  "llama_cpp": {
+    "scores": {
+      "mmlu_style": {
+        "correct": 8,
+        "total": 10,
+        "accuracy": 0.8
+      },
+      "gsm8k_style": {
+        "correct": 2,
+        "total": 8,
+        "accuracy": 0.25
+      },
+      "long_chain": {
+        "correct": 1,
+        "total": 5,
+        "accuracy": 0.2
+      }
+    },
+    "perplexity": {
+      "perplexity": 3.1887,
+      "returncode": 0,
+      "raw_tail": "0.02 minutes\r\n[1]8.8075,[2]3.1887,\r\n\r\n\n0.08.720.662 W llama_context: setting new yarn_attn_factor = 1.0000 (mscale == 0.7, mscale_all_dim = 0.7)\r\n0.08.720.680 W llama_context: n_ctx is not divisible by n_seq_max - rounding down to 4096\r\n0.09.341.684 I cmn          init: llama threadpool init, n_threads = 6\r\n0.09.360.515 I \r\n0.09.374.691 I system_info: n_threads = 6 (n_threads_batch = 6) / 12 | CPU : SSE3 = 1 | SSSE3 = 1 | AVX = 1 | AVX2 = 1 | F16C = 1 | FMA = 1 | BMI2 = 1 | LLAMAFILE = 1 | OPENMP = 1 | REPACK = 1 | \r\n0.09.375.099 I perplexity: tokenizing the input ..\r\n0.09.410.976 I perplexity: tokenization took 35.87 ms\r\n0.09.411.725 I perplexity: calculating perplexity over 2 chunks, n_ctx=128, batch_size=2048, n_seq=16\r\n0.18.372.383 I perplexity: 8.96 seconds per pass - ETA 0.18.415.627 I Final estimate: PPL = 3.1887 +/- 0.74096\r\n"
+    },
+    "tasks": [
+      {
+        "category": "mmlu_style",
+        "id": "mmlu_capital_australia",
+        "expected": "b",
+        "answer_kind": "choice",
+        "response": "B. Canberra",
+        "parsed": "B",
+        "correct": true
+      },
+      {
+        "category": "mmlu_style",
+        "id": "mmlu_gold_symbol",
+        "expected": "b",
+        "answer_kind": "choice",
+        "response": "B. Au",
+        "parsed": "B",
+        "correct": true
+      },
+      {
+        "category": "mmlu_style",
+        "id": "mmlu_power_two",
+        "expected": "b",
+        "answer_kind": "choice",
+        "response": "C. 2048",
+        "parsed": "C",
+        "correct": false
+      },
+      {
+        "category": "mmlu_style",
+        "id": "mmlu_planet_largest",
+        "expected": "c",
+        "answer_kind": "choice",
+        "response": "C. Jupiter",
+        "parsed": "C",
+        "correct": true
+      },
+      {
+        "category": "mmlu_style",
+        "id": "mmlu_photosynthesis",
+        "expected": "c",
+        "answer_kind": "choice",
+        "response": "C. Carbon dioxide",
+        "parsed": "C",
+        "correct": true
+      },
+      {
+        "category": "mmlu_style",
+        "id": "mmlu_boolean",
+        "expected": "a",
+        "answer_kind": "choice",
+        "response": "A. True",
+        "parsed": "A",
+        "correct": true
+      },
+      {
+        "category": "mmlu_style",
+        "id": "mmlu_renaissance",
+        "expected": "b",
+        "answer_kind": "choice",
+        "response": "B. Italy",
+        "parsed": "B",
+        "correct": true
+      },
+      {
+        "category": "mmlu_style",
+        "id": "mmlu_speed",
+        "expected": "c",
+        "answer_kind": "choice",
+        "response": "To find the average speed, we need to use the formula:\r\n\r\nAverage Speed = Total Distance / Total Time\r\n\r\nIn this case, the total distance is 120 kilometers and the total time is 2 hours.\r\n\r\nAverage Speed = 120 km / 2 h = 6",
+        "parsed": null,
+        "correct": false
+      },
+      {
+        "category": "mmlu_style",
+        "id": "mmlu_dna",
+        "expected": "b",
+        "answer_kind": "choice",
+        "response": "B. DNA",
+        "parsed": "B",
+        "correct": true
+      },
+      {
+        "category": "mmlu_style",
+        "id": "mmlu_fraction",
+        "expected": "c",
+        "answer_kind": "choice",
+        "response": "C. 3/4",
+        "parsed": "C",
+        "correct": true
+      },
+      {
+        "category": "gsm8k_style",
+        "id": "gsm_apples",
+        "expected": "14",
+        "answer_kind": "number",
+        "response": "12 - 3 + 5 = 14",
+        "parsed": "14",
+        "correct": true
+      },
+      {
+        "category": "gsm8k_style",
+        "id": "gsm_tickets",
+        "expected": "44",
+        "answer_kind": "number",
+        "response": "38",
+        "parsed": "38",
+        "correct": false
+      },
+      {
+        "category": "gsm8k_style",
+        "id": "gsm_train",
+        "expected": "340",
+        "answer_kind": "number",
+        "response": "360",
+        "parsed": "360",
+        "correct": false
+      },
+      {
+        "category": "gsm8k_style",
+        "id": "gsm_work",
+        "expected": "2",
+        "answer_kind": "number",
+        "response": "3",
+        "parsed": "3",
+        "correct": false
+      },
+      {
+        "category": "gsm8k_style",
+        "id": "gsm_discount",
+        "expected": "60",
+        "answer_kind": "number",
+        "response": "60",
+        "parsed": "60",
+        "correct": true
+      },
+      {
+        "category": "gsm8k_style",
+        "id": "gsm_age",
+        "expected": "24",
+        "answer_kind": "number",
+        "response": "9",
+        "parsed": "9",
+        "correct": false
+      },
+      {
+        "category": "gsm8k_style",
+        "id": "gsm_sequence",
+        "expected": "110",
+        "answer_kind": "number",
+        "response": "200",
+        "parsed": "200",
+        "correct": false
+      },
+      {
+        "category": "gsm8k_style",
+        "id": "gsm_water",
+        "expected": "150",
+        "answer_kind": "number",
+        "response": "180",
+        "parsed": "180",
+        "correct": false
+      },
+      {
+        "category": "long_chain",
+        "id": "long_chain_1",
+        "expected": "10",
+        "answer_kind": "number",
+        "response": "10",
+        "parsed": "10",
+        "correct": true
+      },
+      {
+        "category": "long_chain",
+        "id": "long_chain_2",
+        "expected": "28",
+        "answer_kind": "number",
+        "response": "15",
+        "parsed": "15",
+        "correct": false
+      },
+      {
+        "category": "long_chain",
+        "id": "long_chain_3",
+        "expected": "42",
+        "answer_kind": "number",
+        "response": "52",
+        "parsed": "52",
+        "correct": false
+      },
+      {
+        "category": "long_chain",
+        "id": "long_chain_4",
+        "expected": "8",
+        "answer_kind": "number",
+        "response": "4",
+        "parsed": "4",
+        "correct": false
+      },
+      {
+        "category": "long_chain",
+        "id": "long_chain_5",
+        "expected": "4",
+        "answer_kind": "number",
+        "response": "2 minutes",
+        "parsed": "2",
+        "correct": false
+      }
+    ]
+  },
+  "load_seconds": 19.796138099976815,
+  "fallback_parity": [
+    {
+      "id": "mmlu_capital_australia",
+      "category": "mmlu_style",
+      "fused_token_ids": [
+        380,
+        13,
+        80177,
+        100001
+      ],
+      "fallback_token_ids": [
+        380,
+        13,
+        80177,
+        100001
+      ],
+      "token_ids_equal": true,
+      "text_equal": true
+    },
+    {
+      "id": "gsm_apples",
+      "category": "gsm8k_style",
+      "fused_token_ids": [
+        207,
+        16,
+        17,
+        570,
+        207,
+        18,
+        919,
+        207,
+        20,
+        403,
+        207,
+        16,
+        19,
+        100001
+      ],
+      "fallback_token_ids": [
+        207,
+        16,
+        17,
+        570,
+        207,
+        18,
+        919,
+        207,
+        20,
+        403,
+        207,
+        16,
+        19,
+        100001
+      ],
+      "token_ids_equal": true,
+      "text_equal": true
+    },
+    {
+      "id": "long_chain_1",
+      "category": "long_chain",
+      "fused_token_ids": [
+        207,
+        16,
+        15,
+        100001
+      ],
+      "fallback_token_ids": [
+        207,
+        16,
+        15,
+        100001
+      ],
+      "token_ids_equal": true,
+      "text_equal": true
+    }
+  ],
+  "methodology": {
+    "warning": "This is a small release-gate suite, not full MMLU or GSM8K.",
+    "mmlu_style": "10 hand-written 4-choice questions; prompt asks for one letter.",
+    "gsm8k_style": "8 hand-written GSM8K-style word problems; prompt asks for final numeric answer.",
+    "long_chain": "5 hand-written multi-step arithmetic/logic problems.",
+    "perplexity_native": "aggregate of per-text BOS-prefixed raw-text NLL; each text scored from scratch.",
+    "perplexity_llama": "llama-perplexity on the concatenated suite corpus, n_ctx=128, all chunks; tokenization/context boundaries differ from native.",
+    "sampling": "greedy temperature=0, top_k=0, top_p=1; native max_new_tokens MMLU=64, GSM8K=32, long-chain=32; llama.cpp -n 64.",
+    "fallback_parity": "fused vs dequant+bmm token IDs on the first item of each category."
+  }
+}

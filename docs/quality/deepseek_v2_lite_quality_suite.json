@@ -1,0 +1,203 @@
+{
+  "name": "deepseek_v2_lite_chat_q4km_quality_suite_v1",
+  "description": "Small, auditable quality regression suite: raw-text perplexity, MMLU-style multiple choice, GSM8K-style arithmetic word problems, and multi-step reasoning. This is not the full MMLU/GSM8K benchmark; it is a fast release gate that uses the same Q4_K_M GGUF and greedy sampling as llama.cpp.",
+  "perplexity_texts": [
+    {
+      "id": "ppl_zh_moe",
+      "text": "混合专家模型（MoE）是一种通过多个专家网络提高模型容量的架构。路由器会根据每个 token 的表示选择少数专家，只激活其中一部分参数，因此可以在增加总参数量的同时控制单次计算成本。DeepSeek-V2-Lite 使用 64 个路由专家、top-6 路由和 2 个共享专家。"
+    },
+    {
+      "id": "ppl_en_math",
+      "text": "A train leaves a station at 9:15 in the morning and travels at 60 kilometers per hour. Another train leaves the same station at 10:00 and travels at 80 kilometers per hour in the same direction. The second train catches the first train after traveling for 1 hour and 30 minutes. The station is located in a small town near the coast."
+    },
+    {
+      "id": "ppl_code",
+      "text": "def binary_search(values, target):\n    low = 0\n    high = len(values) - 1\n    while low <= high:\n        middle = (low + high) // 2\n        if values[middle] == target:\n            return middle\n        if values[middle] < target:\n            low = middle + 1\n        else:\n            high = middle - 1\n    return -1\n"
+    },
+    {
+      "id": "ppl_zh_reasoning",
+      "text": "要判断一个整数是否能被 3 整除，可以把它的各位数字相加，如果得到的和能被 3 整除，那么这个整数也能被 3 整除。例如 12345 的各位数字之和是 15，15 能被 3 整除，所以 12345 能被 3 整除。这个规则来自十进制表示与模运算的性质。"
+    }
+  ],
+  "mmlu_style": [
+    {
+      "id": "mmlu_capital_australia",
+      "question": "What is the capital city of Australia?",
+      "choices": [
+        "Sydney",
+        "Canberra",
+        "Melbourne",
+        "Perth"
+      ],
+      "answer": "B"
+    },
+    {
+      "id": "mmlu_gold_symbol",
+      "question": "Which chemical symbol represents gold?",
+      "choices": [
+        "Ag",
+        "Au",
+        "Gd",
+        "Go"
+      ],
+      "answer": "B"
+    },
+    {
+      "id": "mmlu_power_two",
+      "question": "What is 2 raised to the power of 10?",
+      "choices": [
+        "512",
+        "1024",
+        "2048",
+        "4096"
+      ],
+      "answer": "B"
+    },
+    {
+      "id": "mmlu_planet_largest",
+      "question": "Which planet in the Solar System has the largest mass?",
+      "choices": [
+        "Earth",
+        "Saturn",
+        "Jupiter",
+        "Neptune"
+      ],
+      "answer": "C"
+    },
+    {
+      "id": "mmlu_photosynthesis",
+      "question": "Which gas do plants primarily absorb during photosynthesis?",
+      "choices": [
+        "Oxygen",
+        "Nitrogen",
+        "Carbon dioxide",
+        "Hydrogen"
+      ],
+      "answer": "C"
+    },
+    {
+      "id": "mmlu_boolean",
+      "question": "In Python, what is the value of `True and not False`?",
+      "choices": [
+        "True",
+        "False",
+        "None",
+        "Raises an error"
+      ],
+      "answer": "A"
+    },
+    {
+      "id": "mmlu_renaissance",
+      "question": "The Renaissance began in which country?",
+      "choices": [
+        "France",
+        "Italy",
+        "England",
+        "Spain"
+      ],
+      "answer": "B"
+    },
+    {
+      "id": "mmlu_speed",
+      "question": "A car travels 120 kilometers in 2 hours. What is its average speed?",
+      "choices": [
+        "40 km/h",
+        "50 km/h",
+        "60 km/h",
+        "80 km/h"
+      ],
+      "answer": "C"
+    },
+    {
+      "id": "mmlu_dna",
+      "question": "Which molecule stores genetic information in most living cells?",
+      "choices": [
+        "RNA",
+        "DNA",
+        "ATP",
+        "Protein"
+      ],
+      "answer": "B"
+    },
+    {
+      "id": "mmlu_fraction",
+      "question": "Which fraction is equal to 0.75?",
+      "choices": [
+        "1/2",
+        "2/3",
+        "3/4",
+        "4/5"
+      ],
+      "answer": "C"
+    }
+  ],
+  "gsm8k_style": [
+    {
+      "id": "gsm_apples",
+      "question": "Maria has 12 apples. She gives 3 apples to her brother and then buys 5 more. How many apples does she have now?",
+      "answer": "14"
+    },
+    {
+      "id": "gsm_tickets",
+      "question": "A theater sells adult tickets for 8 dollars and child tickets for 5 dollars. If 3 adults and 4 children attend, what is the total ticket cost in dollars?",
+      "answer": "44"
+    },
+    {
+      "id": "gsm_train",
+      "question": "A train travels 60 kilometers per hour for 3 hours and then 80 kilometers per hour for 2 hours. How many kilometers does it travel in total?",
+      "answer": "340"
+    },
+    {
+      "id": "gsm_work",
+      "question": "Tom can paint a fence in 6 hours. Jerry can paint the same fence in 3 hours. If they work together, how many hours will they take?",
+      "answer": "2"
+    },
+    {
+      "id": "gsm_discount",
+      "question": "A jacket costs 80 dollars. It is discounted by 25 percent. What is the sale price in dollars?",
+      "answer": "60"
+    },
+    {
+      "id": "gsm_age",
+      "question": "Alice is 12 years old. Her father is 3 times as old as Alice. How old was her father when Alice was born?",
+      "answer": "24"
+    },
+    {
+      "id": "gsm_sequence",
+      "question": "What is the sum of the first 10 positive even integers?",
+      "answer": "110"
+    },
+    {
+      "id": "gsm_water",
+      "question": "A tank holds 240 liters of water. If 3/8 of the tank is emptied, how many liters remain?",
+      "answer": "150"
+    }
+  ],
+  "long_chain": [
+    {
+      "id": "long_chain_1",
+      "question": "Start with 17. Add 8, multiply the result by 3, subtract 15, and then divide by 6. What is the final integer result?",
+      "answer": "10"
+    },
+    {
+      "id": "long_chain_2",
+      "question": "A box contains red, blue, and green balls. There are twice as many red balls as blue balls, and 3 more green balls than red balls. If there are 5 blue balls, how many balls are in the box in total?",
+      "answer": "28"
+    },
+    {
+      "id": "long_chain_3",
+      "question": "Find the next number in the sequence: 2, 6, 12, 20, 30, ?. The pattern is n multiplied by n+1 for n = 1, 2, 3, ...",
+      "answer": "42"
+    },
+    {
+      "id": "long_chain_4",
+      "question": "A farmer has chickens and rabbits. There are 20 heads and 56 legs. How many rabbits are there?",
+      "answer": "8"
+    },
+    {
+      "id": "long_chain_5",
+      "question": "If it takes 4 machines 4 minutes to make 4 widgets, how many minutes does it take 8 machines to make 8 widgets at the same rate?",
+      "answer": "4"
+    }
+  ]
+}

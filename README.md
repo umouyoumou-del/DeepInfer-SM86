@@ -23,7 +23,9 @@ engine。当前重点是：
 - expert staging 使用双 pinned slot + per-slot down copy stream；
 - 可选 packed expert LRU cache（`--expert-cache-mb`，默认 0）；
 - 可选 GPU packed expert cache + pointer-array grouped kernel
-  （`--gpu-expert-cache-mb`，默认 0）。
+  （`--gpu-expert-cache-mb`，默认 0）；
+- 新增 mini 质量回归 suite：perplexity、MMLU-style、GSM8K-style、长链推理，
+  并支持与 llama.cpp 同 prompt / 同 greedy 采样对照。
 - 同一 runtime 支持 `first_k_dense_replace`、`moe_layer_freq`、dense-only
   层布局，dense MLP 可按显存自动放 GPU 或回退到 CPU FP32。
 
@@ -294,6 +296,7 @@ RTX 3050 Laptop 4 GB + 16 GB RAM，DeepSeek-V2-Lite Q4_K_M：
 | 质量抽检 | MoE 解释、首都、翻译、`5-2=3`、`9.9 > 9.11` 均正确；grouped/per-expert/回退 token IDs 一致 |
 | 可选 expert cache | 512 MB 时约 11% hit，但长生成 1.61 t/s，默认关闭 |
 | 可选 GPU expert cache | 1 GiB 时 hit 24.8%，长生成 2.69 t/s，peak 3.20 GiB；默认关闭 |
+| mini 质量回归 | MMLU-style 8/10、GSM8K-style 4/8、长链 3/5；llama.cpp 为 8/10、2/8、1/5 |
 
 同一份 Q4_K_M 的 llama.cpp CPU 基线约 9–13 tokens/s；本实现的重点是 native
 MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比绝对速度。
@@ -310,7 +313,8 @@ MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比�
   `docs/results/deepseek_v2_lite_q4km_moe_sm86.json`（fused）、
   `docs/results/deepseek_v2_lite_q4km_moe_dequant_bmm_sm86.json`（回退基线）、
   `docs/results/deepseek_v2_lite_q4km_moe_fused_vs_dequant.json`（fused vs 回退）、
-  `docs/results/deepseek_v2_lite_q4km_moe_grouped_vs_per_expert.json`（grouped vs per-expert）；
+  `docs/results/deepseek_v2_lite_q4km_moe_grouped_vs_per_expert.json`（grouped vs per-expert）、
+  `docs/results/deepseek_v2_lite_q4km_moe_quality_eval.json`（质量回归）；
 - 已知边界：
   - 单请求，未接入 paged scheduler / continuous batching；
   - MLA 是 eager/reference attention，不是 FlashMLA；
@@ -320,6 +324,46 @@ MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比�
   - dense/hybrid 路径有单元测试，但本机没有 dense-only DeepSeek GGUF 做
     端到端 benchmark；
   - Q4_K_M 有损，不能宣传成 BF16 等价。
+
+### 6. 质量回归（mini suite）
+
+新增 `scripts/eval_deepseek_moe_quality.py` 和
+`docs/quality/deepseek_v2_lite_quality_suite.json`。这不是完整 MMLU/GSM8K，
+而是一个可重复的快速 release gate：
+
+- 4 段 raw text 的 next-token perplexity；
+- 10 道 MMLU-style 四选一；
+- 8 道 GSM8K-style 数学应用题；
+- 5 道多步长链推理；
+- 同 prompt、同 greedy 采样（temperature=0 / top-k=0 / top-p=1）跑
+  `llama.cpp` CPU 对照；
+- 支持 `--skip-llama`、`--limit`、`--no-fused-moe`。
+
+| 指标 | DeepInfer native | llama.cpp CPU |
+|---|---:|---:|
+| MMLU-style | **8/10（80%）** | 8/10（80%） |
+| GSM8K-style | **4/8（50%）** | 2/8（25%） |
+| 长链推理 | **3/5（60%）** | 1/5（20%） |
+| raw-text PPL | 4.97 | 3.19 |
+
+PPL 不是严格同口径：native 是每段文本从 BOS 开始独立打分后按 token 加权，
+llama.cpp 是 `llama-perplexity` 对拼接语料按 `n_ctx=128` 分 chunk；tokenizer/
+context boundary 不同，不能把这个差值直接解释为模型质量差。MMLU/GSM8K 也只是
+mini suite，不是官方完整数据集。
+
+质量路径验证：
+
+- fused 与 `--no-fused-moe` 在 3 个代表性 prompt 上 token IDs 完全一致；
+- native 在 GSM8K-style 和长链上高于同 prompt 的 llama.cpp；
+- 两个 MMLU-style 失败是模型输出冗长/算术错误，不是 kernel 崩溃或重复 token。
+
+运行：
+
+```powershell
+F:/QwenQLoRA/venv/Scripts/python.exe ^
+  scripts/eval_deepseek_moe_quality.py ^
+  --output docs/results/deepseek_v2_lite_q4km_moe_quality_eval.json
+```
 
 ## 上一轮更新（2026-10-27）
 
