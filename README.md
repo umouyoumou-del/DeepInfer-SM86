@@ -16,7 +16,7 @@ engine。当前重点是：
 - Qwen2 / Llama / Mistral / Gemma / Gemma2 dense 架构适配；
 - 4 GB 显存下的混合精度（Q4/Q3）与整体 Q4 实验数据；
 - DeepSeek-V2-Lite Q4_K_M 的 GGUF routed-expert 流式 MoE、MLA reference
-  路径与 CPU/GPU 混合 offload（单请求，2.56–3.05 tokens/s 稳态）；
+  路径与 CPU/GPU 混合 offload（单请求 2.56–3.05 tokens/s，paged batch 已可运行）；
 - fused Q4_K/Q5_0/Q8_0 MoE GEMV/GEMM 默认开启，直接消费 packed expert rows，
   去掉 FP16 expert 权重 materialize；grouped 版把 decode 每层 12 次 expert
   launch 合并为 2 次；`--no-fused-moe` 可回退 dequant+bmm；
@@ -25,7 +25,9 @@ engine。当前重点是：
 - 可选 GPU packed expert cache + pointer-array grouped kernel
   （`--gpu-expert-cache-mb`，默认 0）；
 - 新增 mini 质量回归 suite：perplexity、MMLU-style、GSM8K-style、长链推理，
-  并支持与 llama.cpp 同 prompt / 同 greedy 采样对照。
+  并支持与 llama.cpp 同 prompt / 同 greedy 采样对照；
+- DeepSeek MoE 已接入现有 paged scheduler：chunked prefill、batched decode、
+  block-level KV 预算、prefix cache 和 CPU KV offload 接口。
 - 同一 runtime 支持 `first_k_dense_replace`、`moe_layer_freq`、dense-only
   层布局，dense MLP 可按显存自动放 GPU 或回退到 CPU FP32。
 
@@ -297,6 +299,7 @@ RTX 3050 Laptop 4 GB + 16 GB RAM，DeepSeek-V2-Lite Q4_K_M：
 | 可选 expert cache | 512 MB 时约 11% hit，但长生成 1.61 t/s，默认关闭 |
 | 可选 GPU expert cache | 1 GiB 时 hit 24.8%，长生成 2.69 t/s，peak 3.20 GiB；默认关闭 |
 | mini 质量回归 | MMLU-style 8/10、GSM8K-style 4/8、长链 3/5；llama.cpp 为 8/10、2/8、1/5 |
+| paged scheduler | 2 请求 batched decode；prefix cache 复用 16 token；token IDs 与单请求一致 |
 
 同一份 Q4_K_M 的 llama.cpp CPU 基线约 9–13 tokens/s；本实现的重点是 native
 MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比绝对速度。
@@ -306,7 +309,7 @@ MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比�
 - `tests/moe/` 新增 GGUF 索引、截断拒绝、expert slice、Q4_K/Q5_0/Q8_0
   GPU 反量化、dense/MoE 层布局、CPU MLP fallback、per-expert fused 和
   grouped MoE kernel 对照测试；
-- 全套测试：**79 passed**；
+- 全套测试：**80 passed**；
 - 新增文章：
   `docs/ARTICLE_9_DEEPSEEK_V2_LITE_MOE_CPU_GPU_OFFLOAD.md`；
 - 结构化结果：
@@ -314,9 +317,11 @@ MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比�
   `docs/results/deepseek_v2_lite_q4km_moe_dequant_bmm_sm86.json`（回退基线）、
   `docs/results/deepseek_v2_lite_q4km_moe_fused_vs_dequant.json`（fused vs 回退）、
   `docs/results/deepseek_v2_lite_q4km_moe_grouped_vs_per_expert.json`（grouped vs per-expert）、
-  `docs/results/deepseek_v2_lite_q4km_moe_quality_eval.json`（质量回归）；
+  `docs/results/deepseek_v2_lite_q4km_moe_quality_eval.json`（质量回归）、
+  `docs/results/deepseek_v2_lite_q4km_moe_paged_scheduler.json`（paged scheduler）；
 - 已知边界：
-  - 单请求，未接入 paged scheduler / continuous batching；
+  - paged scheduler 已接入 chunked prefill / batched decode / KV 预算，但
+    DeepSeek 暂不支持 prefill/decode stream overlap；
   - MLA 是 eager/reference attention，不是 FlashMLA；
   - grouped GEMV/GEMM 是 block-per-row 的 2D-grid 实现；它把 decode launch
     降到 52/token，但 wall time 仍主要受 packed expert 读取和 H2D 限制；
@@ -363,6 +368,51 @@ mini suite，不是官方完整数据集。
 F:/QwenQLoRA/venv/Scripts/python.exe ^
   scripts/eval_deepseek_moe_quality.py ^
   --output docs/results/deepseek_v2_lite_q4km_moe_quality_eval.json
+```
+
+### 7. Paged scheduler 接入
+
+DeepSeek-V2-Lite 已接到现有 `apps/paged_scheduler.py`：
+
+- chunked prefill（`prefill_chunk_tokens=8`）；
+- batched decode（`max_num_seqs=2`，实测 max decode batch = 2）；
+- block-level KV allocator / KV 预算；
+- prefix cache；
+- CPU KV offload 接口保留。
+
+新增 `deepinfer/moe/paged_adapter.py`：
+
+- 把 DeepSeek MLA 的 K/V 写入通用 paged pool；
+- 适配 MLA 的 `qk_nope + qk_rope = 192` 与 `v_head_dim = 128` 不同维度；
+- 更新时 materialize 当前 batch 的 dense K/V，交给未修改的官方 eager
+  attention 计算。
+
+这不是 FlashMLA：当前是“paged 存储 + dense attention materialize”的兼容桥，
+不是原生 paged attention kernel。
+
+实测（2 请求、chunked prefill 8、prefix cache）：
+
+| 指标 | 结果 |
+|---|---:|
+| 2 请求 token IDs 与单请求 baseline | **完全一致** |
+| max decode batch | **2** |
+| prefix cache 复用 | **16 token** |
+| prefix 后 token IDs | **完全一致** |
+| KV pool | 20 blocks，约 106 MB |
+| prefill/decode stream overlap | 关闭 |
+
+DeepSeek 的 expert staging 共用 pinned buffer/copy stream，两个 forward 在
+不同 CUDA stream 上并发会破坏 expert 数据，因此 scheduler 通过
+`runtime.supports_prefill_decode_overlap=False` 自动关闭 stream overlap；
+decode batching 本身仍然工作，只是调度周期内串行执行 prefill/decode。
+
+运行：
+
+```powershell
+F:/QwenQLoRA/venv/Scripts/python.exe ^
+  scripts/smoke_deepseek_v2_lite_moe_paged.py ^
+  --enable-prefill-decode-overlap --prefix-reuse ^
+  --output docs/results/deepseek_v2_lite_q4km_moe_paged_scheduler.json
 ```
 
 ## 上一轮更新（2026-10-27）
@@ -530,7 +580,7 @@ lm_head           : 3-bit, group 128
 | KV FP8 paged cache | ✅ | E4M3/E5M2，native paged decode，无 scale sidecar |
 | CPU cold-block offload | ✅ | 请求级 used-block swap，pinned CPU payload |
 | Prometheus / health | ✅ | block/prefix/queue/prefill/decode/swap 指标 |
-| DeepSeek-V2-Lite MoE | ✅ | Q4_K_M routed-expert 流式执行、fused GEMV/GEMM、CPU/GPU offload；单请求 |
+| DeepSeek-V2-Lite MoE | ✅ | Q4_K_M routed-expert 流式执行、fused GEMV/GEMM、CPU/GPU offload；paged scheduler batched decode |
 | Fused MoE GEMV/GEMM | ✅ | Q4_K/Q5_0/Q8_0 直接消费 packed rows；`--no-fused-moe` 回退 |
 | DeepSeek-V2 dense / hybrid layers | ✅ | `first_k_dense_replace` / `moe_layer_freq` / dense-only；dense MLP 自动 GPU/CPU |
 | DeepSeek-V2 MLA | ✅ | eager/reference attention + DynamicCache；不是 FlashMLA |
@@ -564,6 +614,7 @@ deepinfer/
   moe/fused_moe.py                      per-expert fused Q4_K/Q5_0/Q8_0 GEMV/GEMM
   moe/grouped_moe.py                    grouped multi-expert fused GEMV/GEMM
   moe/ptr_grouped_moe.py                pointer-array grouped GEMV/GEMM
+  moe/paged_adapter.py                  MLA K/V -> generic paged KV pool adapter
   moe/layout.py                         dense / MoE / hybrid 层布局判定
   moe/deepseek_v2_runtime.py            DeepSeek-V2-Lite MoE/MLA 流式执行与 offload
   engine/kv_cache.py                    block allocator、paged FP16/INT8/FP8、CPU payload
@@ -638,6 +689,7 @@ tests/
   moe/test_fused_moe.py                 per-expert fused GEMV/GEMM 对照
   moe/test_grouped_moe.py               grouped multi-expert kernel 对照
   moe/test_ptr_grouped_moe.py           pointer-array grouped kernel 对照
+  moe/test_paged_adapter.py             MLA paged cache 形状/写入测试
   moe/test_dense_support.py             dense/MoE 层布局与 CPU MLP fallback
 docs/
   ARTICLE_1_DEEPINFER_SM86_KERNEL.md          上篇：内核与量化工程
@@ -1084,13 +1136,16 @@ python scripts\export_sm86_kernels.py
 - 4 GB 上整体 Q4 只能作为质量/兼容实验，速度约 8 tokens/s；
 - GPTQ / AWQ 走**离线转换**为 W4A16；DeepSeek-V2-Lite Q4_K_M GGUF 可直接流式执行；
 - AWQ 仅支持 GEMM 布局；GGUF 暂不支持 split shards；
-- DeepSeek-V2-Lite MoE 目前是单请求执行层：未接入 paged scheduler / continuous
-  batching，prefill 会扫描大量专家，冷启动明显慢于稳态 decode；
+- DeepSeek-V2-Lite MoE 已接入 paged scheduler 的 chunked prefill / batched
+  decode / block KV 预算；但 stream overlap 关闭，prefill 仍会扫描大量专家，
+  冷启动明显慢于稳态 decode；
 - dense/hybrid 层布局已实现并有单元测试，但本机没有 dense DeepSeek-V2 GGUF
   做端到端质量基准；dense-only 模型超出显存时会回退 CPU FP32，速度会很慢；
-- DeepSeek MLA 使用官方 eager/reference attention，不是 FlashMLA；MoE 默认为
-  packed-weight fused GEMV/GEMM，`--no-fused-moe` 可回退到 dequant + grouped
-  GEMM；当前 fused kernel 是 block-per-row 通用实现，尚未做多 expert 合并/tile；
+- DeepSeek MLA 使用官方 eager/reference attention；paged 模式通过
+  `DeepSeekPagedCache` 先把 K/V 写进通用 block pool，再 materialize dense
+  K/V，因此不是 FlashMLA/原生 paged attention；
+- MoE 默认为 grouped fused GEMV/GEMM，`--no-fused-moe` 可回退到 dequant +
+  grouped GEMM；block-per-row 通用实现尚未做 Tensor Core tile；
 - 非 tied 的 lm_head 仍以 FP16 dense 保存，7B 转换后体积需要单独评估；
 - dense 通用执行层仍未实现 activation quantization、SmoothQuant 或 MoE；
 - 没有 tensor/pipeline parallel 或跨厂商后端抽象；

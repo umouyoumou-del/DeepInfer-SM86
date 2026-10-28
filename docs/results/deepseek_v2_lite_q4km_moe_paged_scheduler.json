@@ -1,0 +1,262 @@
+{
+  "elapsed_seconds": 11.432300099986605,
+  "baseline": [
+    {
+      "text": " 5-2=3",
+      "token_ids": [
+        207,
+        20,
+        12,
+        17,
+        28,
+        18,
+        100001
+      ]
+    },
+    {
+      "text": " 中国的首都是北京。",
+      "token_ids": [
+        207,
+        18467,
+        4090,
+        4148,
+        7196,
+        398,
+        100001
+      ]
+    }
+  ],
+  "paged": [
+    {
+      "text": " 5-2=3",
+      "token_ids": [
+        207,
+        20,
+        12,
+        17,
+        28,
+        18,
+        100001
+      ],
+      "baseline_text": " 5-2=3",
+      "baseline_token_ids": [
+        207,
+        20,
+        12,
+        17,
+        28,
+        18,
+        100001
+      ],
+      "text_equal": true,
+      "token_ids_equal": true,
+      "finish_reason": "stop"
+    },
+    {
+      "text": " 中国的首都是北京。",
+      "token_ids": [
+        207,
+        18467,
+        4090,
+        4148,
+        7196,
+        398,
+        100001
+      ],
+      "baseline_text": " 中国的首都是北京。",
+      "baseline_token_ids": [
+        207,
+        18467,
+        4090,
+        4148,
+        7196,
+        398,
+        100001
+      ],
+      "text_equal": true,
+      "token_ids_equal": true,
+      "finish_reason": "stop"
+    }
+  ],
+  "prefix_reuse": {
+    "text": " 5-2=3",
+    "token_ids": [
+      207,
+      20,
+      12,
+      17,
+      28,
+      18,
+      100001
+    ],
+    "baseline_token_ids": [
+      207,
+      20,
+      12,
+      17,
+      28,
+      18,
+      100001
+    ],
+    "token_ids_equal": true,
+    "prefix_cached_tokens": 16
+  },
+  "metrics": {
+    "uptime_seconds": 13.914,
+    "counters": {
+      "requests_total": 3.0,
+      "prefill_steps_total": 7.0,
+      "prefill_chunk_tokens_total": 36.0,
+      "prompt_tokens_total": 52.0,
+      "generated_tokens_total": 21.0,
+      "prefill_decode_overlap_steps": 1.0,
+      "decode_steps_total": 13.0,
+      "decode_tokens_total": 36.0,
+      "requests_finished_total": 3.0,
+      "prefix_reused_tokens_total": 16.0
+    },
+    "gauges": {
+      "up": 1.0,
+      "running_requests": 0.0,
+      "swapped_requests": 0.0,
+      "queued_requests": 0.0,
+      "cpu_offload_bytes": 0.0,
+      "cpu_offload_budget_bytes": 2147483648.0,
+      "cpu_offload_enabled": 0.0,
+      "max_swapped_requests": 0.0,
+      "prefill_requests": 0.0,
+      "decode_requests": 0.0,
+      "kv_cache_blocks_used": 2.0,
+      "kv_cache_blocks_free": 18.0,
+      "kv_cache_blocks_total": 20.0,
+      "kv_cache_usage_ratio": 0.1,
+      "max_decode_batch_size": 2.0
+    },
+    "summaries": {
+      "prefill_chunk_seconds": {
+        "sum": 7.806746599962935,
+        "count": 7,
+        "avg": 1.1152495142804193
+      },
+      "ttft_seconds": {
+        "sum": 15.233188900048845,
+        "count": 3,
+        "avg": 5.077729633349615
+      },
+      "decode_step_seconds": {
+        "sum": 6.5441233000019565,
+        "count": 13,
+        "avg": 0.5033941000001505
+      },
+      "tpot_seconds": {
+        "sum": 9.70589799998561,
+        "count": 18,
+        "avg": 0.5392165555547561
+      }
+    },
+    "requests_finished": 3.0,
+    "requests_failed": 0.0,
+    "generated_tokens": 21.0,
+    "decode_tokens_per_second": 3.209,
+    "avg_ttft_seconds": 5.07773,
+    "avg_tpot_seconds": 0.539217,
+    "kv_cache_usage_ratio": 0.1
+  },
+  "status": {
+    "mode": "paged_continuous",
+    "max_num_seqs": 2,
+    "block_size": 16,
+    "prefill_chunk_tokens": 8,
+    "kv_cache_dtype": "fp16",
+    "max_model_len": 128,
+    "active": 0,
+    "prefill": 0,
+    "decode": 0,
+    "swapped": 0,
+    "queued": 0,
+    "cpu_offload": {
+      "enabled": false,
+      "payload_bytes": 0,
+      "budget_bytes": 2147483648,
+      "max_swapped_requests": 0
+    },
+    "chunked_prefill": true,
+    "batched_decode": true,
+    "paged_kv_cache": true,
+    "prefill_decode_overlap": false,
+    "prefill_decode_stream_overlap_steps": 0,
+    "native_paged_attention": false,
+    "native_batched_w4_gemv": false,
+    "memory_budget": {
+      "mode": "cuda",
+      "device": "cuda",
+      "total_memory_bytes": 4294443008,
+      "free_memory_bytes_before_pool": 969356084,
+      "model_parameter_bytes": 2630081536,
+      "model_buffer_bytes": 169344,
+      "gpu_memory_utilization": 0.8,
+      "reserve_memory_bytes": 268435456,
+      "kv_budget_bytes": 536868070,
+      "block_bytes": 5308416,
+      "block_size": 16,
+      "num_blocks": 20,
+      "max_cache": 128,
+      "max_num_seqs": 2,
+      "prefix_cache_blocks": 4,
+      "capacity_tokens": 320
+    },
+    "prefix_cache": {
+      "max_blocks": 4,
+      "cached_blocks": 2,
+      "hits": 1,
+      "misses": 2,
+      "reused_blocks": 1,
+      "evictions": 0
+    },
+    "kv_cache": {
+      "block_size": 16,
+      "num_blocks": 20,
+      "kv_cache_dtype": "fp16",
+      "resolved_kv_cache_dtype": "torch.float16",
+      "memory_bytes": 106168320,
+      "block_bytes": 5308416,
+      "allocator": {
+        "num_blocks": 20,
+        "used_blocks": 2,
+        "free_blocks": 18,
+        "shared_blocks": 0,
+        "peak_refcount": 1
+      },
+      "prefix_cache": {
+        "max_blocks": 4,
+        "cached_blocks": 2,
+        "hits": 1,
+        "misses": 2,
+        "reused_blocks": 1,
+        "evictions": 0
+      }
+    },
+    "requests": []
+  },
+  "methodology": {
+    "model": "DeepSeek-V2-Lite-Chat Q4_K_M",
+    "max_cache": 128,
+    "max_num_seqs": 2,
+    "block_size": 16,
+    "prefill_chunk_tokens": 8,
+    "num_gpu_blocks": 20,
+    "prefix_cache_blocks": 4,
+    "kv_cache_dtype": "fp16",
+    "prefill_decode_overlap": "disabled for DeepSeek because expert staging shares pinned buffers/copy streams",
+    "attention": "DeepSeekPagedCache writes MLA K/V into the generic paged pool, then materializes dense K/V for the unmodified official eager attention"
+  },
+  "summary": {
+    "two_request_token_ids_equal_baseline": true,
+    "max_decode_batch_size": 2.0,
+    "decode_tokens_total": 36.0,
+    "prefix_reuse_tokens": 16,
+    "prefix_reuse_token_ids_equal": true,
+    "kv_pool_bytes": 106168320,
+    "kv_blocks": 20
+  }
+}

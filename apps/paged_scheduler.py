@@ -161,6 +161,8 @@ class PagedBatchScheduler:
         self.block_size = int(block_size)
         self.prefill_chunk_tokens = int(prefill_chunk_tokens)
         self.kv_cache_dtype = str(kv_cache_dtype)
+        if not getattr(runtime, "supports_prefill_decode_overlap", True):
+            enable_prefill_decode_overlap = False
         self.enable_prefill_decode_overlap = bool(enable_prefill_decode_overlap)
         self.enable_cpu_offload = bool(enable_cpu_offload)
         self.max_cpu_offload_bytes = int(max_cpu_offload_mb) * 1024 * 1024
@@ -173,11 +175,33 @@ class PagedBatchScheduler:
             self.prefill_stream = torch.cuda.Stream(device=runtime.device)
             self.decode_stream = torch.cuda.Stream(device=runtime.device)
         self.max_cache = int(runtime.max_cache)
+        cfg = getattr(self.model, "cfg", None)
+        if cfg is None:
+            cfg = getattr(self.model, "config", None)
+        if cfg is None:
+            raise ValueError("scheduler runtime model has no cfg/config object")
         self.max_model_len = min(
             self.max_cache,
-            int(getattr(self.model.cfg, "max_position_embeddings", self.max_cache)),
+            int(getattr(cfg, "max_position_embeddings", self.max_cache)),
         )
-        cfg = self.model.cfg
+        num_kv_heads = int(
+            getattr(
+                cfg,
+                "num_key_value_heads",
+                getattr(cfg, "num_attention_heads", 1),
+            )
+        )
+        if hasattr(cfg, "qk_nope_head_dim") and hasattr(cfg, "qk_rope_head_dim"):
+            # DeepSeek MLA: K uses qk_nope+qk_rope, V uses v_head_dim.  The
+            # generic paged pool stores both padded to the larger dimension.
+            head_dim = max(
+                int(cfg.qk_nope_head_dim) + int(cfg.qk_rope_head_dim),
+                int(getattr(cfg, "v_head_dim", 0)),
+            )
+        else:
+            head_dim = int(getattr(cfg, "head_dim", 0))
+        if num_kv_heads < 1 or head_dim < 1:
+            raise ValueError("could not infer kv head count/head_dim for scheduler")
         blocks_per_seq = (self.max_cache + self.block_size - 1) // self.block_size
         if prefix_cache_blocks is None:
             prefix_cache_blocks = min(16, blocks_per_seq)
@@ -186,9 +210,9 @@ class PagedBatchScheduler:
         dtype = next(self.model.parameters()).dtype
         block_bytes = paged_kv_block_bytes(
             num_layers=int(cfg.num_hidden_layers),
-            num_kv_heads=int(cfg.num_key_value_heads),
+            num_kv_heads=num_kv_heads,
             block_size=self.block_size,
-            head_dim=int(cfg.head_dim),
+            head_dim=head_dim,
             compute_dtype=dtype,
             kv_cache_dtype=self.kv_cache_dtype,
         )
@@ -207,8 +231,8 @@ class PagedBatchScheduler:
         )
         self.manager = PagedKVCacheManager(
             num_layers=int(cfg.num_hidden_layers),
-            num_kv_heads=int(cfg.num_key_value_heads),
-            head_dim=int(cfg.head_dim),
+            num_kv_heads=num_kv_heads,
+            head_dim=head_dim,
             block_size=self.block_size,
             num_blocks=self.memory_budget.num_blocks,
             dtype=dtype,
@@ -338,7 +362,13 @@ class PagedBatchScheduler:
             prompt_text = self.tokenizer.apply_chat_template(
                 request.messages, tokenize=False, add_generation_prompt=True
             )
-        encoded = self.tokenizer(prompt_text, return_tensors="pt")
+        try:
+            encoded = self.tokenizer(
+                prompt_text, return_tensors="pt", add_special_tokens=False
+            )
+        except TypeError:
+            # Minimal fake tokenizers used by tests do not expose this kwarg.
+            encoded = self.tokenizer(prompt_text, return_tensors="pt")
         input_ids = encoded["input_ids"]
         if int(input_ids.shape[0]) != 1:
             raise ValueError("only single-sequence prompts are supported")
@@ -817,6 +847,17 @@ class PagedBatchScheduler:
             work.finished_event = torch.cuda.Event(enable_timing=True)
         return work, True
 
+    def _forward_logits(
+        self,
+        input_ids: torch.Tensor,
+        positions: torch.Tensor,
+        views: list[Any],
+    ) -> torch.Tensor:
+        forward = getattr(self.runtime, "forward_logits", None)
+        if forward is not None:
+            return forward(input_ids, positions, kv_cache=views)
+        return self.model.forward_logits(input_ids, positions, kv_cache=views)
+
     def _launch_prefill_work(
         self, work: _PrefillWork, stream: torch.cuda.Stream | None = None
     ) -> torch.Tensor:
@@ -825,10 +866,10 @@ class PagedBatchScheduler:
             work.finished_event = None
             work.started_at = time.perf_counter()
             with torch.inference_mode():
-                logits = self.model.forward_logits(
+                logits = self._forward_logits(
                     work.input_ids,
                     work.positions,
-                    kv_cache=work.views,
+                    work.views,
                 )
             if self.runtime.device.type == "cuda":
                 torch.cuda.synchronize()
@@ -838,10 +879,10 @@ class PagedBatchScheduler:
             assert work.started_event is not None and work.finished_event is not None
             work.started_event.record()
             with torch.inference_mode():
-                logits = self.model.forward_logits(
+                logits = self._forward_logits(
                     work.input_ids,
                     work.positions,
-                    kv_cache=work.views,
+                    work.views,
                 )
             work.finished_event.record()
         return logits
@@ -976,10 +1017,10 @@ class PagedBatchScheduler:
             work.finished_event = None
             work.started_at = time.perf_counter()
             with torch.inference_mode():
-                logits = self.model.forward_logits(
+                logits = self._forward_logits(
                     work.input_ids,
                     work.positions,
-                    kv_cache=work.views,
+                    work.views,
                 )
             if self.runtime.device.type == "cuda":
                 torch.cuda.synchronize()
@@ -989,10 +1030,10 @@ class PagedBatchScheduler:
             assert work.started_event is not None and work.finished_event is not None
             work.started_event.record()
             with torch.inference_mode():
-                logits = self.model.forward_logits(
+                logits = self._forward_logits(
                     work.input_ids,
                     work.positions,
-                    kv_cache=work.views,
+                    work.views,
                 )
             work.finished_event.record()
         return logits

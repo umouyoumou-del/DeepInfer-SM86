@@ -752,6 +752,10 @@ class DeepSeekV2LiteGGUFRuntime:
         self.requested_fused_moe = bool(fused_moe)
         self.dense_mlp_device = dense_mlp_device
         self.verbose = verbose
+        # Expert staging shares pinned buffers and a copy stream; two
+        # concurrent forwards (e.g. prefill/decode stream overlap) are not
+        # safe.  The paged scheduler serializes them for this runtime.
+        self.supports_prefill_decode_overlap = False
         self._closed = False
 
         if self.device.type != "cuda":
@@ -1390,6 +1394,73 @@ class DeepSeekV2LiteGGUFRuntime:
         with torch.no_grad():
             embedded = self.model.model.embed_tokens(input_ids.cpu())
         return embedded.to(self.device)
+
+    def forward_logits(
+        self,
+        input_ids: torch.Tensor,
+        position_ids: torch.Tensor,
+        *,
+        kv_cache: Sequence[Any] | None = None,
+        attention_mask: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        """Scheduler-compatible forward entry point for paged KV views."""
+
+        if kv_cache is None:
+            raise ValueError("forward_logits requires paged kv_cache views")
+        return self._paged_forward_logits(input_ids, position_ids, kv_cache)
+
+    @torch.inference_mode()
+    def _paged_forward_logits(
+        self,
+        input_ids: torch.Tensor,
+        position_ids: torch.Tensor,
+        kv_cache: Sequence[Any],
+    ) -> torch.Tensor:
+        """Forward one prefill chunk/decode batch through paged KV views."""
+
+        from deepinfer.moe.paged_adapter import DeepSeekPagedCache
+
+        views = list(kv_cache)
+        if not views:
+            raise ValueError("paged forward requires at least one layer view")
+        batch, query_length = input_ids.shape
+        seq_lens = views[0].seq_lens
+        past_length = int(seq_lens.max().item())
+        max_length = max(int(view.max_length) for view in views)
+        total_length = past_length + int(query_length)
+        if total_length > max_length:
+            raise ValueError(
+                f"paged forward length {total_length} exceeds view max {max_length}"
+            )
+        valid_lengths = (seq_lens + int(views[0].new_tokens)).clamp(
+            max=total_length
+        )
+        positions = torch.arange(total_length, device=self.device)
+        attention_mask = (
+            positions.unsqueeze(0) < valid_lengths.unsqueeze(1)
+        ).to(torch.long)
+        key_dim = int(self.config.qk_nope_head_dim) + int(
+            self.config.qk_rope_head_dim
+        )
+        value_dim = int(self.config.v_head_dim)
+        cache = DeepSeekPagedCache(
+            views,
+            position_ids,
+            past_length=past_length,
+            max_length=total_length,
+            key_dim=key_dim,
+            value_dim=value_dim,
+            head_dim=max(key_dim, value_dim),
+        )
+        outputs = self.model.model(
+            inputs_embeds=self._embed_tokens(input_ids),
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+            past_key_values=cache,
+            use_cache=True,
+            return_dict=True,
+        )
+        return self._all_logits(outputs.last_hidden_state)
 
     def _logits(self, hidden_states: torch.Tensor) -> torch.Tensor:
         last = hidden_states[:, -1:, :]

@@ -28,6 +28,7 @@ DeepSeek-V2-Lite 的 MoE 路由、专家计算、MLA attention 和自回归 deco
 | 对照 grouped 无 double buffer | decode 2.53–2.95；prefill 2.20–2.88 |
 | 可选 GPU expert cache 1 GiB | decode 2.69；prefill 2.93；peak 3.20 GiB |
 | mini quality gate | MMLU-style 8/10；GSM8K-style 4/8；长链 3/5 |
+| paged scheduler | 2 请求 batched decode；prefix cache 16 token；token IDs 一致 |
 | 对照 per-expert fused | decode 2.56–3.05；64-token 2.63 |
 | 对照 dequant+bmm | decode 2.43–2.77；64-token 2.43 |
 | GPU 加载后空闲 | 约 1.0 GiB |
@@ -741,6 +742,10 @@ deepinfer/moe/ptr_grouped_moe.py
   - pointer-array grouped down GEMV/GEMM
   - 支持 cached/missed expert 混合，无需拼连续 packed buffer
 
+deepinfer/moe/paged_adapter.py
+  - DeepSeekPagedCache：MLA K/V -> 通用 paged pool
+  - 适配 K head_dim 与 V head_dim 不同的 MLA cache
+
 deepinfer/moe/deepseek_v2_runtime.py
   - GGUFExpertStore：并行读取、pinned staging、copy stream、Event
   - DeepSeekV2LiteGGUFRuntime：meta 加载、权重放置、streaming MoE、生成
@@ -751,6 +756,8 @@ scripts/smoke_deepseek_v2_lite_moe.py
   - 质量/吞吐 CLI，输出结构化 JSON
 scripts/eval_deepseek_moe_quality.py
   - mini quality regression runner
+scripts/smoke_deepseek_v2_lite_moe_paged.py
+  - paged scheduler smoke
 docs/quality/...
   - Q4_K_M quality suite
 
@@ -759,6 +766,7 @@ tests/moe/test_gpu_quant.py
 tests/moe/test_fused_moe.py
 tests/moe/test_grouped_moe.py
 tests/moe/test_ptr_grouped_moe.py
+tests/moe/test_paged_adapter.py
 tests/moe/test_dense_support.py
 ```
 
@@ -768,28 +776,31 @@ tests/moe/test_dense_support.py
 
 ### 当前限制
 
-- 单请求；没有接入 paged scheduler / continuous batching；
+- 已接入 paged scheduler 的 chunked prefill / batched decode / KV 预算；
+  DeepSeek 由于 expert staging 共享 pinned buffer/copy stream，暂不支持
+  prefill/decode stream overlap；
 - grouped GEMV/GEMM 已把 decode launch 降到 52/token；pinned double-buffer
   已实现，显著改善 prefill，但还没有跨层预测 prefetch；
 - packed expert cache 已实现但默认关闭：512 MB 时约 11% hit，CPU cache copy
   和 eviction 开销反而使长生成降到 1.61 t/s；要进一步做 GPU cache；
 - prefill 会扫描大量专家，短 prompt prefill 约 2.1–2.5 s；
-- pinned staging 单缓冲，依赖 Event 串行复用；还没有双缓冲/多缓冲预取；
-- MLA 是官方 eager/reference attention，不是 FlashMLA；
+- MLA 是官方 eager/reference attention；paged 模式通过 DeepSeekPagedCache
+  materialize dense K/V，不是 FlashMLA/原生 paged attention；
 - Q4_K_M 是唯一验证过的 DeepSeek-V2-Lite GGUF 量化档；
-- 没有长上下文、批量并发和官方完整 MMLU/GSM8K；perplexity 已做 mini 回归；
+- 没有长上下文和官方完整 MMLU/GSM8K；perplexity 已做 mini 回归；
 - 只验证 Windows + Python 3.10 + torch 2.5.1+cu121。
 
 ### 下一步优先级
 
-1. **接入 paged scheduler**：把 MoE 层接入已有 continuous batching / KV 预算；
-2. **更激进的 CPU/GPU 切分**：把部分层或部分 expert 放在 CPU AVX2 kernel，
+1. **更激进的 CPU/GPU 切分**：把部分层或部分 expert 放在 CPU AVX2 kernel，
    GPU 只算 attention + 热门 expert；
-3. **CUDA Graph / prefill chunk pipeline**：降低 Python/launch 开销，保持确定性；
-4. **更大显存/CPU offload 组合**：GPU cache 已验证可行但 1 GiB 只带来约 2.3%
+2. **CUDA Graph / prefill chunk pipeline**：降低 Python/launch 开销，保持确定性；
+3. **更大显存/CPU offload 组合**：GPU cache 已验证可行但 1 GiB 只带来约 2.3%
    提升；若要继续，需要把 shared/lm_head 移到 CPU 腾出 1.5–2 GiB VRAM；
-5. **完整 MMLU/GSM8K**：当前 mini suite 已作为 release gate，完整数据集需要
-   更长上下文和数小时评测预算。
+4. **完整 MMLU/GSM8K**：当前 mini suite 已作为 release gate，完整数据集需要
+   更长上下文和数小时评测预算；
+5. **原生 paged MLA attention**：当前 paged 模式会 materialize dense K/V，
+   下一步需要把 MLA 直接接到 paged attention kernel。
 
 ---
 
@@ -979,7 +990,7 @@ fused 之后 decode 的瓶颈更偏向 packed expert 读取和 H2D，而不是 G
   - 5 个质量 prompt 的 token IDs 完全一致；
   - 64-token 长故事生成 token IDs 完全一致；
   - `--no-fused-moe` 可随时回退到旧路径。
-- 全套测试：**79 passed**。
+- 全套测试：**80 passed**。
 
 ### 11.4 Grouped multi-expert kernel
 
@@ -1086,7 +1097,7 @@ opt-in 实验项保留，默认关闭。
 
 - double-buffer 路径与 grouped、per-expert、dequant+bmm 的 token IDs 一致；
 - 512 MB cache 路径 token IDs 也一致；
-- 全套测试：**79 passed**。
+- 全套测试：**80 passed**。
 
 ## 13. GPU packed cache + pointer-array grouped kernel
 
@@ -1129,7 +1140,7 @@ H2D 进来。
 
 - pointer-array gate/up 和 down 都有独立 GPU 单测；
 - GPU cache 路径与无 cache 路径 token IDs 完全一致；
-- 全套测试：**79 passed**。
+- 全套测试：**80 passed**。
 
 ## 14. 质量回归（mini suite）
 
@@ -1178,7 +1189,55 @@ F:/QwenQLoRA/venv/Scripts/python.exe ^
 
 结果文件：`docs/results/deepseek_v2_lite_q4km_moe_quality_eval.json`。
 
-## 15. 一句话结论
+## 15. Paged scheduler 接入
+
+`apps/paged_scheduler.py` 原本只面向 Qwen GQA。DeepSeek-V2-Lite 的 MLA
+K/V 维度不同（K = qk_nope + qk_rope = 192，V = v_head_dim = 128），而且
+官方 attention 走 eager 路径，所以这次没有硬塞一个错误形状的 cache，而是
+增加兼容桥 `deepinfer/moe/paged_adapter.py`：
+
+- `DeepSeekPagedCache` 实现 HF `Cache` 接口；
+- `update()` 把当前 MLA K/V padding 到统一 head_dim，写入通用 paged pool；
+- 随后 materialize 当前 batch 的 dense K/V，返回给未修改的官方 attention；
+- run-time `forward_logits(input_ids, positions, kv_cache=...)` 暴露给 scheduler；
+- scheduler 自动从 DeepSeek config 推断 `num_attention_heads=16` 和
+  `head_dim=max(192,128)=192`，并继续使用 block allocator、prefix cache 和
+  KV 预算。
+
+这不是 FlashMLA/原生 paged attention，而是“paged 存储 + dense attention
+materialize”的兼容桥。它的价值是先把 MoE 层接进现有 continuous batching /
+KV 预算，验证路由、expert streaming 和 block cache 能一起工作。
+
+实测（`max_cache=128`、`block_size=16`、`prefill_chunk_tokens=8`）：
+
+| 指标 | 结果 |
+|---|---:|
+| 2 请求 token IDs vs 单请求 baseline | **完全一致** |
+| max decode batch | **2** |
+| decode tokens total | 36 |
+| prefix cache 复用 | **16 token** |
+| prefix 后 token IDs | **完全一致** |
+| KV pool | 20 blocks / 约 106 MB |
+| prefill/decode stream overlap | 关闭 |
+
+为什么关闭 overlap：DeepSeek expert staging 共用 pinned buffer 和 copy
+stream，两个 forward 放到不同 CUDA stream 上会破坏 expert 数据；实测开启
+overlap 时输出退化成 `!!!!`。因此 runtime 设置
+`supports_prefill_decode_overlap=False`，scheduler 自动串行执行 cycle 中的
+prefill/decode，但 batched decode 仍然有效。
+
+运行：
+
+```powershell
+F:/QwenQLoRA/venv/Scripts/python.exe ^
+  scripts/smoke_deepseek_v2_lite_moe_paged.py ^
+  --enable-prefill-decode-overlap --prefix-reuse ^
+  --output docs/results/deepseek_v2_lite_q4km_moe_paged_scheduler.json
+```
+
+结果文件：`docs/results/deepseek_v2_lite_q4km_moe_paged_scheduler.json`。
+
+## 16. 一句话结论
 
 这次最重要的不是“4 GB 跑 15.7B”这个标题，而是把 **MoE 的路由、专家流式读取、
 GPU 反量化、pinned H2D、确定性 scatter、MLA attention 和生成循环** 真正接进了
