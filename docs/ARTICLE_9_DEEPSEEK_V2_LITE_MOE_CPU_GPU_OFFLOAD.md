@@ -19,12 +19,13 @@ DeepSeek-V2-Lite 的 MoE 路由、专家计算、MLA attention 和自回归 deco
 
 | 指标 | 实测 |
 |---|---:|
-| 模型加载 | 17.60 s |
+| 模型加载 | 17–19 s |
 | 冷启动 warmup（4 token） | 3.4–16 s，取决于 OS page cache |
-| prefill（短 prompt） | 1.91–2.70 s |
-| decode 稳态 | **2.56–3.05 tokens/s**（64-token 长生成 2.63） |
+| prefill（短 prompt） | 2.20–2.88 s |
+| decode 稳态 | **2.53–2.95 tokens/s**（64-token 长生成 2.64） |
 | peak GPU allocated | **2.23 GiB** |
 | peak GPU reserved | **2.31 GiB** |
+| 对照 per-expert fused | decode 2.56–3.05；64-token 2.63 |
 | 对照 dequant+bmm | decode 2.43–2.77；64-token 2.43 |
 | GPU 加载后空闲 | 约 1.0 GiB |
 | shared experts / lm_head | GPU（auto 放置） |
@@ -567,15 +568,15 @@ F:\QwenQLoRA\venv\Scripts\python.exe `
 
 | prompt | prefill | decode token 数 | decode t/s | peak GPU |
 |---|---:|---:|---:|---:|
-| MoE 解释 | 2.373 s | 23 | **2.556** | 2278.5 MiB |
-| 首都 | 2.700 s | 6 | **2.767** | 2278.4 MiB |
-| 翻译 | 2.101 s | 6 | **3.034** | 2278.1 MiB |
-| 5-2 | 1.907 s | 6 | **3.045** | 2277.5 MiB |
-| 9.11 vs 9.9 | 2.579 s | 6 | **2.995** | 2281.3 MiB |
+| MoE 解释 | 2.618 s | 23 | **2.526** | 2278.5 MiB |
+| 首都 | 2.882 s | 6 | **2.946** | 2278.4 MiB |
+| 翻译 | 2.213 s | 6 | **2.929** | 2278.1 MiB |
+| 5-2 | 2.195 s | 6 | **2.948** | 2277.5 MiB |
+| 9.11 vs 9.9 | 2.723 s | 6 | **2.900** | 2281.3 MiB |
 
-同一组 prompt 用 `--no-fused-moe` 的 dequant + grouped bmm 回退路径时，
-decode 为 2.43–2.77 tokens/s，peak GPU allocated 约 2.36 GiB。fused 路径在
-5 个 prompt 上和长生成上都保持 **token IDs 完全一致**（见第 11 节）。
+上表是当前默认 grouped fused 路径。相同 prompt 用 per-expert fused 路径时
+decode 为 2.56–3.05 tokens/s，用 `--no-fused-moe` 的 dequant+bmm 回退路径时
+为 2.43–2.77；三条路径的 token IDs 完全一致（见第 11 节）。
 
 峰值：
 
@@ -585,7 +586,7 @@ peak reserved  ≈ 2.31 GiB
 加载后空闲     ≈ 1.0 GiB
 ```
 
-模型加载 17.60 s。第一次进程内的冷启动 warmup 可能很慢（曾观察 16 s），
+模型加载 17–19 s。第一次进程内的冷启动 warmup 可能很慢（曾观察 16 s），
 因为 Q4_K_M 的 expert 页还没有进入 OS page cache；后续 prefill/decode 会稳定。
 
 ### 5.2 为什么比 llama.cpp CPU 慢
@@ -618,7 +619,8 @@ llama.cpp 有成熟的 AVX2/AVX512 CPU 量化 GEMV、mmap 权重和专门的 MoE
 | pinned H2D + down copy stream overlap | 约 2.4–2.7 t/s |
 | 修复 race 前的“2.7” | 不可复现，不能作为结果 |
 | 修复 race 后的 dequant+bmm 版本 | **2.40–2.70 t/s，可复现** |
-| fused packed MoE GEMV/GEMM | **2.56–3.05 t/s；64-token 2.63；可复现** |
+| per-expert fused GEMV/GEMM | **2.56–3.05 t/s；64-token 2.63；可复现** |
+| grouped fused GEMV/GEMM | **2.53–2.95 t/s；64-token 2.64；可复现** |
 
 ---
 
@@ -720,9 +722,14 @@ deepinfer/moe/gpu_quant.py
   - 分派与尺寸检查
 
 deepinfer/moe/fused_moe.py
-  - fused Q4_K/Q5_0/Q8_0 gate/up GEMV/GEMM
-  - fused down GEMV/GEMM
+  - per-expert fused Q4_K/Q5_0/Q8_0 gate/up GEMV/GEMM
+  - per-expert fused down GEMV/GEMM
   - packed row 解码 + dot-product，直接写 activation/output
+
+deepinfer/moe/grouped_moe.py
+  - grouped multi-expert gate/up GEMV/GEMM
+  - grouped multi-expert down GEMV/GEMM
+  - 2D grid `(output_row, expert)` + per-expert counts
 
 deepinfer/moe/deepseek_v2_runtime.py
   - GGUFExpertStore：并行读取、pinned staging、copy stream、Event
@@ -736,6 +743,7 @@ scripts/smoke_deepseek_v2_lite_moe.py
 tests/moe/test_gguf_index.py
 tests/moe/test_gpu_quant.py
 tests/moe/test_fused_moe.py
+tests/moe/test_grouped_moe.py
 tests/moe/test_dense_support.py
 ```
 
@@ -746,8 +754,8 @@ tests/moe/test_dense_support.py
 ### 当前限制
 
 - 单请求；没有接入 paged scheduler / continuous batching；
-- fused GEMV/GEMM 是 block-per-row 的通用实现，还未做多 expert 合并、
-  Tensor Core tile、cp.async 或专门 decode GEMV 的 warp-specialized kernel；
+- grouped GEMV/GEMM 已把 decode launch 降到 52/token，但 block-per-row
+  实现还没有 Tensor Core tile、cp.async 或跨层专家预取；
 - prefill 会扫描大量专家，短 prompt prefill 约 2.1–2.5 s；
 - pinned staging 单缓冲，依赖 Event 串行复用；还没有双缓冲/多缓冲预取；
 - MLA 是官方 eager/reference attention，不是 FlashMLA；
@@ -757,17 +765,15 @@ tests/moe/test_dense_support.py
 
 ### 下一步优先级
 
-1. **多 expert 合并 kernel**：把当前每 expert 一次 launch 合并成 grouped
-   GEMM，降低 decode 的 launch 与 Python 循环开销；
-2. **pinned double-buffer + 多 copy stream**：在 fused kernel 计算当前
+1. **pinned double-buffer + 多 copy stream**：在 fused kernel 计算当前
    chunk 时预取下一 chunk/下一层可预测专家；
-3. **专家缓存**：按层缓存热门 expert 的 packed 权重；
-4. **接入 paged scheduler**：把 MoE 层接入已有 continuous batching / KV 预算；
-5. **量化质量回归**：perplexity、MMLU、GSM8K、长链推理，与 llama.cpp 同
+2. **专家缓存**：按层缓存热门 expert 的 packed 权重；
+3. **接入 paged scheduler**：把 MoE 层接入已有 continuous batching / KV 预算；
+4. **量化质量回归**：perplexity、MMLU、GSM8K、长链推理，与 llama.cpp 同
    prompt / 同采样设置对照；
-6. **更激进的 CPU/GPU 切分**：把部分层或部分 expert 放在 CPU AVX2 kernel，
+5. **更激进的 CPU/GPU 切分**：把部分层或部分 expert 放在 CPU AVX2 kernel，
    GPU 只算 attention + 热门 expert；
-7. **CUDA Graph / prefill chunk pipeline**：降低 Python/launch 开销，保持确定性。
+6. **CUDA Graph / prefill chunk pipeline**：降低 Python/launch 开销，保持确定性。
 
 ---
 
@@ -877,7 +883,7 @@ dense_layer_bytes
 - `n_routed_experts=None/0` 的 dense-only；
 - CPU MLP fallback 的 shape/dtype/数值对照。
 
-当前 `tests/moe` 共 15 个测试（含 fused GEMV/GEMM 对照），全套 74 个测试通过。
+当前 `tests/moe` 共 18 个测试（含 grouped fused GEMV/GEMM 对照），全套 77 个测试通过。
 
 必须说明：本机没有 dense-only DeepSeek-V2 GGUF，因此 dense-only 的端到端
 吞吐和质量没有像 Q4_K_M MoE 那样做真实 benchmark；“dense/hybrid 层可加载、
@@ -950,13 +956,43 @@ fused 之后 decode 的瓶颈更偏向 packed expert 读取和 H2D，而不是 G
   - Q5_0 down，n_tokens=4；
   - Q8_0 down，n_tokens=4；
   - 与反量化后的 GPU matmul 参考逐元素对照。
+- `tests/moe/test_grouped_moe.py`：
+  - 3 个 expert、不同 counts；
+  - grouped gate/up 和 grouped down 与 per-expert 反量化参考对照。
 - 模型级 A/B：
   - 5 个质量 prompt 的 token IDs 完全一致；
   - 64-token 长故事生成 token IDs 完全一致；
   - `--no-fused-moe` 可随时回退到旧路径。
-- 全套测试：**74 passed**。
+- 全套测试：**77 passed**。
 
-### 11.4 当前 fused kernel 的边界
+### 11.4 Grouped multi-expert kernel
+
+per-expert fused 路径对每个 expert 分别 launch gate/up 和 down：decode top-6
+时每层 12 次 kernel，26 层共 312 次/token。新增
+`deepinfer/moe/grouped_moe.py`：
+
+- grid 变成 2D `(output_row, expert)`；
+- 一个 kernel 处理整个 expert chunk；
+- `counts[expert]` 控制每个 expert 的真实 token 数；
+- gate/up 一个 launch，down 一个 launch；
+- decode 每层 launch 从 12 降到 2，每 token 从 312 降到 **52**。
+
+结果：
+
+| 指标 | per-expert fused | grouped fused |
+|---|---:|---:|
+| decode launch / token | 312 | **52** |
+| 64-token decode | 2.63 t/s | **2.64 t/s** |
+| 5-prompt decode 范围 | **2.56–3.05** | 2.53–2.95 |
+| prefill | 2.81 s（长 prompt） | 2.95 s |
+| peak allocated | 2.23 GiB | 2.23 GiB |
+| token IDs | 基准 | 完全一致 |
+
+结论要诚实：**launch 数确实降了 6 倍，但 wall time 基本不变，prefill 还略慢**。
+在 4 GB 卡上当前瓶颈已经是 packed expert 读取和 H2D，不是 launch overhead。
+grouped 版本为下一阶段的 double-buffer/多 copy stream 提供了更干净的接口。
+
+### 11.5 当前 fused kernel 的边界
 
 - block-per-row，Q4_K/Q5_0/Q8_0 packed row 解码在每行内完成；
 - 还没有做多 expert 合并 launch、Tensor Core tile、cp.async prefetch；
@@ -970,7 +1006,7 @@ fused 之后 decode 的瓶颈更偏向 packed expert 读取和 H2D，而不是 G
 
 这次最重要的不是“4 GB 跑 15.7B”这个标题，而是把 **MoE 的路由、专家流式读取、
 GPU 反量化、pinned H2D、确定性 scatter、MLA attention 和生成循环** 真正接进了
-DeepInfer 的执行层，并在 4 GB RTX 3050 上用 Q4_K_M 跑出了 **2.56–3.05 tokens/s**
-（64-token 长生成 2.63 tokens/s）
+DeepInfer 的执行层，并在 4 GB RTX 3050 上用 Q4_K_M 跑出了 **2.53–2.95 tokens/s**
+（64-token 长生成 2.64 tokens/s）
 的可复现结果；速度还不是 llama.cpp CPU 的对手，但它是 native 的、可控的、
 可以继续往下做 fused kernel 和调度的基线。

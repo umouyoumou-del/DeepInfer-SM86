@@ -44,10 +44,10 @@ from transformers.cache_utils import DynamicCache
 from transformers.dynamic_module_utils import get_class_from_dynamic_module
 
 from deepinfer.logger import init_logger
-from deepinfer.moe.fused_moe import (
-    fused_down_gemm,
-    fused_gate_up_gemm,
-    fused_moe_supported,
+from deepinfer.moe.fused_moe import fused_moe_supported
+from deepinfer.moe.grouped_moe import (
+    fused_down_gemm_grouped,
+    fused_gate_up_gemm_grouped,
 )
 from deepinfer.moe.gguf_index import GGUFIndex
 from deepinfer.moe.gpu_quant import dequantize_matrix
@@ -1007,56 +1007,39 @@ class DeepSeekV2LiteGGUFRuntime:
     ) -> torch.Tensor:
         batch = self.expert_store.load_packed_experts(layer_idx, chunk_ids)
         gate_spec, up_spec, down_spec = batch.specs
-        gate_activations: list[torch.Tensor | None] = []
-        for local_index, count in enumerate(chunk_counts):
-            if count == 0:
-                gate_activations.append(None)
-                continue
-            x = chunk_tokens[local_index, :count]
-            gate_start = local_index * gate_spec.bytes_per_expert
-            gate_end = gate_start + gate_spec.bytes_per_expert
-            up_start = local_index * up_spec.bytes_per_expert
-            up_end = up_start + up_spec.bytes_per_expert
-            gate_activations.append(
-                fused_gate_up_gemm(
-                    x,
-                    batch.packed[0][gate_start:gate_end],
-                    batch.packed[1][up_start:up_end],
-                    n_tokens=int(count),
-                    out_features=gate_spec.out_features,
-                    k_size=gate_spec.in_features,
-                    gate_qtype=gate_spec.quant_type,
-                    up_qtype=up_spec.quant_type,
-                    gate_row_bytes=gate_spec.row_bytes,
-                    up_row_bytes=up_spec.row_bytes,
-                )
-            )
-        batch.wait_for_down()
-        expert_output = torch.zeros(
-            (
-                len(chunk_ids),
-                chunk_tokens.shape[1],
-                down_spec.out_features,
-            ),
-            dtype=chunk_tokens.dtype,
+        n_experts = len(chunk_ids)
+        max_count = chunk_tokens.shape[1]
+        counts = torch.tensor(
+            [int(count) for count in chunk_counts],
+            dtype=torch.int32,
             device=chunk_tokens.device,
         )
-        for local_index, activation in enumerate(gate_activations):
-            if activation is None:
-                continue
-            count = int(chunk_counts[local_index])
-            down_start = local_index * down_spec.bytes_per_expert
-            down_end = down_start + down_spec.bytes_per_expert
-            expert_output[local_index, :count] = fused_down_gemm(
-                activation,
-                batch.packed[2][down_start:down_end],
-                n_tokens=count,
-                out_features=down_spec.out_features,
-                k_size=down_spec.in_features,
-                down_qtype=down_spec.quant_type,
-                down_row_bytes=down_spec.row_bytes,
-            )
-        return expert_output
+        gate_activation = fused_gate_up_gemm_grouped(
+            chunk_tokens,
+            batch.packed[0],
+            batch.packed[1],
+            counts,
+            n_experts=n_experts,
+            max_count=max_count,
+            out_features=gate_spec.out_features,
+            k_size=gate_spec.in_features,
+            gate_qtype=gate_spec.quant_type,
+            up_qtype=up_spec.quant_type,
+            gate_row_bytes=gate_spec.row_bytes,
+            up_row_bytes=up_spec.row_bytes,
+        )
+        batch.wait_for_down()
+        return fused_down_gemm_grouped(
+            gate_activation,
+            batch.packed[2],
+            counts,
+            n_experts=n_experts,
+            max_count=max_count,
+            out_features=down_spec.out_features,
+            k_size=down_spec.in_features,
+            down_qtype=down_spec.quant_type,
+            down_row_bytes=down_spec.row_bytes,
+        )
 
     def _moe_cpu_fallback(
         self,

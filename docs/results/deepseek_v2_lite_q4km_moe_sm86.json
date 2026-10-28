@@ -1,9 +1,9 @@
 {
-  "created_at": "2026-10-28 10:10:37",
+  "created_at": "2026-10-28 11:54:20",
   "model": "E:\\DeepInfer-MoE\\models\\DeepSeek-V2-Lite-Chat-GGUF\\DeepSeek-V2-Lite-Chat-Q4_K_M.gguf",
   "meta_dir": "E:\\DeepInfer-MoE\\meta",
-  "load_seconds": 17.601067299983697,
-  "warmup_seconds": 3.4013807000010274,
+  "load_seconds": 19.157275400008075,
+  "warmup_seconds": 5.434926800022367,
   "device": "NVIDIA GeForce RTX 3050 Laptop GPU",
   "torch": "2.5.1+cu121",
   "cuda": "12.1",
@@ -19,12 +19,12 @@
       "text": " 混合专家模型（MoE）是一种人工智能模型，它通过结合多个专家系统来提高整体性能，每个",
       "prompt_tokens": 20,
       "completion_tokens": 24,
-      "prefill_seconds": 2.372728999995161,
-      "decode_seconds": 8.999545099999523,
-      "decode_tokens_per_second": 2.5556847312206057,
-      "peak_gpu_allocated_bytes": 2389216256,
-      "peak_gpu_reserved_bytes": 2451570688,
-      "gpu_free_bytes_after_load": 1099379508,
+      "prefill_seconds": 2.6181657999986783,
+      "decode_seconds": 9.10423019999871,
+      "decode_tokens_per_second": 2.526298159728349,
+      "peak_gpu_allocated_bytes": 2389327360,
+      "peak_gpu_reserved_bytes": 2476736512,
+      "gpu_free_bytes_after_load": 766049484,
       "shared_experts_device": "cuda",
       "lm_head_device": "cuda",
       "token_ids": [
@@ -54,8 +54,8 @@
         13712
       ],
       "timings": {
-        "expert_read_seconds": 5.386261299659964,
-        "expert_h2d_seconds": 0.30594929985818453,
+        "expert_read_seconds": 5.944839299481828,
+        "expert_h2d_seconds": 0.29020529953413643,
         "expert_dequant_launch_seconds": 0.0,
         "expert_load_calls": 922.0
       },
@@ -102,12 +102,12 @@
       "text": " 中国的首都是北京。",
       "prompt_tokens": 19,
       "completion_tokens": 7,
-      "prefill_seconds": 2.7003629000100773,
-      "decode_seconds": 2.168427900003735,
-      "decode_tokens_per_second": 2.7669815537743565,
-      "peak_gpu_allocated_bytes": 2389120512,
-      "peak_gpu_reserved_bytes": 2451570688,
-      "gpu_free_bytes_after_load": 1099379508,
+      "prefill_seconds": 2.88227130001178,
+      "decode_seconds": 2.036786300013773,
+      "decode_tokens_per_second": 2.945817143388792,
+      "peak_gpu_allocated_bytes": 2389259776,
+      "peak_gpu_reserved_bytes": 2476736512,
+      "gpu_free_bytes_after_load": 766049484,
       "shared_experts_device": "cuda",
       "lm_head_device": "cuda",
       "token_ids": [
@@ -120,8 +120,8 @@
         100001
       ],
       "timings": {
-        "expert_read_seconds": 7.762548799539218,
-        "expert_h2d_seconds": 0.4191811998025514,
+        "expert_read_seconds": 8.033617799170315,
+        "expert_h2d_seconds": 0.38205529924016446,
         "expert_dequant_launch_seconds": 0.0,
         "expert_load_calls": 1235.0
       },
@@ -168,12 +168,12 @@
       "text": " The weather is beautiful today.",
       "prompt_tokens": 18,
       "completion_tokens": 7,
-      "prefill_seconds": 2.1014696000202093,
-      "decode_seconds": 1.9774475000158418,
-      "decode_tokens_per_second": 3.0342145619299288,
-      "peak_gpu_allocated_bytes": 2388741120,
-      "peak_gpu_reserved_bytes": 2451570688,
-      "gpu_free_bytes_after_load": 1099379508,
+      "prefill_seconds": 2.2126821000128984,
+      "decode_seconds": 2.0485709000204224,
+      "decode_tokens_per_second": 2.9288710485637504,
+      "peak_gpu_allocated_bytes": 2388897280,
+      "peak_gpu_reserved_bytes": 2476736512,
+      "gpu_free_bytes_after_load": 766049484,
       "shared_experts_device": "cuda",
       "lm_head_device": "cuda",
       "token_ids": [
@@ -186,8 +186,8 @@
         100001
       ],
       "timings": {
-        "expert_read_seconds": 9.527634199766908,
-        "expert_h2d_seconds": 0.5206225996371359,
+        "expert_read_seconds": 10.014358999120304,
+        "expert_h2d_seconds": 0.46849919942906126,
         "expert_dequant_launch_seconds": 0.0,
         "expert_load_calls": 1537.0
       },
@@ -234,12 +234,12 @@
       "text": " 5-2=3",
       "prompt_tokens": 17,
       "completion_tokens": 7,
-      "prefill_seconds": 1.907402999990154,
-      "decode_seconds": 1.9706454999977723,
-      "decode_tokens_per_second": 3.0446876416924216,
-      "peak_gpu_allocated_bytes": 2388169728,
+      "prefill_seconds": 2.1950626999896485,
+      "decode_seconds": 2.0355612999992445,
+      "decode_tokens_per_second": 2.9475899350229477,
+      "peak_gpu_allocated_bytes": 2388387328,
       "peak_gpu_reserved_bytes": 2476736512,
-      "gpu_free_bytes_after_load": 1099379508,
+      "gpu_free_bytes_after_load": 766049484,
       "shared_experts_device": "cuda",
       "lm_head_device": "cuda",
       "token_ids": [
@@ -252,8 +252,8 @@
         100001
       ],
       "timings": {
-        "expert_read_seconds": 11.09652809999534,
-        "expert_h2d_seconds": 0.6693054996139836,
+        "expert_read_seconds": 11.968807199416915,
+        "expert_h2d_seconds": 0.5703293994010892,
         "expert_dequant_launch_seconds": 0.0,
         "expert_load_calls": 1837.0
       },
@@ -300,12 +300,12 @@
       "text": " 9.9大。",
       "prompt_tokens": 24,
       "completion_tokens": 7,
-      "prefill_seconds": 2.5794262000126764,
-      "decode_seconds": 2.0033425000146963,
-      "decode_tokens_per_second": 2.9949946152272937,
-      "peak_gpu_allocated_bytes": 2392162304,
+      "prefill_seconds": 2.723055900016334,
+      "decode_seconds": 2.0686917999992147,
+      "decode_tokens_per_second": 2.9003837110981334,
+      "peak_gpu_allocated_bytes": 2392370688,
       "peak_gpu_reserved_bytes": 2476736512,
-      "gpu_free_bytes_after_load": 1099379508,
+      "gpu_free_bytes_after_load": 766049484,
       "shared_experts_device": "cuda",
       "lm_head_device": "cuda",
       "token_ids": [
@@ -318,8 +318,8 @@
         100001
       ],
       "timings": {
-        "expert_read_seconds": 12.908625000418397,
-        "expert_h2d_seconds": 0.7722253994725179,
+        "expert_read_seconds": 14.25556009967113,
+        "expert_h2d_seconds": 0.677300599461887,
         "expert_dequant_launch_seconds": 0.0,
         "expert_load_calls": 2161.0
       },
