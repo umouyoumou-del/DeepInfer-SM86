@@ -375,6 +375,11 @@ class RemoteExpertWorker:
             dist.send(output.contiguous(), dst=src_rank)
             self.bytes_sent += int(output.numel() * output.element_size())
             self.requests += 1
+            fault_after = int(
+                os.environ.get("DEEPINFER_REMOTE_FAULT_AFTER", "0")
+            )
+            if fault_after > 0 and self.requests >= fault_after:
+                os._exit(42)
 
     def close(self) -> None:
         self.store.close()

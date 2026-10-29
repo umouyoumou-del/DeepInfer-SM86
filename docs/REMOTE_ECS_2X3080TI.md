@@ -266,8 +266,29 @@ Request-level outputs:
 
 Important limitation: the service provides concurrent **submission and
 queueing**, but the coordinator runtime still executes one request at a time.
-This is not continuous batching.  The heartbeat detects a dead worker file
-writer but does not automatically restart rank 1.
+This is not continuous batching.
+
+### Supervised restart
+
+`scripts/run_ecs_expert_parallel_supervised.py` launches the coordinator and
+remote rank itself, monitors process exit and the heartbeat file, and restarts
+both ranks after a failure.  A simulated first-attempt fault was injected with
+`DEEPINFER_REMOTE_FAULT_AFTER=2` (rank 1 exits with code 42):
+
+| Supervised restart metric | Value |
+|---|---:|
+| Attempts | 2 |
+| Attempt 0 | `worker_exit_42` |
+| Attempt 1 worker / coordinator | 0 / 0 |
+| Recovered | yes |
+| Output | `5-2` (4 generated) |
+| Token IDs | `[207, 20, 12, 17]` |
+| Prefill / decode | 1.88 s / 4.63 tok/s |
+| Heartbeat age | 0.004 s, healthy |
+
+This is whole-request restart: both ranks are killed/recreated, the model is
+reloaded, and the request is retried.  In-flight KV/cache resume is not
+implemented, and model reload adds startup cost.
 
 Long-context smoke (45 prompt tokens, 4 generated tokens):
 
@@ -302,12 +323,13 @@ Still not validated:
   smoke did pass);
 - continuous/batched execution of concurrently submitted requests (the
   request service currently drains them sequentially);
-- automatic restart when the remote expert rank dies (heartbeat and
-  process-group timeout are implemented, but recovery is not);
+- in-flight request/KV resume after a restart (whole-request retry is
+  implemented by the supervisor);
 - production heartbeat/worker restart for the dual-GPU pool.
 
-Next: implement continuous batching/parallel request execution, rank-1
-automatic restart, validate hybrid long-context throughput, and evaluate a
+Next: implement continuous batching/parallel request execution, in-flight
+request resume, validate hybrid long-context throughput, and evaluate a
 collective all-to-all.  The hybrid path beats the 4.20 tok/s single-GPU
 decode baseline on the 8-token smoke (4.71 tok/s) and preserves exact token
-parity.
+parity; the supervisor now recovers from a simulated rank-1 crash by
+whole-request retry.

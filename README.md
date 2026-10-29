@@ -642,9 +642,13 @@ prefill 退化到 7.79 s、decode 2.74 tok/s，因为 rank1 还是单 executor�
 failed=0，heartbeat age 0.44 s。但 coordinator 仍然一次执行一个请求，
 所以这是服务层并发提交，不是 continuous batching。
 
+新增 supervisor：监控 rank 退出和 heartbeat，rank1 崩溃时杀掉并重启
+两个 rank，重新加载模型后重试整个请求。故障注入 `worker_exit_42` 后
+第2次尝试成功，输出 token 正确，heartbeat healthy。它恢复的是整个请求，
+不是 in-flight KV/cache 续跑。
+
 当前仍是 point-to-point request/reply，不是 collective all-to-all；
-continuous batching、rank1 自动重启和 hybrid 长上下文吞吐仍待做。
-NCCL process group 已加可配置 timeout，remote rank 死亡不会无限挂起。
+continuous batching、in-flight 请求续跑和 hybrid 长上下文吞吐仍待做。
 双卡机没有 P2P/NVLink。
 
 复现与硬件细节：`docs/REMOTE_ECS_2X3080TI.md`  

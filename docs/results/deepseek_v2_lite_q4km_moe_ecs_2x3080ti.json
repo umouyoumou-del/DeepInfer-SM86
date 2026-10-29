@@ -177,7 +177,9 @@
     "nccl_hybrid_beats_single_decode": true,
     "multi_request_worker_drained": true,
     "request_service_completed": true,
-    "request_service_heartbeat_healthy": true
+    "request_service_heartbeat_healthy": true,
+    "supervised_restart_recovered": true,
+    "supervised_restart_heartbeat_healthy": true
   },
   "notes": [
     "The dual GPU pool runs one independent DeepSeek runtime per GPU and assigns requests by queue depth.",
@@ -185,7 +187,7 @@
     "The NCCL all-to-all smoke validates real ExpertPacket transport and hot-expert token sharding across both GPUs.",
     "The expert-sharded runtime splits routed expert chunks by ECS owner across GPU0/GPU1; the in-model activation exchange was subsequently moved to NCCL point-to-point between coordinator and remote expert worker.",
     "The asynchronous NCCL revision overlaps remote expert requests with local expert chunks: exact token parity, 4.90 tok/s decode, 2.02 s prefill, and ~39.6 MB peak GPU allocation on the remote rank.",
-    "A bounded NCCLRequestService now accepts concurrent submissions and drains them through the single coordinator runtime, with queue metrics and a shared heartbeat file. Two concurrent submissions completed with exact outputs; heartbeat healthy at ~0.44 s age. True batched execution and automatic worker restart remain open."
+    "A supervisor now monitors rank exit and heartbeat, restarts both ranks and retries the full request after a simulated rank1 crash. Fault-injected attempt 0 failed with worker_exit_42; attempt 1 recovered with exact output and healthy heartbeat. In-flight request/KV resume and continuous batching remain open."
   ],
   "layer_pipeline": {
     "prompt": "只回答数字：5-2=?",
@@ -533,5 +535,30 @@
       }
     ],
     "note": "The service queue accepts submissions concurrently, but the single coordinator runtime executes them sequentially; this is not batched transformer execution."
+  },
+  "supervised_restart": {
+    "fault_injection": "rank1 os._exit(42) after 2 remote expert requests on first attempt",
+    "attempts": 2,
+    "recovered": true,
+    "attempt0_failure": "worker_exit_42",
+    "attempt1_worker_rc": 0,
+    "attempt1_coordinator_rc": 0,
+    "output": " 5-2",
+    "token_ids": [
+      207,
+      20,
+      12,
+      17
+    ],
+    "prefill_seconds": 1.8842978104948997,
+    "decode_tokens_per_second": 4.631675000126532,
+    "remote_requests": 151,
+    "heartbeat": {
+      "path": "/root/autodl-tmp/results/nccl_supervised_heartbeat.1",
+      "age_seconds": 0.004223823547363281,
+      "healthy": true,
+      "timeout_seconds": 5.0
+    },
+    "note": "The supervisor kills and restarts both ranks, reloads the model, and retries the full request; in-flight KV/cache resume is not implemented."
   }
 }
