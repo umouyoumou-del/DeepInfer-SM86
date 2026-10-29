@@ -6,17 +6,115 @@
 > 基线：单远端 expert worker + 点对点 request/reply
 
 这篇文章记录的是把 ECS 从「连续批处理能跑但吞吐低」推到「二卡定版」的这一轮。
-里面有三处我押错了方向，其中一处还被我写进了文档当成结论。都原样记下来。
+
+开篇先讲怎么从一份 8.7 MB 的压缩日志里把上下文捞回来——那部分不是花絮，
+它决定了后面每一步的起点是否可靠。然后是三次押错方向，其中一处我还写进了文档当成结论。
+都原样记下来。
 
 ---
 
-## 0. 起点：一个卡死的终端
+## 0. 起点：从一份压缩日志里把上下文捞回来
 
-上一轮会话的终端卡死了，只剩一份 8.4 MB 的 `session.v4.jsonl.zstd`。
-解出来 10461 条记录，断点很干净：停在 turn 49，刚读完 `paged_adapter.py`，
-正准备给 `ContinuousBatchEngine` 上 **paged KV slot allocator**。
+### 现场
 
-于是这一轮从这个断点开始。
+上一轮会话的终端卡死了。进程没了，屏幕没了，**只剩磁盘上的一份日志**：
+
+```
+~/.dsh/sessions/--D-DeepInfer-SM86--/a7c7547f-.../session.v4.jsonl.zstd
+```
+
+8.7 MB 的 zstd，对应解压后 32.3 MB、10461 条记录。
+
+换句话说：这一轮开工时，我对「做到哪了、下一步是什么」的全部认知，
+都要从这 32 MB 里重建。
+
+### 第一步：先确认这是哪个项目
+
+`.dsh/sessions/` 下是按工作目录分的（`--D-DeepInfer-SM86--`、`--F-QwenQLoRA--`……）。
+把所有 session 解压后统计关键词出现次数：
+
+```
+3166 ECS   9470 DeepInfer   32.30MB  --D-DeepInfer-SM86--/a7c7547f...
+   0 ECS   3888 DeepInfer    6.45MB  --D---/13f52102...
+```
+
+一眼就锁定了目标会话。剩下的都是无关项目（VRChat 规则 wiki、剧情脚本之类）。
+
+### 第二步：两个工具链的坑
+
+第一个坑：**Git Bash 的 `/c/...` 路径，Windows 原生 Python 不认**。
+
+```python
+open('/c/Users/13567/.dsh/sessions/...')   # FileNotFoundError
+```
+
+Python 是原生 Windows 解释器，`/c/Users` 会被解析成 `C:\c\Users`。
+所以先用 bash `cp` 到 `/tmp`，再用 `F:\Temp\...` 交给 Python。
+这个坑后面还咬了我一次：用 paramiko 传文件时把 `/tmp/xxx` 交给 Windows Python，
+报出来的是远端 `FileNotFoundError`，实际是本地源文件根本没打开。
+
+第二个坑：**控制台编码**。直接 `print` 中文会炸：
+
+```
+UnicodeEncodeError: 'gbk' codec can't encode character '\U0001f3db'
+```
+
+解法是别往控制台打，**写进 UTF-8 文件再用 read 工具看**。整个复盘过程基本就是
+「解压 → 落盘 → 读文件」。
+
+### 第三步：先看人话，再看机器话
+
+10461 条记录里绝大多数是 `tool/call`、`tool/result`、`step/start` 这类噪音。
+先把所有 `user/message` 抽出来——**人的发言是最便宜的索引**，几十条就能看出整个弧线：
+
+- 最初目标：「通过 DeepSeek V2 Lite 实现 DeepInfer SM86 的 MoE 部分，极致的 CPU/GPU 混合 Offload，不能再 OOM」
+- 中途：「记住可以牺牲速度，哪怕是 2 token/s 你就是赢」
+- 然后是一长串「按照你建议的继续做」
+- 后面几次上下文压缩留下的 checkpoint，各自带了阶段摘要
+- 最后：「按照这个实现 ECS」+ 一段很长的架构设想
+
+有两个 checkpoint 摘要特别有用，直接把「已完成 / 未完成」的清单给了我。
+
+### 第四步：找断点
+
+光有弧线不够，要找到**卡死前的那一句**。取最后 45 条记录：
+
+```
+SEQ 10451  turn 49, step 1  reasoning: "We need continue. Need implement paged KV slot allocator..."
+SEQ 10452  tool/call            bash: sed -n '1,220p' deepinfer/moe/paged_adapter.py
+SEQ 10457  turn 49, step 2  reasoning: "Paged scheduler exists for Qwen; can adapt DeepSeek?..."
+SEQ 10459  turn/end             {"reason": {"kind": "completed"}}
+```
+
+断点非常干净：读完 `paged_adapter.py`，正在琢磨「要不要做真正的 paged KV slot
+allocator」，还没动手。**上一轮没有任何半成品代码留在工作区**。
+
+### 第五步：用 git 交叉验证
+
+日志是「模型说自己做了什么」，git 是「机器实际被改成了什么样」。两边对不上，日志就不可信。
+
+```
+$ git log --oneline -1
+9059f68 perf: batch continuous admission prefills
+$ git status --short
+（空）
+```
+
+干净的工作区 + 最后一条 commit 正好是日志里提到的那次（批量 admission prefill），
+两边对上了，说明**从 9059f68 往后接着写是安全的**。
+
+顺带确认环境还在：本地 `E:\DeepInfer-MoE\models\...gguf` 在，
+远端双卡机 SSH 能连，两张 3080 Ti 都空着。
+
+### 这一节的收获
+
+跨会话接续真正需要的不是"记忆"，是**可验证的状态**：
+
+1. 会话日志告诉你**意图和推理**（但可能是错的）；
+2. git 告诉你**代码实际状态**（但不告诉你为什么这么做）；
+3. 测试套件告诉你**现在还能不能跑**（开工前先跑一遍全量，是最便宜的体检）。
+
+这一轮开工前跑的是 113 passed。收工时 127。
 
 ---
 
