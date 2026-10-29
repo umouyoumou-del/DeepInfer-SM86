@@ -1820,6 +1820,7 @@ python scripts\export_sm86_kernels.py
 - 项目介绍视频制作脚本（分镜 / 旁白 / 录制清单）：`docs/VIDEO_INTRO_SCRIPT.md`
 - ECS 论文（系统设计与否定性结果）：`docs/PAPER_ECS.md`
 - 中文博客：为什么把 MoE 装进手机这件事会先发生在软件上：`docs/BLOG_MOE_ON_PHONE.md`
+  - 知乎编辑器友好版（无 Markdown 语法，表格已转列表）：`docs/BLOG_MOE_ON_PHONE_zhihu.txt`
 - 上篇（内核/量化）：`docs/ARTICLE_1_DEEPINFER_SM86_KERNEL.md`
 - 下篇（生产力/基准）：`docs/ARTICLE_2_DEEPINFER_SM86_PRODUCTIVITY.md`
 - 扩展篇（通用化/Llama）：`docs/ARTICLE_3_DEEPINFER_SM86_GENERIC.md`
