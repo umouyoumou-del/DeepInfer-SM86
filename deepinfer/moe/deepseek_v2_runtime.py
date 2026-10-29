@@ -1962,6 +1962,28 @@ class DeepSeekV2LiteGGUFRuntime:
             dtype=flat.dtype,
             device=flat.device,
         )
+        if (
+            self._multi_device_experts
+            and self.remote_expert_client is not None
+            and self.fused_moe_enabled
+            and layer_idx not in self.cpu_moe_layer_set
+            and not cpu_expert_set
+            and token_count > 1
+        ):
+            routed = self._remote_expert_layer_forward(
+                layer_idx=layer_idx,
+                expert_list=expert_list,
+                counts_list=counts_list,
+                padded_tokens=padded_tokens,
+                max_count=max_count,
+                padded_flat_index=padded_flat_index,
+                sorted_weights=sorted_weights,
+                order=order,
+                flat=flat,
+            )
+            routed = routed.reshape(*original_shape)
+            return routed + mlp.shared_experts(identity)
+
         chunk_size = self.expert_chunk_size
         if (
             self.prefill_all_experts
@@ -2165,6 +2187,138 @@ class DeepSeekV2LiteGGUFRuntime:
         routed = routed.float().sum(dim=1).to(flat.dtype)
         routed = routed.reshape(*original_shape)
         return routed + mlp.shared_experts(identity)
+
+    def _remote_expert_layer_forward(
+        self,
+        *,
+        layer_idx: int,
+        expert_list: list[int],
+        counts_list: list[int],
+        padded_tokens: torch.Tensor,
+        max_count: int,
+        padded_flat_index: torch.Tensor,
+        sorted_weights: torch.Tensor,
+        order: torch.Tensor,
+        flat: torch.Tensor,
+    ) -> torch.Tensor:
+        """Compute all routed experts of one layer with a batched remote queue.
+
+        Remote chunks are submitted first, then all local expert chunks run,
+        and only afterwards are the queued remote outputs joined.  This keeps
+        the remote expert rank busy across an entire layer instead of waiting
+        after every chunk.
+        """
+
+        remote_device = int(self.remote_expert_device or 1)
+        remote_positions = [
+            index
+            for index, expert_id in enumerate(expert_list)
+            if self._expert_device_index(layer_idx, int(expert_id))
+            == remote_device
+        ]
+        local_positions = [
+            index
+            for index in range(len(expert_list))
+            if index not in set(remote_positions)
+        ]
+        full_output = torch.zeros(
+            (len(expert_list), max_count, flat.shape[-1]),
+            dtype=flat.dtype,
+            device=flat.device,
+        )
+        remote_pending: list[tuple[torch.Tensor, Any, list[int]]] = []
+        remote_chunk_size = max(1, int(self.expert_chunk_size))
+        for start in range(0, len(remote_positions), remote_chunk_size):
+            positions = remote_positions[start : start + remote_chunk_size]
+            position_tensor = torch.tensor(
+                positions, dtype=torch.long, device=padded_tokens.device
+            )
+            group_ids = [int(expert_list[index]) for index in positions]
+            group_tokens = padded_tokens.index_select(0, position_tensor)
+            group_counts = [int(counts_list[index]) for index in positions]
+            if hasattr(self.remote_expert_client, "submit_chunk"):
+                pending = self.remote_expert_client.submit_chunk(
+                    layer_idx,
+                    group_ids,
+                    group_tokens,
+                    group_counts,
+                )
+            else:
+                pending = self.remote_expert_client.compute_chunk(
+                    layer_idx,
+                    group_ids,
+                    group_tokens,
+                    group_counts,
+                )
+            remote_pending.append((position_tensor, pending, group_ids))
+
+        local_by_device: dict[int, list[int]] = {}
+        for position in local_positions:
+            owner = self._expert_device_index(
+                layer_idx, int(expert_list[position])
+            )
+            local_by_device.setdefault(owner, []).append(position)
+        for owner, positions in sorted(local_by_device.items()):
+            for start in range(0, len(positions), remote_chunk_size):
+                group_positions = positions[start : start + remote_chunk_size]
+                position_tensor = torch.tensor(
+                    group_positions,
+                    dtype=torch.long,
+                    device=padded_tokens.device,
+                )
+                group_ids = [
+                    int(expert_list[index]) for index in group_positions
+                ]
+                group_tokens = padded_tokens.index_select(0, position_tensor)
+                group_counts = [
+                    int(counts_list[index]) for index in group_positions
+                ]
+                piece = self._fused_expert_chunk(
+                    layer_idx,
+                    group_ids,
+                    group_tokens,
+                    group_counts,
+                    target_device=torch.device(f"cuda:{owner}"),
+                )
+                full_output.index_copy_(
+                    0, position_tensor, piece.to(full_output.device)
+                )
+                self.expert_device_chunks += 1
+                self.expert_device_counts[owner] = (
+                    self.expert_device_counts.get(owner, 0) + len(group_ids)
+                )
+
+        for position_tensor, pending, group_ids in remote_pending:
+            if hasattr(self.remote_expert_client, "wait_chunk"):
+                piece = self.remote_expert_client.wait_chunk(pending)
+            else:
+                piece = pending
+            full_output.index_copy_(
+                0, position_tensor, piece.to(full_output.device)
+            )
+            self.remote_expert_chunks += 1
+            self.expert_device_chunks += 1
+            self.expert_device_counts[remote_device] = (
+                self.expert_device_counts.get(remote_device, 0)
+                + len(group_ids)
+            )
+
+        selected = full_output.reshape(-1, flat.shape[-1]).index_select(
+            0, padded_flat_index
+        )
+        contribution = selected.float() * sorted_weights.unsqueeze(-1)
+        assignment_outputs = torch.zeros(
+            (order.numel(), flat.shape[-1]),
+            dtype=flat.dtype,
+            device=flat.device,
+        )
+        assignment_outputs.index_copy_(
+            0, order, contribution.to(assignment_outputs.dtype)
+        )
+        routed = assignment_outputs.view(
+            flat.shape[0], -1, flat.shape[-1]
+        ).float().sum(dim=1).to(flat.dtype)
+        return routed
 
     def _fused_expert_chunk_multi(
         self,

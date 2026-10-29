@@ -172,7 +172,9 @@
     "remote_worker_does_not_load_full_model": true,
     "nccl_async_token_parity": true,
     "nccl_async_beats_single_decode": true,
-    "long_context_token_parity": true
+    "long_context_token_parity": true,
+    "nccl_hybrid_token_parity": true,
+    "nccl_hybrid_beats_single_decode": true
   },
   "notes": [
     "The dual GPU pool runs one independent DeepSeek runtime per GPU and assigns requests by queue depth.",
@@ -180,7 +182,7 @@
     "The NCCL all-to-all smoke validates real ExpertPacket transport and hot-expert token sharding across both GPUs.",
     "The expert-sharded runtime splits routed expert chunks by ECS owner across GPU0/GPU1; the in-model activation exchange was subsequently moved to NCCL point-to-point between coordinator and remote expert worker.",
     "The asynchronous NCCL revision overlaps remote expert requests with local expert chunks: exact token parity, 4.90 tok/s decode, 2.02 s prefill, and ~39.6 MB peak GPU allocation on the remote rank.",
-    "Long-context (45 prompt tokens) also preserves exact token parity; async NCCL decode is 4.28 tok/s vs 4.50 single-GPU, so short-decode wins but long-context still needs optimization. Remaining work: multi-request NCCL scheduling, heartbeat/restart, and collective all-to-all."
+    "The hybrid NCCL path batches remote expert groups during prefill and uses per-chunk async overlap during decode: 1.74 s prefill, 4.71 tok/s decode, exact token parity, and 52.8 MB peak allocation on the remote rank. Remaining work: multi-request NCCL scheduling, worker heartbeat/restart, and long-context hybrid validation."
   ],
   "layer_pipeline": {
     "prompt": "只回答数字：5-2=?",
@@ -392,5 +394,60 @@
     "remote_bytes_sent": 59961344,
     "remote_worker_peak_gpu_allocated_bytes": 33469952,
     "coordinator_peak_gpu_allocated_bytes": 2370534400
+  },
+  "nccl_expert_parallel_hybrid": {
+    "strategy": "prefill uses one queued remote group per layer; decode uses per-chunk async isend/irecv",
+    "text": " 5-2=3",
+    "token_ids": [
+      207,
+      20,
+      12,
+      17,
+      28,
+      18,
+      100001
+    ],
+    "prompt_tokens": 17,
+    "prefill_seconds": 1.7445846796035767,
+    "decode_seconds": 1.274304322898388,
+    "decode_tokens_per_second": 4.708451421049158,
+    "coordinator_peak_gpu_allocated_bytes": 2388395520,
+    "remote_worker_peak_gpu_allocated_bytes": 52811776,
+    "remote_requests": 232,
+    "remote_bytes_sent": 21344256,
+    "remote_bytes_received": 21344256,
+    "remote_latency_seconds": 3.0556414276361465,
+    "remote_active_sends": 0,
+    "remote_expert_chunks": 232,
+    "expert_device_chunks": 465,
+    "expert_device_0_experts": 996,
+    "expert_device_1_experts": 984,
+    "token_parity_single_gpu": true,
+    "speedup_vs_single_decode": 1.1210355662662639,
+    "ecs": {
+      "backend": "cpp",
+      "tier_bytes": {
+        "L1": 0,
+        "L2": 0,
+        "L3": 3244572672
+      },
+      "device_bytes": {
+        "0": 3244572672,
+        "1": 0
+      },
+      "entries": 3365,
+      "metrics": {
+        "l1_hits": 0.0,
+        "l2_hits": 0.0,
+        "l3_reads": 2988.0,
+        "l1_promotions": 0.0,
+        "evictions": 0.0,
+        "chunk_plans": 156.0,
+        "cross_device_packets": 0.0,
+        "cross_device_bytes": 0.0,
+        "hot_replications": 0.0
+      },
+      "tick": 4652
+    }
   }
 }

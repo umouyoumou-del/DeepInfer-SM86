@@ -190,6 +190,24 @@ This is the first dual-GPU path that beats the single-GPU decode baseline.
 The accumulated request latency is larger than wall decode time because the
 requests overlap local compute; wall time is what matters.
 
+The current hybrid revision batches all remote expert groups of a prefill
+layer, then runs local expert groups while the remote rank works; decode keeps
+the lower-latency per-chunk async path.  The 8-token smoke becomes:
+
+| Hybrid NCCL metric | Value |
+|---|---:|
+| Output | `5-2=3` |
+| Token parity | exact |
+| Prefill | 1.74 s |
+| Decode | **4.71 tok/s** |
+| Single-GPU decode | 4.20 tok/s |
+| Hybrid speedup | 1.12× |
+| Remote requests | 232 |
+| Remote worker peak | 50.4 MiB |
+
+Per-chunk async decode alone measured 4.90 tok/s, but its prefill was 2.02 s.
+The hybrid keeps the better prefill batching and the better decode strategy.
+
 The transport is still point-to-point request/reply rather than a collective
 all-to-all.
 

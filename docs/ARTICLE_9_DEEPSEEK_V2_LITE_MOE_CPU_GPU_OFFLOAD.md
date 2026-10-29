@@ -1624,8 +1624,9 @@ PyTorch 2.5.1+cu121、CuPy 14.2、Python 3.12。
 | hot expert token shard | 2/2 跨卡 |
 | 单模型 expert sharding | GPU0/GPU1 1416/1415 dispatches |
 | expert sharding token parity | 与单卡完全一致 |
-| NCCL expert-parallel async | 4.90 tok/s，超过单卡 4.20 |
-| remote worker peak | 37.7 MiB |
+| NCCL expert-parallel async | 4.90 tok/s（per-chunk） |
+| NCCL hybrid | 4.71 tok/s，prefill 1.74 s |
+| remote worker peak | 50.4 MiB hybrid |
 
 Layer pipeline 的 token IDs 与单卡基线相同：
 `[207, 20, 12, 17, 28, 18, 100001]`。这说明跨 GPU hidden-state
@@ -1651,17 +1652,20 @@ shared experts / LM head，rank1 只加载 routed expert bytes。异步版本先
 remote output。输出 token 与单卡完全一致，294 个 remote expert requests；
 remote rank 峰值仅37.7 MiB。
 
-| 路径 | Decode |
-|---|---:|
-| 单卡 | 4.20 tok/s |
-| 阻塞 NCCL expert | 3.44 tok/s |
-| 异步 NCCL expert | **4.90 tok/s** |
+| 路径 | Prefill | Decode |
+|---|---:|---:|
+| 单卡 | 0.90 s | 4.20 tok/s |
+| 阻塞 NCCL expert | 2.62 s | 3.44 tok/s |
+| 异步 NCCL per-chunk | 2.02 s | **4.90 tok/s** |
+| 异步 NCCL hybrid | **1.74 s** | 4.71 tok/s |
 
-异步路径 prefill 2.02 s，已超过单卡 decode 基线 1.17×。45-token
-long-context smoke 也保持 token parity，但 decode 4.28 tok/s，略低于单卡
-4.50 tok/s；short-decode 收益尚未稳定扩展到长上下文。当前仍是
-point-to-point request/reply，不是 collective all-to-all；多请求 NCCL
-调度和 remote worker heartbeat/restart 尚未验证。该机没有 P2P/NVLink。
+Hybrid 模式在 prefill 时按层批量提交 remote expert group，decode 时
+保留 per-chunk 异步路径。45-token long-context 也保持 token parity，
+但 per-chunk decode 4.28 tok/s，略低于单卡4.50 tok/s。
+
+当前仍是 point-to-point request/reply，不是 collective all-to-all；
+长上下文 hybrid、多请求 NCCL 调度和 remote worker heartbeat/restart
+尚未验证。该机没有 P2P/NVLink。
 
 结果文件：
 `docs/results/deepseek_v2_lite_q4km_moe_ecs_smoke.json`、
