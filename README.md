@@ -1173,6 +1173,7 @@ lm_head           : 3-bit, group 128
 | paged KV slot allocator | ✅ | 每请求独立 block list、按需增长、行不重排；长上下文 1.17×，短上下文持平 |
 | 前缀块共享（paged 引擎） | ✅ | block hash 精确匹配 + retain/LRU；89-token 共享前缀 wall −26%、prefill −53%；仅 paged prefill 模式 |
 | admission 合并 / grace 窗口 | ✅ | 空闲期合并到达，先 decode 后 admit；+2–5%，未追平 dense |
+| 传输后端抽象 | ✅ | `ExpertTransport` 协议 + `UnifiedMemoryTransport`（零拷贝）+ `StagedTransport`；调度器不再硬编码"必须拷贝"；尚无统一内存硬件可验证 |
 | expert worker pool | 🧪 | `PooledExpertClient` 分发器已有单测；无 ≥3 卡环境，**未接真流量**；不属于二卡定版范围 |
 | prefill/decode overlap | ❌ | 已实现 per-thread staging + 独立 stream；NCCL expert transport 单生产者，双卡上 SIGABRT，引擎显式拒绝 |
 | prefill/decode stream overlap | ✅ | 双 CUDA stream launch；4 GB 带宽受限，收益按场景测量 |
