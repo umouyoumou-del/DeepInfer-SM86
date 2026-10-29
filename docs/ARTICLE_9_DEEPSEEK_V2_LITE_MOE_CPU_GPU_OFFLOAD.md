@@ -1663,9 +1663,14 @@ Hybrid 模式在 prefill 时按层批量提交 remote expert group，decode 时
 保留 per-chunk 异步路径。45-token long-context 也保持 token parity，
 但 per-chunk decode 4.28 tok/s，略低于单卡4.50 tok/s。
 
+Expert ownership 仍以 50/50 最优：67% remote expert 会使 prefill
+退化到7.79 s、decode2.74 tok/s。同一个 NCCL worker 连续服务2个请求时
+`active_sends=0`，验证了队列排空；但并发多请求调度尚未实现。NCCL
+process group 已加 timeout，remote rank 死亡不会无限挂起，但没有自动重启。
+
 当前仍是 point-to-point request/reply，不是 collective all-to-all；
-长上下文 hybrid、多请求 NCCL 调度和 remote worker heartbeat/restart
-尚未验证。该机没有 P2P/NVLink。
+并发多请求、active heartbeat/自动重启和 hybrid 长上下文吞吐仍待做。
+该机没有 P2P/NVLink。
 
 结果文件：
 `docs/results/deepseek_v2_lite_q4km_moe_ecs_smoke.json`、

@@ -634,9 +634,15 @@ Hybrid 模式在 prefill 时按层批量提交 remote expert group，decode 时
 保留 per-chunk 异步路径。45-token long-context 也保持 token parity，
 但 per-chunk decode 4.28 tok/s，略低于单卡4.50 tok/s。
 
+Expert ownership 仍以 50/50 最优：把 67% expert 放到 rank1 会使
+prefill 退化到 7.79 s、decode 2.74 tok/s，因为 rank1 还是单 executor。
+同一个 NCCL worker 连续服务 2 个请求时 `active_sends=0`，验证了请求队列
+可以排空；但还不是并发多请求调度。
+
 当前仍是 point-to-point request/reply，不是 collective all-to-all；
-长上下文 hybrid、多请求 NCCL 调度和 remote worker heartbeat/restart
-尚未验证。双卡机没有 P2P/NVLink。
+并发多请求、active heartbeat/自动重启和 hybrid 长上下文吞吐仍待做。
+NCCL process group 已加可配置 timeout，能避免 remote rank 死亡时无限挂起。
+双卡机没有 P2P/NVLink。
 
 复现与硬件细节：`docs/REMOTE_ECS_2X3080TI.md`  
 结果：`docs/results/deepseek_v2_lite_q4km_moe_ecs_2x3080ti.json`

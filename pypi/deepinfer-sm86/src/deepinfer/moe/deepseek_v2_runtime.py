@@ -1209,6 +1209,7 @@ class DeepSeekV2LiteGGUFRuntime:
         expert_devices: Sequence[int] | None = None,
         remote_expert_client: Any = None,
         remote_expert_device: int | None = None,
+        remote_expert_fraction: float = 0.5,
         max_cache: int = 256,
         cpu_threads: int = 6,
         expert_chunk_size: int = 8,
@@ -1263,6 +1264,9 @@ class DeepSeekV2LiteGGUFRuntime:
             int(remote_expert_device)
             if remote_expert_device is not None
             else None
+        )
+        self.remote_expert_fraction = min(
+            1.0, max(0.0, float(remote_expert_fraction))
         )
         self.remote_expert_chunks = 0
         self.expert_device_chunks = 0
@@ -1365,10 +1369,23 @@ class DeepSeekV2LiteGGUFRuntime:
 
             for layer_idx in self.moe_layer_indices:
                 for expert_id in range(self.routed_expert_count):
-                    owner = self.expert_devices[
-                        (int(layer_idx) * 131 + int(expert_id))
-                        % len(self.expert_devices)
-                    ]
+                    if (
+                        self.remote_expert_client is not None
+                        and self.remote_expert_device is not None
+                    ):
+                        score = (
+                            int(layer_idx) * 67 + int(expert_id) * 29
+                        ) % 1000
+                        owner = (
+                            int(self.remote_expert_device)
+                            if score < int(self.remote_expert_fraction * 1000)
+                            else int(self.expert_devices[0])
+                        )
+                    else:
+                        owner = self.expert_devices[
+                            (int(layer_idx) * 131 + int(expert_id))
+                            % len(self.expert_devices)
+                        ]
                     self.ecs_controller.place(
                         ExpertKey(layer_idx, "route", expert_id),
                         tier=Tier.L3,

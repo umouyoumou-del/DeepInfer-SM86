@@ -211,6 +211,38 @@ The hybrid keeps the better prefill batching and the better decode strategy.
 The transport is still point-to-point request/reply rather than a collective
 all-to-all.
 
+### Expert ownership balance
+
+The hybrid path defaults to 50% remote experts.  A 67% remote experiment
+(1313 remote vs 667 local expert dispatches) overloaded the single remote
+worker:
+
+| Remote fraction | Prefill | Decode |
+|---:|---:|---:|
+| 50% (default) | 1.74 s | 4.71 tok/s |
+| 67% | 7.79 s | 2.74 tok/s |
+
+The remote rank is one executor, not a pool; moving more experts to it just
+serializes the work.  Keep 50/50 until remote worker replication exists.
+
+### Multi-request and dead-rank timeout
+
+The same NCCL worker was served two sequential prompts with
+`--requests 2`:
+
+| Request | Output | Prefill | Decode |
+|---|---|---:|---:|
+| `5-2?` | `5-2` (4 generated) | 2.13 s | 4.14 tok/s |
+| `2+3?` | `2+3` (4 generated) | 0.97 s | 4.03 tok/s |
+
+Both finished with `active_sends=0`, so the worker queue drained and the
+worker handled more than one request lifetime.  This is sequential queue
+validation, not concurrent request batching.
+
+`--timeout-seconds` is now passed to the NCCL process group.  A dead remote
+rank therefore produces a timeout instead of hanging forever, but automatic
+worker restart is not implemented.
+
 Long-context smoke (45 prompt tokens, 4 generated tokens):
 
 | Metric | Single GPU | Async NCCL expert |
@@ -242,11 +274,12 @@ Still not validated:
 - a collective All-to-All as the in-model activation exchange (the async NCCL
   path uses point-to-point isend/irecv; the separate ExpertPacket all-to-all
   smoke did pass);
-- multi-request expert-parallel scheduling;
-- heartbeat/restart handling when the remote expert rank dies;
+- concurrent (not sequential) multi-request expert scheduling;
+- active heartbeat plus automatic restart when the remote expert rank dies;
+  only the NCCL process-group timeout is implemented;
 - production heartbeat/worker restart for the dual-GPU pool.
 
-Next: test long context and multiple queued requests, add heartbeat/timeout
-for the remote rank, and evaluate a collective all-to-all or multi-chunk
-pipeline.  The current async path already beats the 4.20 tok/s single-GPU
-decode baseline on the 8-token smoke.
+Next: add concurrent request queues, active heartbeat plus automatic rank
+restart, validate hybrid long-context throughput, and evaluate a collective
+all-to-all.  The hybrid path beats the 4.20 tok/s single-GPU decode baseline
+on the 8-token smoke (4.71 tok/s) and preserves exact token parity.

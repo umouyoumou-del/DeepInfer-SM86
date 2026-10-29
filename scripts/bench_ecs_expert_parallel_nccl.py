@@ -10,6 +10,7 @@ import argparse
 import json
 import os
 import time
+from datetime import timedelta
 from pathlib import Path
 
 import torch
@@ -42,8 +43,26 @@ def main() -> int:
         ),
     )
     parser.add_argument("--meta-dir", type=Path, default=Path("/root/autodl-tmp/meta"))
+    parser.add_argument(
+        "--remote-fraction",
+        type=float,
+        default=0.5,
+        help="fraction of routed experts owned by the remote rank",
+    )
     parser.add_argument("--max-new-tokens", type=int, default=8)
     parser.add_argument("--max-cache", type=int, default=128)
+    parser.add_argument(
+        "--requests",
+        type=int,
+        default=1,
+        help="number of sequential prompts to serve over the same NCCL worker",
+    )
+    parser.add_argument(
+        "--timeout-seconds",
+        type=float,
+        default=300.0,
+        help="NCCL process-group timeout used to detect a dead remote rank",
+    )
     parser.add_argument(
         "--prompt", default="只回答数字：5-2=?"
     )
@@ -56,7 +75,10 @@ def main() -> int:
     if world != 2:
         raise RuntimeError("this benchmark requires exactly two ranks")
     torch.cuda.set_device(local_rank)
-    dist.init_process_group(backend="nccl")
+    dist.init_process_group(
+        backend="nccl",
+        timeout=timedelta(seconds=max(1.0, float(args.timeout_seconds))),
+    )
     moe_layers = _moe_layers(args.meta_dir)
     worker: RemoteExpertWorker | None = None
     client: NCCLExpertClient | None = None
@@ -102,6 +124,7 @@ def main() -> int:
             expert_devices=(0, 1),
             remote_expert_client=client,
             remote_expert_device=1,
+            remote_expert_fraction=args.remote_fraction,
             max_cache=args.max_cache,
             expert_chunk_size=8,
             verbose=False,
@@ -111,30 +134,54 @@ def main() -> int:
         # Rank 1 is already blocked in serve_forever waiting for the first
         # expert request.  A second barrier here would deadlock rank 0.
         print(f"[rank0] runtime ready; starting generate", flush=True)
-        result = runtime.generate(
-            [{"role": "user", "content": args.prompt}],
-            max_new_tokens=args.max_new_tokens,
-            temperature=0.0,
-        )
+        prompts = [args.prompt]
+        extra = ["只回答数字：2+3=?", "只回答数字：9-4=?"]
+        prompts.extend(extra[: max(0, int(args.requests) - 1)])
+        records = []
+        for prompt in prompts:
+            result = runtime.generate(
+                [{"role": "user", "content": prompt}],
+                max_new_tokens=args.max_new_tokens,
+                temperature=0.0,
+            )
+            records.append(
+                {
+                    "prompt": prompt,
+                    "text": result.text,
+                    "token_ids": result.token_ids,
+                    "prompt_tokens": result.prompt_tokens,
+                    "completion_tokens": result.completion_tokens,
+                    "prefill_seconds": result.prefill_seconds,
+                    "decode_seconds": result.decode_seconds,
+                    "decode_tokens_per_second": result.decode_tokens_per_second,
+                    "peak_gpu_allocated_bytes": result.peak_gpu_allocated_bytes,
+                    "timings": result.timings,
+                    "ecs": result.ecs,
+                }
+            )
         print("[rank0] generate finished; stopping worker", flush=True)
         client.close()
         dist.barrier()
+        result = records[0]
         payload = {
             "rank": rank,
             "gpu": torch.cuda.get_device_name(local_rank),
             "role": "coordinator",
             "load_seconds": load_seconds,
-            "text": result.text,
-            "token_ids": result.token_ids,
-            "prompt_tokens": result.prompt_tokens,
-            "completion_tokens": result.completion_tokens,
-            "prefill_seconds": result.prefill_seconds,
-            "decode_seconds": result.decode_seconds,
-            "decode_tokens_per_second": result.decode_tokens_per_second,
-            "peak_gpu_allocated_bytes": result.peak_gpu_allocated_bytes,
+            "remote_fraction": args.remote_fraction,
+            "requests": len(records),
+            "text": result["text"],
+            "token_ids": result["token_ids"],
+            "prompt_tokens": result["prompt_tokens"],
+            "completion_tokens": result["completion_tokens"],
+            "prefill_seconds": result["prefill_seconds"],
+            "decode_seconds": result["decode_seconds"],
+            "decode_tokens_per_second": result["decode_tokens_per_second"],
+            "peak_gpu_allocated_bytes": result["peak_gpu_allocated_bytes"],
             "remote_transport": client.metrics(),
-            "timings": result.timings,
-            "ecs": result.ecs,
+            "timings": result["timings"],
+            "ecs": result.get("ecs"),
+            "records": records,
         }
         print(json.dumps(payload, ensure_ascii=False, indent=2), flush=True)
         if args.output is not None:

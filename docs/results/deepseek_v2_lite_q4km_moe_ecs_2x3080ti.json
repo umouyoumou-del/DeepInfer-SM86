@@ -174,7 +174,8 @@
     "nccl_async_beats_single_decode": true,
     "long_context_token_parity": true,
     "nccl_hybrid_token_parity": true,
-    "nccl_hybrid_beats_single_decode": true
+    "nccl_hybrid_beats_single_decode": true,
+    "multi_request_worker_drained": true
   },
   "notes": [
     "The dual GPU pool runs one independent DeepSeek runtime per GPU and assigns requests by queue depth.",
@@ -182,7 +183,7 @@
     "The NCCL all-to-all smoke validates real ExpertPacket transport and hot-expert token sharding across both GPUs.",
     "The expert-sharded runtime splits routed expert chunks by ECS owner across GPU0/GPU1; the in-model activation exchange was subsequently moved to NCCL point-to-point between coordinator and remote expert worker.",
     "The asynchronous NCCL revision overlaps remote expert requests with local expert chunks: exact token parity, 4.90 tok/s decode, 2.02 s prefill, and ~39.6 MB peak GPU allocation on the remote rank.",
-    "The hybrid NCCL path batches remote expert groups during prefill and uses per-chunk async overlap during decode: 1.74 s prefill, 4.71 tok/s decode, exact token parity, and 52.8 MB peak allocation on the remote rank. Remaining work: multi-request NCCL scheduling, worker heartbeat/restart, and long-context hybrid validation."
+    "Hybrid NCCL keeps 50/50 expert ownership (0.67 remote fraction regressed heavily). Two sequential requests drained the same remote worker with active_sends=0; concurrent multi-request scheduling and restart recovery remain open. A process-group timeout is now configurable for dead-remote detection."
   ],
   "layer_pipeline": {
     "prompt": "只回答数字：5-2=?",
@@ -449,5 +450,44 @@
       },
       "tick": 4652
     }
+  },
+  "remote_fraction_experiment": {
+    "remote_fraction": 0.67,
+    "prefill_seconds": 7.786460801959038,
+    "decode_tokens_per_second": 2.73927049616239,
+    "expert_device_0_experts": 667,
+    "expert_device_1_experts": 1313,
+    "conclusion": "67% remote overloads the single remote expert rank and is much slower than the balanced 50/50 default."
+  },
+  "multi_request": {
+    "requests": 2,
+    "remote_requests": 304,
+    "remote_bytes_sent": 39632896,
+    "remote_active_sends": 0,
+    "records": [
+      {
+        "text": " 5-2",
+        "token_ids": [
+          207,
+          20,
+          12,
+          17
+        ],
+        "prefill_seconds": 2.125989980995655,
+        "decode_tokens_per_second": 4.141955933085079
+      },
+      {
+        "text": " 2+3",
+        "token_ids": [
+          207,
+          17,
+          10,
+          18
+        ],
+        "prefill_seconds": 0.9722508937120438,
+        "decode_tokens_per_second": 4.02517595947805
+      }
+    ],
+    "note": "sequential requests over the same NCCL expert worker; this validates worker lifetime and queue drain, not concurrent request batching."
   }
 }
