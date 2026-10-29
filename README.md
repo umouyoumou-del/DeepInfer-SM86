@@ -1777,7 +1777,7 @@ python scripts\export_sm86_kernels.py
 - 3-bit MLP/lm_head 是有损量化，短输出可读不代表与 BF16 等价；
 - 4 GB 上整体 Q4 只能作为质量/兼容实验，速度约 8 tokens/s；
 - GPTQ / AWQ 走**离线转换**为 W4A16；DeepSeek-V2-Lite Q4_K_M GGUF 可直接流式执行；
-- AWQ 仅支持 GEMM 布局；GGUF 暂不支持 split shards；
+- AWQ 仅支持 GEMM 布局；GGUF split shards 已支持（`gguf_split.open_gguf`，含缺片/重复片/分片总数校验）；
 - DeepSeek-V2-Lite MoE 已接入 paged scheduler 的 chunked prefill / batched
   decode / block KV 预算和 prefill/decode stream overlap；CuPy kernels 跟随
   torch stream，短 smoke 已验证 token parity，但 4 GB 带宽下 overlap 收益
