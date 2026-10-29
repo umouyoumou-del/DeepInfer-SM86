@@ -1819,6 +1819,8 @@ python scripts\export_sm86_kernels.py
 - ECS 二卡推进全过程（paged KV / 前缀共享 / 三次押错）：`docs/ARTICLE_10_ECS_PAGED_KV_AND_TRANSPORT.md`
 - 项目介绍视频制作脚本（分镜 / 旁白 / 录制清单）：`docs/VIDEO_INTRO_SCRIPT.md`
 - ECS 论文（系统设计与否定性结果）：`docs/PAPER_ECS.md`（PDF：`docs/PAPER_ECS.pdf`，18 页）
+- 跨模型横向对比（带宽上界与达成率）：`docs/CROSS_MODEL_COMPARISON.md`
+- OLMoE 移植计划与耦合点清单：`docs/OLMOE_PORT_PLAN.md`
 - 中文博客：为什么把 MoE 装进手机这件事会先发生在软件上：`docs/BLOG_MOE_ON_PHONE.md`（PDF：`docs/BLOG_MOE_ON_PHONE.pdf`）
   - 知乎编辑器友好版（无 Markdown 语法，表格已转列表）：`docs/BLOG_MOE_ON_PHONE_zhihu.txt`
 - 上篇（内核/量化）：`docs/ARTICLE_1_DEEPINFER_SM86_KERNEL.md`
