@@ -129,11 +129,72 @@ def infer_layer_count(index: Any) -> int:
     return max(layers) + 1
 
 
+
+
+def load_state_dict_into(model: Any, state: dict[str, Any], *, strict: bool = True) -> Any:
+    """Load a mapped GGUF state dict into an already-built dense model.
+
+    Handles the two shape details that bite in practice: tensors arrive as
+    NumPy (convert to torch) and tied-embedding checkpoints carry no
+    ``lm_head.weight``, which ``strict=True`` would otherwise report missing.
+    """
+
+    import torch
+
+    tied = bool(getattr(model.cfg, "tie_word_embeddings", False))
+    converted: dict[str, torch.Tensor] = {}
+    for name, value in state.items():
+        tensor = torch.as_tensor(value)
+        converted[name] = tensor
+    if tied and "lm_head.weight" not in converted:
+        embedding = converted.get("model.embed_tokens.weight")
+        if embedding is not None:
+            converted["lm_head.weight"] = embedding
+    missing, unexpected = model.load_state_dict(converted, strict=False)
+    if strict and unexpected:
+        raise UnsupportedGGUFLayout(
+            "GGUF tensors with no counterpart in the model: "
+            + ", ".join(sorted(unexpected)[:8])
+        )
+    if strict and missing:
+        raise UnsupportedGGUFLayout(
+            "model parameters absent from the GGUF file: "
+            + ", ".join(sorted(missing)[:8])
+        )
+    return model
+
+
+def from_gguf(index: Any, model: Any, *, dtype: Any = None) -> Any:
+    """Build the state dict from ``index`` and load it into ``model``."""
+
+    state = build_dense_state_dict(
+        index,
+        num_layers=int(getattr(model.cfg, "num_hidden_layers", 0)) or None,
+        dtype=_numpy_dtype(dtype),
+    )
+    return load_state_dict_into(model, state)
+
+
+def _numpy_dtype(dtype: Any) -> Any:
+    if dtype is None:
+        return None
+    import numpy as np
+    import torch
+
+    if isinstance(dtype, torch.dtype):
+        return {torch.float16: np.float16, torch.float32: np.float32}.get(
+            dtype, np.float32
+        )
+    return dtype
+
+
 __all__ = [
     "BLOCK_TENSORS",
     "STATIC_TENSORS",
     "UnsupportedGGUFLayout",
     "build_dense_state_dict",
+    "from_gguf",
     "infer_layer_count",
+    "load_state_dict_into",
     "map_tensor_name",
 ]

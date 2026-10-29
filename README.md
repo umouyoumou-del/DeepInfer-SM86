@@ -1196,7 +1196,7 @@ lm_head           : 3-bit, group 128
 | GPTQ | ✅ | 2/4/8-bit、group quant、`g_idx`/desc_act -> W4A16 |
 | AWQ | ✅ | AutoAWQ GEMM 4-bit -> W4A16 |
 | GGUF | ✅ | 单文件 + Q4_0/Q4_K 等类型 -> W4A16 |
-| GGUF 直接流式执行 | ⚠️ | DeepSeek-V2-Lite Q4_K_M 已直跑；dense 侧张量名映射与 state-dict 组装已实现（`gguf_dense_loader.py`），尚未接进模型加载入口 |
+| GGUF 直接流式执行 | ⚠️ | DeepSeek-V2-Lite Q4_K_M 已直跑；dense 侧 `from_gguf()` 已可把 GGUF 装进现成模型（张量映射 + 去量化 + tied embedding），尚未接进 cfg→model 的工厂函数 |
 | activation quant / SmoothQuant | ❌ | 仅权重量化 W4A16/W3A16 |
 | tensor / pipeline parallel | ❌ | 单 GPU |
 | 跨厂商后端 | ❌ | 当前 kernel 绑定 NVIDIA SM86 |
