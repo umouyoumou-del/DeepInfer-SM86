@@ -354,7 +354,7 @@ MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比�
   `docs/results/deepseek_v2_lite_q4km_moe_decode_prefetch.json`（decode prefetch）、
   `docs/results/deepseek_v2_lite_q4km_moe_decode_predictive.json`（预测式 prefetch）；
 - PyPI 独立库：`pypi/deepinfer-sm86/`；PyPI 已发布 `0.1.0`，
-  本地 ECS `0.2.0` wheel/sdist 已构建但尚未上传；
+  ECS `0.2.0` 已于 PyPI 发布（`pip install deepinfer-sm86==0.2.0`）；
 - 已知边界：
   - paged scheduler 已接入 chunked prefill / batched decode / KV 预算，但
     DeepSeek 暂不支持 prefill/decode stream overlap；
@@ -496,7 +496,7 @@ pypi/deepinfer-sm86/dist/SHA256SUMS
 安装方式：
 
 ```powershell
-# PyPI 当前已发布版本（不含 ECS 0.2）
+# PyPI 已发布版本
 pip install deepinfer-sm86==0.1.0
 # ECS 0.2 本地 wheel
 pip install .\pypi\deepinfer-sm86\dist\deepinfer_sm86-0.2.0-py3-none-any.whl

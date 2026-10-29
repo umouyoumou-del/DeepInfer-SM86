@@ -28,3 +28,4 @@ docs/*.chromepdf
 docs/*.html
 docs/.chromepdf*
 docs/*.html
+build/old-logs/
