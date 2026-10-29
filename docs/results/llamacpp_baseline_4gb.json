@@ -1,40 +1,32 @@
 {
-  "backend": "llama.cpp (bundled in Ollama 0.24.0), num_gpu=0 (CPU inference)",
+  "backend": "llama.cpp (bundled in Ollama 0.24.0)",
   "device": "RTX 3050 Laptop 4 GB",
   "gguf": "DeepSeek-V2-Lite-Chat-Q4_K_M",
-  "note": "Partial run: only the num_gpu=0 arm completed before the driver process died. num_gpu=8/99 arms not collected. Single measurement per prompt, greedy decoding.",
+  "note": "num_gpu=0 arm completed with two repeats. num_gpu=8 hung: the 4 GB card filled to 3.48 GiB and produced no token for >3 minutes, so the GPU-offload arms could not be measured on this device. Greedy decoding, 8 new tokens.",
+  "arms": {
+    "num_gpu=0 (CPU experts)": {
+      "cold_repeat_tok_s": [
+        6.67,
+        13.95,
+        17.24,
+        19.55
+      ],
+      "warm_repeat_tok_s": [
+        23.72,
+        24.58,
+        25.49,
+        24.76
+      ],
+      "peak_gpu_mib": 386
+    },
+    "num_gpu=8": "hung on 4 GB (3.48 GiB resident, no output)",
+    "num_gpu=99": "not attempted"
+  },
   "steady_state_decode_tokens_per_second": [
-    19.86,
-    21.97,
-    21.97,
-    23.36
+    23.72,
+    24.58,
+    25.49,
+    24.76
   ],
-  "peak_gpu_mib": 624,
-  "records": [
-    {
-      "prompt": "只回答数字：5-2=?",
-      "decode_tokens_per_second": 19.86,
-      "peak_gpu_mib": 1083,
-      "text": " 这个问题很简单，只需要做减法",
-      "note": "cold, long answer"
-    },
-    {
-      "prompt": "只回答数字：2+3=?",
-      "decode_tokens_per_second": 21.97,
-      "peak_gpu_mib": 624,
-      "text": " 2 + 3 = 5"
-    },
-    {
-      "prompt": "只回答数字：9-4=?",
-      "decode_tokens_per_second": 21.97,
-      "peak_gpu_mib": 624,
-      "text": " 9 - 4 = 5"
-    },
-    {
-      "prompt": "只回答数字：1+1=?",
-      "decode_tokens_per_second": 23.36,
-      "peak_gpu_mib": 624,
-      "text": " 1 + 1 = 2"
-    }
-  ]
+  "peak_gpu_mib": 386
 }
