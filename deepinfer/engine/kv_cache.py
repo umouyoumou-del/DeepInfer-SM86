@@ -219,11 +219,24 @@ class PrefixCache:
     cache reference for newly materialized full blocks.
     """
 
-    def __init__(self, allocator: BlockAllocator, *, max_blocks: int) -> None:
+    def __init__(
+        self,
+        allocator: BlockAllocator,
+        *,
+        max_blocks: int,
+        heat_fn: Any = None,
+    ) -> None:
         if max_blocks < 0:
             raise ValueError("max_blocks must be non-negative")
         self.allocator = allocator
         self.max_blocks = int(max_blocks)
+        # Optional ``heat_fn(block_id) -> float``.  When supplied, eviction
+        # picks the coldest entry instead of the least recently used one.
+        # Strict LRU throws away a block precisely when it was last touched,
+        # which is the right signal for recency, but the wrong one when a
+        # high-heat prefix (a shared system prompt, say) is simply older than
+        # a stream of one-off prompts.
+        self.heat_fn = heat_fn
         self._entries: OrderedDict[bytes, int] = OrderedDict()
         self._lock = threading.RLock()
         self.hits = 0
@@ -289,6 +302,30 @@ class PrefixCache:
                 self.reused_blocks += len(matched)
         return matched
 
+    def _pick_eviction(self) -> int:
+        """Remove and return the block to evict.
+
+        Without a ``heat_fn`` this is plain LRU.  With one, the coldest block
+        wins; ties keep LRU order because the strict ``<`` comparison leaves the
+        first (oldest) entry in place.
+        """
+
+        if self.heat_fn is None:
+            _, evicted = self._entries.popitem(last=False)
+            return evicted
+        coldest_digest = None
+        coldest_block = None
+        coldest_heat = None
+        for digest, block in self._entries.items():
+            try:
+                heat = float(self.heat_fn(block))
+            except Exception:  # noqa: BLE001 - a bad heat source must not break serving
+                heat = 0.0
+            if coldest_heat is None or heat < coldest_heat:
+                coldest_digest, coldest_block, coldest_heat = digest, block, heat
+        self._entries.pop(coldest_digest, None)
+        return coldest_block
+
     def register(self, hashes: list[bytes], blocks: list[int]) -> int:
         """Cache full blocks and retain one prefix-cache reference each."""
         if self.max_blocks == 0:
@@ -301,7 +338,7 @@ class PrefixCache:
                 if digest in self._entries:
                     continue
                 if len(self._entries) >= self.max_blocks:
-                    _, evicted = self._entries.popitem(last=False)
+                    evicted = self._pick_eviction()
                     self.allocator.free([evicted])
                     self.evictions += 1
                 self.allocator.retain([block])
