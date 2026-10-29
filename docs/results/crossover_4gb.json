@@ -1,0 +1,45 @@
+{
+  "title": "4 GB device crossover: llama.cpp vs ECS on DeepSeek-V2-Lite Q4_K_M",
+  "device": "RTX 3050 Laptop 4 GB, Ryzen 5 5600H, 16 GB RAM, Windows 11",
+  "model_file_gib": 9.7,
+  "measurement_notes": [
+    "n=1 for each cold-start figure; warm figures have two repeats.",
+    "llama.cpp peak RSS sampled at 200 ms over the whole ollama process tree.",
+    "ECS peak RSS sampled at 200 ms over the python process tree; decode rate not captured in this run (field naming), steady value carried over from earlier measurements of the same configuration.",
+    "llama.cpp cold start = one /api/generate request including model load (wall 166.62 s)."
+  ],
+  "llamacpp": {
+    "backend": "llama.cpp bundled in Ollama 0.24.0, num_gpu=0 (mmap, CPU experts)",
+    "cold": {
+      "wall_seconds": 166.62,
+      "decode_tokens_per_second": 7.46
+    },
+    "warm_decode_tokens_per_second": [
+      23.72,
+      24.58,
+      25.49,
+      24.76
+    ],
+    "peak_rss_gib": 5.37,
+    "peak_gpu_mib": 386,
+    "num_gpu_8": "hung on 4 GB: 3.48 GiB resident, no token for over 3 minutes"
+  },
+  "ecs": {
+    "backend": "DeepInfer-SM86 ECS, fused grouped MoE, expert streaming from NVMe",
+    "load_seconds": 33.21,
+    "warmup_seconds": 17.82,
+    "cold_end_to_end_seconds": 51.03,
+    "steady_decode_tokens_per_second": [
+      2.64,
+      3.01
+    ],
+    "peak_rss_gib": 3.0,
+    "peak_gpu_allocated_gib": 2.23
+  },
+  "summary": {
+    "ecs_rss_ratio_vs_llamacpp": 0.56,
+    "ecs_cold_start_speedup": 3.3,
+    "llamacpp_warm_decode_speedup": 8.7,
+    "reading": "Neither dominates. llama.cpp wins steady-state throughput once the page cache is warm; ECS wins cold start and peak memory. The 8-9x throughput gap reported earlier is a warm-cache figure and does not hold at cold start (7.46 tok/s)."
+  }
+}
