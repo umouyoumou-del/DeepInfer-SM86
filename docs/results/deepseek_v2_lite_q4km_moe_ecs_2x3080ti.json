@@ -165,13 +165,16 @@
       0,
       1
     ],
-    "layer_pipeline_token_parity": true
+    "layer_pipeline_token_parity": true,
+    "expert_sharded_token_parity": true,
+    "expert_sharded_uses_both_gpus": true
   },
   "notes": [
     "The dual GPU pool runs one independent DeepSeek runtime per GPU and assigns requests by queue depth.",
-    "The layer-pipeline benchmark runs layers 0-12 on GPU0 and layers 13-26 + LM head on GPU1 in one process and produces token-for-token parity with the single-GPU baseline.",
+    "The layer-pipeline benchmark runs layers 0-12 on GPU0 and layers 13-26 + LM head on GPU1 and produces token-for-token parity with the single-GPU baseline.",
     "The NCCL all-to-all smoke validates real ExpertPacket transport and hot-expert token sharding across both GPUs.",
-    "A fully expert-sharded single-model data plane (routed experts split across ranks inside each layer) remains the next Level-2 milestone."
+    "The expert-sharded runtime now splits routed expert chunks by ECS owner across GPU0/GPU1, with 1416/1415 expert dispatches and exact token parity.",
+    "Remaining work: route the in-model activation exchange through NCCL All-to-All and implement a memory-optimized layer-sharded loader; this host has no P2P/NVLink."
   ],
   "layer_pipeline": {
     "prompt": "只回答数字：5-2=?",
@@ -202,5 +205,52 @@
       "cuda:0",
       "cuda:1"
     ]
+  },
+  "expert_sharded": {
+    "enabled": true,
+    "method": "ECS route-placement ownership: experts round-robin placed on GPU0/GPU1; each expert chunk is split by owner and computed on the owning GPU; token activations and outputs cross PCIe into the coordinator GPU.",
+    "text": " 5-2=3",
+    "token_ids": [
+      207,
+      20,
+      12,
+      17,
+      28,
+      18,
+      100001
+    ],
+    "prefill_seconds": 1.4220763072371483,
+    "decode_seconds": 1.847473606467247,
+    "decode_tokens_per_second": 3.247678331639739,
+    "peak_coordinator_gpu_allocated_bytes": 2350819328,
+    "expert_device_chunks": 834,
+    "expert_device_0_experts": 1416,
+    "expert_device_1_experts": 1415,
+    "token_parity_single_gpu": true,
+    "ecs": {
+      "backend": "cpp",
+      "tier_bytes": {
+        "L1": 0,
+        "L2": 0,
+        "L3": 6833913856
+      },
+      "device_bytes": {
+        "0": 6833913856,
+        "1": 0
+      },
+      "entries": 5249,
+      "metrics": {
+        "l1_hits": 0.0,
+        "l2_hits": 0.0,
+        "l3_reads": 8493.0,
+        "l1_promotions": 0.0,
+        "evictions": 0.0,
+        "chunk_plans": 234.0,
+        "cross_device_packets": 0.0,
+        "cross_device_bytes": 0.0,
+        "hot_replications": 0.0
+      },
+      "tick": 10157
+    }
   }
 }

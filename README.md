@@ -332,7 +332,7 @@ MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比�
 - `tests/moe/` 新增 GGUF 索引、截断拒绝、expert slice、Q4_K/Q5_0/Q8_0
   GPU 反量化、dense/MoE 层布局、CPU MLP fallback、per-expert fused 和
   grouped MoE kernel 对照测试；
-- 全套测试：**107 passed**；
+- 全套测试：**108 passed**；
 - 新增文章：
   `docs/ARTICLE_9_DEEPSEEK_V2_LITE_MOE_CPU_GPU_OFFLOAD.md`；
 - 结构化结果：
@@ -597,6 +597,8 @@ PyTorch 2.5.1+cu121、CuPy 14.2）上完成了真实多设备验证：
 | 双 runtime worker pool | 两请求并发，分别落到 GPU0/GPU1 |
 | NCCL ExpertPacket all-to-all | rank1 收到 2 个跨卡包 |
 | hot expert 7 token shard | 2/2 跨卡 |
+| 单模型 expert sharding | GPU0/GPU1 1416/1415 expert dispatches |
+| expert sharding token parity | 与单卡完全一致 |
 
 真实执行路径包括：
 
@@ -606,9 +608,14 @@ PyTorch 2.5.1+cu121、CuPy 14.2）上完成了真实多设备验证：
 - 跨 GPU layer pipeline：GPU0 做 embedding+前 13 层，GPU1 做后 14 层
   + norm + LM head，输出 token 与单卡完全一致。
 
-仍未完成：**单个模型的 routed experts 在层内真正分片到两张卡**。
-当前双卡结果是 worker pool + layer pipeline + packet transport，不是完整
-expert-sharded Level-2。双卡机也没有 P2P/NVLink。
+现在单模型 routed experts 也已按 ECS route placement 分片到两张卡：
+每个 expert chunk 按 owner 拆分，在 owner GPU 上执行 grouped MoE，
+再回到协调 GPU。输出 token 与单卡完全一致，GPU0/GPU1 分别承担
+1416/1415 次 expert dispatch。代价是每 chunk 有跨 PCIe 的 activation/output
+拷贝，所以 decode 3.25 tok/s，暂时慢于单卡 4.20 tok/s。
+
+仍未完成：把 in-model activation exchange 改成 NCCL All-to-All，
+以及做不重复加载非 routed 权重的 layer-sharded loader。双卡机没有 P2P/NVLink。
 
 复现与硬件细节：`docs/REMOTE_ECS_2X3080TI.md`  
 结果：`docs/results/deepseek_v2_lite_q4km_moe_ecs_2x3080ti.json`

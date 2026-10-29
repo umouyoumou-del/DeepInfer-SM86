@@ -102,6 +102,40 @@ NCCL ECS packet All-to-All:
   (`[101, 102]` for expert 7 and `[201, 202]` for expert 8).
 - Rank 0 received its local shard `[103, 104]`.
 
+## Expert-sharded single-model execution
+
+The runtime now supports `--expert-devices 0 1`.  With ECS enabled, routed
+experts receive an ECS route-placement owner on GPU0 or GPU1.  Each expert
+chunk is split by owner, the owner stages its packed expert bytes and runs the
+grouped gate/up/down kernels on that GPU, and the chunk output is copied back
+to the coordinator GPU.
+
+Command:
+
+```bash
+PYTHONPATH=$PWD /root/autodl-tmp/ecs-venv/bin/python -u   scripts/smoke_deepseek_v2_lite_moe.py   --model /root/autodl-tmp/models/DeepSeek-V2-Lite-Chat-GGUF/DeepSeek-V2-Lite-Chat-Q4_K_M.gguf   --meta-dir /root/autodl-tmp/meta   --device cuda:0 --expert-devices 0 1 --ecs   --prompt '只回答数字：5-2=?' --max-new-tokens 8 --warmup-tokens 2   --max-cache 128 --output /root/autodl-tmp/results/ecs_expert_shard.json
+```
+
+| Metric | Value |
+|---|---:|
+| Output | `5-2=3` |
+| Token IDs | `[207, 20, 12, 17, 28, 18, 100001]` |
+| Token parity vs single GPU | exact |
+| Expert dispatches on GPU0 / GPU1 | 1416 / 1415 |
+| Expert chunk dispatches | 834 |
+| Prefill | 1.42 s |
+| Decode | 3.25 tok/s |
+| Coordinator peak | 2.24 GiB |
+
+This is slower than the single-GPU 4.20 tok/s because every expert chunk now
+has cross-PCIe activation/output copies and the coordinator still runs all
+attention/shared layers.  It proves correctness and balanced expert ownership;
+it is not yet a throughput win.
+
+The current path uses direct `Tensor.to()` copies between the two GPUs.  The
+NCCL ExpertPacket All-to-All above is the transport path for the next revision
+of in-model activation exchange.
+
 ## What is and is not validated
 
 Validated on hardware:
@@ -115,12 +149,15 @@ Validated on hardware:
 
 Still not validated:
 
-- one model's routed experts physically split across ranks inside one layer;
 - NVLink/P2P (this host reports no P2P);
 - 8×P100 or any multi-node fabric;
-- production heartbeat/worker restart for the new dual-GPU pool.
+- NCCL All-to-All as the *in-model* activation exchange (the separate NCCL
+  packet smoke passed, but the expert-sharded runtime currently uses direct
+  cross-GPU tensor copies);
+- a memory-optimized loader that does not duplicate the full runtime on both
+  GPUs;
+- production heartbeat/worker restart for the dual-GPU pool.
 
-The next Level-2 target is expert-sharded execution: keep attention on a
-coordinator GPU, place routed expert owners on both GPUs, exchange token
-assignments/activations through the existing ECS packet transport, and verify
-token parity against this single-GPU baseline.
+The next Level-2 target is moving the in-model expert activation exchange onto
+the existing ECS packet/NCCL transport, then eliminating duplicated non-routed
+weights with a layer-sharded loader.

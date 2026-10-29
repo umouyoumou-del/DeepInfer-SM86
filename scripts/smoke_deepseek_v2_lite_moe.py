@@ -177,6 +177,14 @@ def _parse_args() -> argparse.Namespace:
         help="disable fused packed-weight MoE GEMV/GEMM and use dequant+bmm",
     )
     parser.add_argument("--cpu-threads", type=int, default=6)
+    parser.add_argument("--device", default="cuda")
+    parser.add_argument(
+        "--expert-devices",
+        type=int,
+        nargs="+",
+        default=None,
+        help="GPU indices that own routed experts (e.g. 0 1)",
+    )
     parser.add_argument(
         "--shared-experts-device", choices=("auto", "cuda", "cpu"), default="auto"
     )
@@ -218,6 +226,8 @@ def main() -> int:
     runtime = DeepSeekV2LiteGGUFRuntime(
         args.model,
         meta_dir=args.meta_dir,
+        device=args.device,
+        expert_devices=args.expert_devices,
         max_cache=args.max_cache,
         cpu_threads=args.cpu_threads,
         expert_chunk_size=args.expert_chunk_size,
@@ -302,7 +312,10 @@ def main() -> int:
         "meta_dir": str(args.meta_dir),
         "load_seconds": load_seconds,
         "warmup_seconds": warmup_seconds,
-        "device": torch.cuda.get_device_name(0),
+        "device": torch.cuda.get_device_name(
+            int(torch.device(args.device).index or 0)
+        ),
+        "expert_devices": args.expert_devices,
         "torch": torch.__version__,
         "cuda": torch.version.cuda,
         "gpu_total_bytes": int(total_bytes),

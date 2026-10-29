@@ -173,3 +173,25 @@ def test_ecs_worker_pool_queue_scheduling() -> None:
         assert status["workers"]["1"]["completed"] == 1
     finally:
         pool.close()
+
+
+def test_runtime_expert_owner_uses_ecs_placement() -> None:
+    from deepinfer.moe.deepseek_v2_runtime import DeepSeekV2LiteGGUFRuntime
+
+    runtime = object.__new__(DeepSeekV2LiteGGUFRuntime)
+    runtime.device = __import__("torch").device("cpu")
+    runtime.expert_devices = (0, 1)
+    runtime._multi_device_experts = True
+    controller = ECSController(
+        devices=(0, 1), use_cpp=cpp_available()
+    )
+    controller.place(
+        ExpertKey(4, "route", 7),
+        tier=Tier.L3,
+        device=1,
+        bytes=0,
+    )
+    runtime.ecs_controller = controller
+    assert runtime._expert_device_index(4, 7) == 1
+    runtime.ecs_controller = None
+    assert runtime._expert_device_index(4, 7) in (0, 1)

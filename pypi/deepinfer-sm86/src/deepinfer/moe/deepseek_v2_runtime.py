@@ -1031,7 +1031,9 @@ class GGUFExpertStore:
             started = time.perf_counter()
             compute_stream = torch.cuda.current_stream()
             copy_stream = (
-                self._copy_streams[slot] if self._overlap_down_copy else None
+                self._copy_streams[slot]
+                if self._overlap_down_copy and target_device == self.device
+                else None
             )
             if async_gate_up and copy_stream is not None:
                 # Prefill pipeline: all three copies are issued on the slot's
@@ -1204,6 +1206,7 @@ class DeepSeekV2LiteGGUFRuntime:
         *,
         meta_dir: str | Path | None = None,
         device: str = "cuda",
+        expert_devices: Sequence[int] | None = None,
         max_cache: int = 256,
         cpu_threads: int = 6,
         expert_chunk_size: int = 8,
@@ -1244,6 +1247,19 @@ class DeepSeekV2LiteGGUFRuntime:
                 candidates[0],
             )
         self.device = torch.device(device)
+        if expert_devices is None:
+            self.expert_devices = (
+                int(self.device.index) if self.device.index is not None else 0,
+            )
+        else:
+            self.expert_devices = tuple(int(index) for index in expert_devices)
+        if not self.expert_devices:
+            raise ValueError("at least one expert device is required")
+        self._multi_device_experts = len(self.expert_devices) > 1
+        self.expert_device_chunks = 0
+        self.expert_device_counts: dict[int, int] = {
+            int(index): 0 for index in self.expert_devices
+        }
         self.max_cache = int(max_cache)
         self.cpu_threads = int(cpu_threads)
         self.expert_chunk_size = max(1, int(expert_chunk_size))
@@ -1275,9 +1291,7 @@ class DeepSeekV2LiteGGUFRuntime:
                 l2_capacity_bytes=max(
                     0, max(int(ecs_l2_mb), int(expert_cache_mb))
                 ) * _MIB,
-                devices=(int(self.device.index or 0),)
-                if self.device.index is not None
-                else (0,),
+                devices=self.expert_devices,
             )
             if self.ecs_profile_path is not None:
                 self.ecs_controller.load_profile(self.ecs_profile_path)
@@ -1337,6 +1351,22 @@ class DeepSeekV2LiteGGUFRuntime:
         self.dense_layer_indices, self.moe_layer_indices = split_layer_indices(
             self.config
         )
+        if self.ecs_controller is not None and self._multi_device_experts:
+            from deepinfer.ecs import ExpertKey, Tier
+
+            for layer_idx in self.moe_layer_indices:
+                for expert_id in range(self.routed_expert_count):
+                    owner = self.expert_devices[
+                        (int(layer_idx) * 131 + int(expert_id))
+                        % len(self.expert_devices)
+                    ]
+                    self.ecs_controller.place(
+                        ExpertKey(layer_idx, "route", expert_id),
+                        tier=Tier.L3,
+                        device=owner,
+                        bytes=0,
+                        heat_delta=0.0,
+                    )
         cpu_layer_count = min(
             self.requested_cpu_moe_layers, len(self.moe_layer_indices)
         )
@@ -1787,6 +1817,33 @@ class DeepSeekV2LiteGGUFRuntime:
         )
         mlp.forward = MethodType(forward, mlp)
 
+    def _expert_device_index(self, layer_idx: int, expert_id: int) -> int:
+        """Return the owner GPU for a routed expert.
+
+        With ECS enabled the ownership is an ECS placement.  Without ECS a
+        deterministic round-robin placement is used so the dual-GPU path is
+        still testable.
+        """
+
+        if not self._multi_device_experts:
+            return int(self.device.index or 0)
+        if self.ecs_controller is not None:
+            try:
+                from deepinfer.ecs import ExpertKey
+
+                return int(
+                    self.ecs_controller.choose_device(
+                        ExpertKey(layer_idx, "route", int(expert_id)),
+                        bytes=0,
+                    )
+                )
+            except Exception:
+                pass
+        position = (int(layer_idx) * 131 + int(expert_id)) % len(
+            self.expert_devices
+        )
+        return self.expert_devices[position]
+
     def _streaming_moe_forward(
         self,
         mlp: nn.Module,
@@ -1810,6 +1867,7 @@ class DeepSeekV2LiteGGUFRuntime:
             self.decode_prefetch
             and token_count == 1
             and self.fused_moe_enabled
+            and not self._multi_device_experts
             and self.expert_store is not None
             and not self.expert_store.gpu_cache_enabled()
             and layer_idx not in self.cpu_moe_layer_set
@@ -1934,6 +1992,7 @@ class DeepSeekV2LiteGGUFRuntime:
             and self.fused_moe_enabled
             and self.expert_store is not None
             and not self.expert_store.gpu_cache_enabled()
+            and not self._multi_device_experts
             and layer_idx not in self.cpu_moe_layer_set
             and not cpu_expert_set
         )
@@ -1994,12 +2053,20 @@ class DeepSeekV2LiteGGUFRuntime:
                         gpu_tokens = chunk_tokens.index_select(0, gpu_index)
                         gpu_counts = [chunk_counts[index] for index in gpu_local]
                         if self.fused_moe_enabled:
-                            gpu_output = self._fused_expert_chunk(
-                                layer_idx,
-                                gpu_ids,
-                                gpu_tokens,
-                                gpu_counts,
-                            )
+                            if self._multi_device_experts:
+                                gpu_output = self._fused_expert_chunk_multi(
+                                    layer_idx,
+                                    gpu_ids,
+                                    gpu_tokens,
+                                    gpu_counts,
+                                )
+                            else:
+                                gpu_output = self._fused_expert_chunk(
+                                    layer_idx,
+                                    gpu_ids,
+                                    gpu_tokens,
+                                    gpu_counts,
+                                )
                             self.fused_moe_chunks += 1
                         else:
                             gate_w, up_w, down_w = self.expert_store.load_experts(
@@ -2032,13 +2099,21 @@ class DeepSeekV2LiteGGUFRuntime:
                         self.cpu_expert_chunks += 1
                         expert_output.index_copy_(0, cpu_index, cpu_output)
                 elif self.fused_moe_enabled:
-                    expert_output = self._fused_expert_chunk(
-                        layer_idx,
-                        chunk_ids,
-                        chunk_tokens,
-                        chunk_counts,
-                        prefetched=current_prefetch,
-                    )
+                    if self._multi_device_experts:
+                        expert_output = self._fused_expert_chunk_multi(
+                            layer_idx,
+                            chunk_ids,
+                            chunk_tokens,
+                            chunk_counts,
+                        )
+                    else:
+                        expert_output = self._fused_expert_chunk(
+                            layer_idx,
+                            chunk_ids,
+                            chunk_tokens,
+                            chunk_counts,
+                            prefetched=current_prefetch,
+                        )
                     self.fused_moe_chunks += 1
                 else:
                     gate_w, up_w, down_w = self.expert_store.load_experts(
@@ -2082,6 +2157,46 @@ class DeepSeekV2LiteGGUFRuntime:
         routed = routed.reshape(*original_shape)
         return routed + mlp.shared_experts(identity)
 
+    def _fused_expert_chunk_multi(
+        self,
+        layer_idx: int,
+        chunk_ids: Sequence[int],
+        chunk_tokens: torch.Tensor,
+        chunk_counts: Sequence[int],
+    ) -> torch.Tensor:
+        """Split one ECS expert chunk by owner GPU and gather the outputs."""
+
+        groups: dict[int, list[int]] = {}
+        for local_index, expert_id in enumerate(chunk_ids):
+            device_index = self._expert_device_index(layer_idx, int(expert_id))
+            groups.setdefault(device_index, []).append(local_index)
+        output = torch.zeros(
+            (len(chunk_ids), chunk_tokens.shape[1], chunk_tokens.shape[2]),
+            dtype=chunk_tokens.dtype,
+            device=chunk_tokens.device,
+        )
+        for device_index, positions in sorted(groups.items()):
+            position_tensor = torch.tensor(
+                positions, dtype=torch.long, device=chunk_tokens.device
+            )
+            group_ids = [int(chunk_ids[index]) for index in positions]
+            group_tokens = chunk_tokens.index_select(0, position_tensor)
+            group_counts = [int(chunk_counts[index]) for index in positions]
+            target = torch.device(f"cuda:{device_index}")
+            piece = self._fused_expert_chunk(
+                layer_idx,
+                group_ids,
+                group_tokens,
+                group_counts,
+                target_device=target,
+            )
+            output.index_copy_(0, position_tensor, piece.to(chunk_tokens.device))
+            self.expert_device_chunks += 1
+            self.expert_device_counts[device_index] = (
+                self.expert_device_counts.get(device_index, 0) + len(group_ids)
+            )
+        return output
+
     def _fused_expert_chunk(
         self,
         layer_idx: int,
@@ -2089,7 +2204,48 @@ class DeepSeekV2LiteGGUFRuntime:
         chunk_tokens: torch.Tensor,
         chunk_counts: Sequence[int],
         prefetched: ExpertPrefetch | None = None,
+        target_device: torch.device | None = None,
     ) -> torch.Tensor:
+        target = self.device if target_device is None else torch.device(target_device)
+        if target == self.device:
+            return self._fused_expert_chunk_on_device(
+                layer_idx,
+                chunk_ids,
+                chunk_tokens,
+                chunk_counts,
+                prefetched=prefetched,
+                target_device=target,
+            )
+        if target.type != "cuda":
+            raise ValueError("multi-device expert execution requires CUDA")
+        import cupy as cp
+
+        target_index = int(target.index or 0)
+        tokens_on_target = chunk_tokens.to(target)
+        with torch.cuda.device(target):
+            with cp.cuda.Device(target_index):
+                stream = torch.cuda.current_stream(target)
+                with cp.cuda.ExternalStream(stream.cuda_stream):
+                    return self._fused_expert_chunk_on_device(
+                        layer_idx,
+                        chunk_ids,
+                        tokens_on_target,
+                        chunk_counts,
+                        prefetched=None,
+                        target_device=target,
+                    )
+
+    def _fused_expert_chunk_on_device(
+        self,
+        layer_idx: int,
+        chunk_ids: Sequence[int],
+        chunk_tokens: torch.Tensor,
+        chunk_counts: Sequence[int],
+        *,
+        prefetched: ExpertPrefetch | None = None,
+        target_device: torch.device | None = None,
+    ) -> torch.Tensor:
+        target = self.device if target_device is None else torch.device(target_device)
         n_experts = len(chunk_ids)
         max_count = chunk_tokens.shape[1]
         counts = torch.tensor(
@@ -2097,7 +2253,7 @@ class DeepSeekV2LiteGGUFRuntime:
             dtype=torch.int32,
             device=chunk_tokens.device,
         )
-        if self.expert_store.gpu_cache_enabled():
+        if self.expert_store.gpu_cache_enabled() and target == self.device:
             pointer_batch = self.expert_store.load_pointer_experts(
                 layer_idx, chunk_ids
             )
@@ -2131,6 +2287,7 @@ class DeepSeekV2LiteGGUFRuntime:
         batch = self.expert_store.load_packed_experts(
             layer_idx,
             chunk_ids,
+            device=target,
             async_gate_up=self.prefill_pipeline and chunk_tokens.shape[1] > 1,
             prefetched=prefetched,
         )
@@ -2666,6 +2823,11 @@ class DeepSeekV2LiteGGUFRuntime:
                         else {}
                     ),
                     "cpu_moe_seconds": float(self.cpu_moe_seconds),
+                    "expert_device_chunks": float(self.expert_device_chunks),
+                    **{
+                        f"expert_device_{device}_experts": float(count)
+                        for device, count in self.expert_device_counts.items()
+                    },
                 }
             ),
             dense_layer_indices=list(self.dense_layer_indices),

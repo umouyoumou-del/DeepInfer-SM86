@@ -1046,7 +1046,7 @@ fused 之后 decode 的瓶颈更偏向 packed expert 读取和 H2D，而不是 G
   - 5 个质量 prompt 的 token IDs 完全一致；
   - 64-token 长故事生成 token IDs 完全一致；
   - `--no-fused-moe` 可随时回退到旧路径。
-- 全套测试：**107 passed**。
+- 全套测试：**108 passed**。
 
 ### 11.4 Grouped multi-expert kernel
 
@@ -1153,7 +1153,7 @@ opt-in 实验项保留，默认关闭。
 
 - double-buffer 路径与 grouped、per-expert、dequant+bmm 的 token IDs 一致；
 - 512 MB cache 路径 token IDs 也一致；
-- 全套测试：**107 passed**。
+- 全套测试：**108 passed**。
 
 ## 13. GPU packed cache + pointer-array grouped kernel
 
@@ -1196,7 +1196,7 @@ H2D 进来。
 
 - pointer-array gate/up 和 down 都有独立 GPU 单测；
 - GPU cache 路径与无 cache 路径 token IDs 完全一致；
-- 全套测试：**107 passed**。
+- 全套测试：**108 passed**。
 
 ## 14. 质量回归（mini suite）
 
@@ -1622,6 +1622,8 @@ PyTorch 2.5.1+cu121、CuPy 14.2、Python 3.12。
 | 双 runtime worker pool | 两请求并发，分别落 GPU0/GPU1 |
 | NCCL ExpertPacket all-to-all | rank1 收到 2 个跨卡包 |
 | hot expert token shard | 2/2 跨卡 |
+| 单模型 expert sharding | GPU0/GPU1 1416/1415 dispatches |
+| expert sharding token parity | 与单卡完全一致 |
 
 Layer pipeline 的 token IDs 与单卡基线相同：
 `[207, 20, 12, 17, 28, 18, 100001]`。这说明跨 GPU hidden-state
@@ -1635,8 +1637,14 @@ Layer pipeline 的 token IDs 与单卡基线相同：
 - 每卡一个独立 DeepSeek runtime 的 queue-depth worker pool；
 - embedding+layers0–12 / layers13–26+norm+LM head 的两卡 layer pipeline。
 
-仍未完成：**同一个模型的 routed expert 在单层内真正分片到两张卡**。
-双卡结果不是完整 expert-sharded Level-2；该机也没有 P2P/NVLink。
+Expert-sharded 路径也已跑通：ECS route placement 把 routed expert
+分给 GPU0/GPU1，expert chunk 按 owner 拆分并在 owner GPU 上执行，
+输出回到协调 GPU。GPU0/GPU1 分别 dispatch 1416/1415 个 expert，
+token IDs 与单卡完全一致；代价是跨 PCIe activation/output 拷贝，
+decode 3.25 tok/s，暂时慢于单卡 4.20 tok/s。
+
+仍未完成：把 in-model activation exchange 改成 NCCL All-to-All，
+以及做不重复加载非 routed 权重的 layer-sharded loader。该机没有 P2P/NVLink。
 
 结果文件：
 `docs/results/deepseek_v2_lite_q4km_moe_ecs_smoke.json`、
