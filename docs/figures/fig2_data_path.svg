@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="420" viewBox="0 0 900 420" font-family="'Microsoft YaHei','PingFang SC','Noto Sans CJK SC',sans-serif">
+<rect width="900" height="420" fill="#ffffff"/>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#1f2328"/></marker></defs>
+<text x="40" y="42" font-size="20" fill="#1f2328" font-weight="bold" text-anchor="start">同一个 token 的两条数据通路</text>
+<text x="40" y="96" font-size="15" fill="#d2691e" font-weight="bold" text-anchor="start">① 独立显卡架构（本文实测）</text>
+<rect x="40" y="116" width="180" height="72" rx="8" fill="#fff" stroke="#8c959f" stroke-width="1.4"/>
+<text x="130.0" y="148" font-size="15" fill="#1f2328" font-weight="bold" text-anchor="middle">NVMe</text>
+<text x="130.0" y="170" font-size="12" fill="#57606a" font-weight="normal" text-anchor="middle">9.65 GB 全量</text>
+<path d="M 223 152.0 L 242 152.0" stroke="#1f2328" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="246" y="116" width="180" height="72" rx="8" fill="#fff" stroke="#8c959f" stroke-width="1.4"/>
+<text x="336.0" y="148" font-size="15" fill="#1f2328" font-weight="bold" text-anchor="middle">主机内存</text>
+<text x="336.0" y="170" font-size="12" fill="#57606a" font-weight="normal" text-anchor="middle">pinned 缓冲</text>
+<path d="M 429 152.0 L 448 152.0" stroke="#1f2328" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="452" y="116" width="180" height="72" rx="8" fill="#fff" stroke="#d2691e" stroke-width="2"/>
+<text x="542.0" y="148" font-size="15" fill="#1f2328" font-weight="bold" text-anchor="middle">PCIe 3.0</text>
+<text x="542.0" y="170" font-size="12" fill="#57606a" font-weight="normal" text-anchor="middle">6–8 GB/s</text>
+<path d="M 635 152.0 L 654 152.0" stroke="#1f2328" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="658" y="116" width="180" height="72" rx="8" fill="#fff" stroke="#8c959f" stroke-width="1.4"/>
+<text x="748.0" y="148" font-size="15" fill="#1f2328" font-weight="bold" text-anchor="middle">显存 4 GB</text>
+<text x="748.0" y="170" font-size="12" fill="#57606a" font-weight="normal" text-anchor="middle">2.23 GiB 峰值</text>
+<text x="40" y="218" font-size="13" fill="#d2691e" font-weight="normal" text-anchor="start">每 token 都要搬 1.35 GB 过 PCIe → 上限约 5 tok/s（实测 2.64–3.01）</text>
+<text x="40" y="274" font-size="15" fill="#2da44e" font-weight="bold" text-anchor="start">② 统一内存架构（手机 SoC）</text>
+<rect x="40" y="286" width="800" height="86" rx="10" fill="#2da44e" opacity="0.08" stroke="#2da44e" stroke-width="1.6"/>
+<text x="60" y="320" font-size="15" fill="#1f2328" font-weight="bold" text-anchor="start">统一内存（LPDDR5X，50–70 GB/s）</text>
+<text x="60" y="344" font-size="12" fill="#57606a" font-weight="normal" text-anchor="start">CPU · GPU · NPU 共用同一块物理内存：不需要 pinned 缓冲、不需要 H2D、不需要双缓冲槽位</text>
+<text x="640" y="320" font-size="14" fill="#1f2328" font-weight="bold" text-anchor="middle">UFS 4.0</text>
+<text x="640" y="344" font-size="12" fill="#57606a" font-weight="normal" text-anchor="middle">冷门专家按需读</text>
+<path d="M 560 320 L 556 320" stroke="#1f2328" stroke-width="1.6" marker-end="url(#a)"/>
+<text x="40" y="402" font-size="13" fill="#2da44e" font-weight="normal" text-anchor="start">热专家常驻 LPDDR5X → 理论上限 30–35 tok/s；全冷走 UFS → 1.5–3 tok/s</text>
+
+</svg>

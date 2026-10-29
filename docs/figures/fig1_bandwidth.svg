@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="380" viewBox="0 0 860 380" font-family="'Microsoft YaHei','PingFang SC','Noto Sans CJK SC',sans-serif">
+<rect width="860" height="380" fill="#ffffff"/>
+<text x="250" y="42" font-size="20" fill="#1f2328" font-weight="bold" text-anchor="start">各平台的有效带宽（GB/s）</text>
+<text x="250" y="64" font-size="13" fill="#57606a" font-weight="normal" text-anchor="start">同一份 MoE 每生成一个 token 需触达约 1.35 GB 权重</text>
+<text x="234" y="109.92" font-size="14" fill="#1f2328" font-weight="normal" text-anchor="end">手机 SoC  LPDDR5X</text>
+<rect x="250" y="80" width="444" height="44" rx="4" fill="#2da44e" opacity="0.85"/>
+<text x="704.0" y="109.92" font-size="15" fill="#1f2328" font-weight="bold" text-anchor="start">60</text>
+<text x="746.0" y="109.92" font-size="12" fill="#57606a" font-weight="normal" text-anchor="start">统一内存</text>
+<text x="234" y="179.92000000000002" font-size="14" fill="#1f2328" font-weight="normal" text-anchor="end">笔记本 CPU  DDR4-3200</text>
+<rect x="250" y="150" width="259" height="44" rx="4" fill="#2f6feb" opacity="0.85"/>
+<text x="519.0" y="179.92000000000002" font-size="15" fill="#1f2328" font-weight="bold" text-anchor="start">35</text>
+<text x="561.0" y="179.92000000000002" font-size="12" fill="#57606a" font-weight="normal" text-anchor="start">统一内存</text>
+<text x="234" y="249.92000000000002" font-size="14" fill="#1f2328" font-weight="normal" text-anchor="end">独立 GPU  PCIe 3.0 实际</text>
+<rect x="250" y="220" width="52" height="44" rx="4" fill="#d2691e" opacity="0.85"/>
+<text x="311.8" y="249.92000000000002" font-size="15" fill="#1f2328" font-weight="bold" text-anchor="start">7</text>
+<text x="353.8" y="249.92000000000002" font-size="12" fill="#57606a" font-weight="normal" text-anchor="start">分离，要搬运</text>
+<text x="234" y="319.92" font-size="14" fill="#1f2328" font-weight="normal" text-anchor="end">手机 UFS 4.0 闪存</text>
+<rect x="250" y="290" width="22" height="44" rx="4" fill="#8c959f" opacity="0.85"/>
+<text x="282.2" y="319.92" font-size="15" fill="#1f2328" font-weight="bold" text-anchor="start">3</text>
+<text x="324.2" y="319.92" font-size="12" fill="#57606a" font-weight="normal" text-anchor="start">按页流式</text>
+<text x="250" y="354" font-size="12" fill="#57606a" font-weight="normal" text-anchor="start">数据口径：DDR4/PCIe 为实测区间中点；LPDDR5X、UFS 4.0 为公开规格的典型值。</text>
+
+</svg>
