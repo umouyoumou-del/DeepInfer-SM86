@@ -339,16 +339,18 @@ class PagedContinuousBatchEngine:
         self.overlap_prefill = bool(overlap_prefill) and (
             torch.cuda.is_available() and self.manager.device.type == "cuda"
         )
-        if self.overlap_prefill and getattr(
-            runtime, "remote_expert_client", None
-        ) is not None:
-            # The NCCL expert transport is a single-producer request/reply
-            # channel: the worker serves one chunk at a time and interleaved
-            # sends from two threads abort the process inside the NCCL
-            # watchdog.  Refuse instead of dying asynchronously.
+        _remote = getattr(runtime, "remote_expert_client", None)
+        if self.overlap_prefill and _remote is not None and not getattr(
+            _remote, "supports_concurrent_submit", False
+        ):
+            # A transport that issues its own sends from the calling thread is
+            # a single-producer channel: the worker serves one chunk at a time
+            # and interleaved sends from two threads abort the process inside
+            # the NCCL watchdog.  Only transports that funnel submissions
+            # through one I/O thread may be overlapped.
             raise ValueError(
-                "overlap_prefill is not supported with a remote expert client: "
-                "the NCCL expert transport is single-producer"
+                "overlap_prefill requires a transport with concurrent submit "
+                f"support; {type(_remote).__name__} does not provide it"
             )
         self._prefill_stream: Any = None
         self._prefill_job: Any = None

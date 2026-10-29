@@ -587,6 +587,32 @@ Until then the honest statement is that continuous batching on this host is
 bounded by admission prefill blocking decode, and the per-thread staging work
 is a prerequisite that is already in place.
 
+### Worker pooling (dispatcher only)
+
+Since a single remote worker serialises every chunk, replication is the only
+way past that ceiling.  `deepinfer/moe/expert_worker_pool.py` adds the
+dispatcher side: `PooledExpertClient` fans chunks out to several transport
+clients by in-flight count with a round-robin tie-break, keeps the
+`submit_chunk`/`wait_chunk` contract, routes each reply back to the worker that
+owns it (`PendingRemoteChunk.owner`), and aggregates per-worker counters so
+imbalance is visible (a metric the single-worker setup could never show).
+
+Covered by unit tests with fake transports: least-in-flight avoids a busy
+worker, round-robin alternates, aggregation and `imbalance` are correct, and
+close propagates.
+
+**Not validated on hardware.** Pooling needs at least three ranks (one
+coordinator plus two expert workers) and this host has two GPUs, so the single
+remote worker could not be replicated.  The dispatcher is therefore unproven
+against real NCCL traffic, and the remaining work is the part the tests cannot
+reach:
+
+- launch and supervise N remote workers (one process or one queue per GPU);
+- heartbeat per worker, and eviction of a dead worker from the pool;
+- activation sharding across workers with a per-worker route table, so a chunk
+  is not merely sent to one worker but split by expert ownership;
+- a collective all-to-all to replace the point-to-point request/reply pairs.
+
 ## What is and is not validated
 
 Validated on hardware:

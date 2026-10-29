@@ -60,6 +60,7 @@ class PendingRemoteChunk:
     started: float
     done: threading.Event | None = None
     transport_error: BaseException | None = None
+    owner: Any = None
 
     def wait(self) -> torch.Tensor:
         if self.done is not None:

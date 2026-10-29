@@ -59,6 +59,7 @@ def main() -> int:
         "continuous_batching.py",
         "paged_continuous_batching.py",
         "nccl_expert_transport.py",
+        "expert_worker_pool.py",
         "nccl_request_service.py",
         "ptr_grouped_moe.py",
         "paged_adapter.py",

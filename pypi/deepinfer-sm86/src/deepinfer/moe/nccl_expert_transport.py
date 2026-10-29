@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import queue
 import threading
 import time
 from dataclasses import dataclass
@@ -57,8 +58,16 @@ class PendingRemoteChunk:
     tokens: torch.Tensor
     works: tuple[Any, ...]
     started: float
+    done: threading.Event | None = None
+    transport_error: BaseException | None = None
+    owner: Any = None
 
     def wait(self) -> torch.Tensor:
+        if self.done is not None:
+            self.done.wait()
+            if self.transport_error is not None:
+                raise self.transport_error
+            return self.output
         for work in self.works:
             work.wait()
         return self.output
@@ -127,8 +136,41 @@ class HeartbeatMonitor:
         }
 
 
+class _TransportRequest:
+    """One queued remote expert chunk waiting for the I/O thread."""
+
+    __slots__ = ("pending", "layer_idx", "expert_ids", "counts")
+
+    def __init__(
+        self,
+        pending: PendingRemoteChunk,
+        layer_idx: int,
+        expert_ids: Sequence[int],
+        counts: Sequence[int],
+    ) -> None:
+        self.pending = pending
+        self.layer_idx = int(layer_idx)
+        self.expert_ids = [int(value) for value in expert_ids]
+        self.counts = [int(value) for value in counts]
+
+
 class NCCLExpertClient:
-    """Coordinator-side blocking request/reply client."""
+    """Coordinator-side request/reply client with a single I/O thread.
+
+    The wire protocol is strictly FIFO and has no request id: the worker
+    answers chunks in the order they arrive.  Anything that issues sends from
+    more than one thread therefore corrupts the stream -- with a prefill thread
+    and a decode thread submitting at the same time, the NCCL watchdog aborts
+    the process.
+
+    Submissions are now queued and drained by one dedicated I/O thread, so the
+    protocol still sees a single ordered producer while callers may submit from
+    any thread and wait independently on their own event.
+    """
+
+    # Submissions are queued and drained by one I/O thread, so callers may
+    # submit from several threads at once without corrupting the FIFO protocol.
+    supports_concurrent_submit = True
 
     def __init__(
         self,
@@ -136,6 +178,7 @@ class NCCLExpertClient:
         dst_rank: int = 1,
         device: int = 0,
         heartbeat_path: str | Path | None = None,
+        queue_depth: int = 64,
     ) -> None:
         self.dst_rank = int(dst_rank)
         self.device = int(device)
@@ -149,6 +192,21 @@ class NCCLExpertClient:
         self.bytes_received = 0
         self.latency_seconds = 0.0
         self._active_sends = 0
+        self._lock = threading.Lock()
+        self._queue: queue.Queue[_TransportRequest | None] = queue.Queue(
+            maxsize=max(1, int(queue_depth))
+        )
+        self._closed = False
+        self._error: BaseException | None = None
+        self._max_in_flight = 0
+        self._thread = threading.Thread(
+            target=self._io_loop, name="nccl-expert-io", daemon=True
+        )
+        self._thread.start()
+
+    @property
+    def in_flight(self) -> int:
+        return int(self._active_sends)
 
     def submit_chunk(
         self,
@@ -157,7 +215,7 @@ class NCCLExpertClient:
         tokens: torch.Tensor,
         counts: Sequence[int],
     ) -> PendingRemoteChunk:
-        """Send a chunk and post the output receive without blocking."""
+        """Queue a chunk and return a handle; never touches the wire itself."""
 
         tokens = tokens.contiguous()
         if not tokens.is_cuda:
@@ -176,35 +234,59 @@ class NCCLExpertClient:
                 "dtype": dtype_name,
             }
         ).to(tokens.device)
-        if os.environ.get("DEEPINFER_NCCL_DEBUG") == "1":
-            print(
-                f"[nccl-client] submit layer={layer_idx} "
-                f"experts={len(expert_ids)} shape={shape}",
-                flush=True,
-            )
-        started = time.perf_counter()
-        header_work = dist.isend(header, dst=self.dst_rank)
-        token_work = dist.isend(tokens, dst=self.dst_rank)
         output = torch.empty(shape, dtype=tokens.dtype, device=tokens.device)
-        recv_work = dist.irecv(output, src=self.dst_rank)
-        self._active_sends += 1
-        return PendingRemoteChunk(
+        pending = PendingRemoteChunk(
             output=output,
             header=header,
             tokens=tokens,
-            works=(header_work, token_work, recv_work),
-            started=started,
+            works=(),
+            started=time.perf_counter(),
+            done=threading.Event(),
         )
+        with self._lock:
+            if self._closed:
+                raise RuntimeError("expert transport is closed")
+            self._active_sends += 1
+            self._max_in_flight = max(self._max_in_flight, self._active_sends)
+        self._queue.put(
+            _TransportRequest(pending, layer_idx, expert_ids, counts)
+        )
+        return pending
+
+    def _io_loop(self) -> None:
+        """Drain submissions in FIFO order on one thread."""
+
+        while True:
+            item = self._queue.get()
+            if item is None:
+                return
+            pending = item.pending
+            try:
+                header_work = dist.isend(pending.header, dst=self.dst_rank)
+                token_work = dist.isend(pending.tokens, dst=self.dst_rank)
+                recv_work = dist.irecv(pending.output, src=self.dst_rank)
+                header_work.wait()
+                token_work.wait()
+                recv_work.wait()
+            except BaseException as exc:  # noqa: BLE001
+                self._error = exc
+                pending.transport_error = exc
+                with self._lock:
+                    self._active_sends = max(0, self._active_sends - 1)
+                pending.done.set()
+                continue
+            pending.done.set()
 
     def wait_chunk(self, pending: PendingRemoteChunk) -> torch.Tensor:
         output = pending.wait()
-        self.latency_seconds += time.perf_counter() - pending.started
-        self.requests += 1
-        self.bytes_sent += int(
-            pending.tokens.numel() * pending.tokens.element_size()
-        )
-        self.bytes_received += int(output.numel() * output.element_size())
-        self._active_sends = max(0, self._active_sends - 1)
+        with self._lock:
+            self.latency_seconds += time.perf_counter() - pending.started
+            self.requests += 1
+            self.bytes_sent += int(
+                pending.tokens.numel() * pending.tokens.element_size()
+            )
+            self.bytes_received += int(output.numel() * output.element_size())
+            self._active_sends = max(0, self._active_sends - 1)
         return output
 
     def compute_chunk(
@@ -219,6 +301,15 @@ class NCCLExpertClient:
         )
 
     def close(self) -> None:
+        with self._lock:
+            if self._closed:
+                return
+            self._closed = True
+        try:
+            self._queue.put(None, timeout=30.0)
+        except queue.Full:
+            pass
+        self._thread.join(timeout=30.0)
         header = _pack_header({"stop": True}).to(f"cuda:{self.device}")
         dist.send(header, dst=self.dst_rank)
 
@@ -229,6 +320,9 @@ class NCCLExpertClient:
             "bytes_received": self.bytes_received,
             "latency_seconds": self.latency_seconds,
             "active_sends": self._active_sends,
+            "max_in_flight": self._max_in_flight,
+            "queued": self._queue.qsize(),
+            "transport_error": str(self._error) if self._error is not None else None,
             "heartbeat": (
                 self.heartbeat.status() if self.heartbeat is not None else None
             ),
