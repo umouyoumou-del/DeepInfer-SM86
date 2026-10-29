@@ -24,3 +24,7 @@ debug_runtime*
 .pypi_token.*
 build/llamacpp_baseline/
 docs/figures/*_print.html
+docs/*.chromepdf
+docs/*.html
+docs/.chromepdf*
+docs/*.html
