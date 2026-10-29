@@ -1,0 +1,127 @@
+{
+  "backend": "llama.cpp (via ollama)",
+  "ollama_binary": "F:\\Ollama\\app\\ollama.exe",
+  "gguf": "E:\\DeepInfer-MoE\\models\\OLMoE-1B-7B-GGUF\\OLMoE-1B-7B-0924.Q4_K_M.gguf",
+  "max_new_tokens": 8,
+  "device": "RTX 3050 Laptop 4 GB",
+  "num_gpu_values": [
+    0
+  ],
+  "decode_tokens_per_second_by_num_gpu": {
+    "0": 51.11547024809521
+  },
+  "records": [
+    {
+      "prompt": "只回答数字：5-2=?",
+      "text": "\n\n# ### 第二",
+      "completion_tokens": 8,
+      "prompt_tokens": 12,
+      "wall_seconds": 8.277587099990342,
+      "decode_tokens_per_second": 52.22784396931614,
+      "prefill_seconds": 7.7207675,
+      "prefill_tokens_per_second": 70.37330693552397,
+      "peak_gpu_mib": 1112,
+      "num_gpu": 0,
+      "repeat": 0,
+      "model": "dsv2lite-baseline-g0"
+    },
+    {
+      "prompt": "只回答数字：2+3=?",
+      "text": "\n    // 如果是回",
+      "completion_tokens": 8,
+      "prompt_tokens": 12,
+      "wall_seconds": 0.4173319000401534,
+      "decode_tokens_per_second": 51.69628432956382,
+      "prefill_seconds": 0.1903758,
+      "prefill_tokens_per_second": 214.9913465982994,
+      "peak_gpu_mib": 1033,
+      "num_gpu": 0,
+      "repeat": 0,
+      "model": "dsv2lite-baseline-g0"
+    },
+    {
+      "prompt": "只回答数字：9-4=?",
+      "text": "\n\n2. 如果你的",
+      "completion_tokens": 8,
+      "prompt_tokens": 12,
+      "wall_seconds": 0.464088799955789,
+      "decode_tokens_per_second": 49.08493411574718,
+      "prefill_seconds": 0.0950166,
+      "prefill_tokens_per_second": 222.84867460750777,
+      "peak_gpu_mib": 1033,
+      "num_gpu": 0,
+      "repeat": 0,
+      "model": "dsv2lite-baseline-g0"
+    },
+    {
+      "prompt": "只回答数字：1+1=?",
+      "text": "\n\n# ### 解",
+      "completion_tokens": 8,
+      "prompt_tokens": 12,
+      "wall_seconds": 0.4457274999585934,
+      "decode_tokens_per_second": 50.26925469546257,
+      "prefill_seconds": 0.0960587,
+      "prefill_tokens_per_second": 216.29805872492295,
+      "peak_gpu_mib": 1031,
+      "num_gpu": 0,
+      "repeat": 0,
+      "model": "dsv2lite-baseline-g0"
+    },
+    {
+      "prompt": "只回答数字：5-2=?",
+      "text": "\n\n# ### 第二",
+      "completion_tokens": 8,
+      "prompt_tokens": 12,
+      "wall_seconds": 0.4504956999444403,
+      "decode_tokens_per_second": 49.349237770179364,
+      "prefill_seconds": 0.1067589,
+      "prefill_tokens_per_second": 204.71178286903566,
+      "peak_gpu_mib": 1011,
+      "num_gpu": 0,
+      "repeat": 1,
+      "model": "dsv2lite-baseline-g0"
+    },
+    {
+      "prompt": "只回答数字：2+3=?",
+      "text": "\n    // 如果是回",
+      "completion_tokens": 8,
+      "prompt_tokens": 12,
+      "wall_seconds": 0.42033180000726134,
+      "decode_tokens_per_second": 53.32551225820213,
+      "prefill_seconds": 0.0913445,
+      "prefill_tokens_per_second": 239.88341665950347,
+      "peak_gpu_mib": 1011,
+      "num_gpu": 0,
+      "repeat": 1,
+      "model": "dsv2lite-baseline-g0"
+    },
+    {
+      "prompt": "只回答数字：9-4=?",
+      "text": "\n\n2. 如果你的",
+      "completion_tokens": 8,
+      "prompt_tokens": 12,
+      "wall_seconds": 0.43560480000451207,
+      "decode_tokens_per_second": 51.39439415645739,
+      "prefill_seconds": 0.0989458,
+      "prefill_tokens_per_second": 229.00107821340993,
+      "peak_gpu_mib": 1000,
+      "num_gpu": 0,
+      "repeat": 1,
+      "model": "dsv2lite-baseline-g0"
+    },
+    {
+      "prompt": "只回答数字：1+1=?",
+      "text": "\n\n# ### 解",
+      "completion_tokens": 8,
+      "prompt_tokens": 12,
+      "wall_seconds": 0.41898109996691346,
+      "decode_tokens_per_second": 51.57630068983302,
+      "prefill_seconds": 0.0953346,
+      "prefill_tokens_per_second": 232.81757772711842,
+      "peak_gpu_mib": 977,
+      "num_gpu": 0,
+      "repeat": 1,
+      "model": "dsv2lite-baseline-g0"
+    }
+  ]
+}
