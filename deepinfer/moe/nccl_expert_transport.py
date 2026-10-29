@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -48,6 +49,20 @@ def _unpack_header(tensor: torch.Tensor) -> dict[str, Any]:
     return json.loads(data.rstrip(b" \x00").decode("utf-8"))
 
 
+@dataclass(slots=True)
+class PendingRemoteChunk:
+    output: torch.Tensor
+    header: torch.Tensor
+    tokens: torch.Tensor
+    works: tuple[Any, ...]
+    started: float
+
+    def wait(self) -> torch.Tensor:
+        for work in self.works:
+            work.wait()
+        return self.output
+
+
 class NCCLExpertClient:
     """Coordinator-side blocking request/reply client."""
 
@@ -58,14 +73,17 @@ class NCCLExpertClient:
         self.bytes_sent = 0
         self.bytes_received = 0
         self.latency_seconds = 0.0
+        self._active_sends = 0
 
-    def compute_chunk(
+    def submit_chunk(
         self,
         layer_idx: int,
         expert_ids: Sequence[int],
         tokens: torch.Tensor,
         counts: Sequence[int],
-    ) -> torch.Tensor:
+    ) -> PendingRemoteChunk:
+        """Send a chunk and post the output receive without blocking."""
+
         tokens = tokens.contiguous()
         if not tokens.is_cuda:
             raise ValueError("NCCL expert transport requires CUDA tokens")
@@ -85,25 +103,45 @@ class NCCLExpertClient:
         ).to(tokens.device)
         if os.environ.get("DEEPINFER_NCCL_DEBUG") == "1":
             print(
-                f"[nccl-client] send layer={layer_idx} experts={len(expert_ids)} "
-                f"shape={shape}",
+                f"[nccl-client] submit layer={layer_idx} "
+                f"experts={len(expert_ids)} shape={shape}",
                 flush=True,
             )
         started = time.perf_counter()
-        dist.send(header, dst=self.dst_rank)
-        dist.send(tokens, dst=self.dst_rank)
+        header_work = dist.isend(header, dst=self.dst_rank)
+        token_work = dist.isend(tokens, dst=self.dst_rank)
         output = torch.empty(shape, dtype=tokens.dtype, device=tokens.device)
-        dist.recv(output, src=self.dst_rank)
-        if os.environ.get("DEEPINFER_NCCL_DEBUG") == "1":
-            print(
-                f"[nccl-client] recv layer={layer_idx} output={shape}",
-                flush=True,
-            )
-        self.latency_seconds += time.perf_counter() - started
+        recv_work = dist.irecv(output, src=self.dst_rank)
+        self._active_sends += 1
+        return PendingRemoteChunk(
+            output=output,
+            header=header,
+            tokens=tokens,
+            works=(header_work, token_work, recv_work),
+            started=started,
+        )
+
+    def wait_chunk(self, pending: PendingRemoteChunk) -> torch.Tensor:
+        output = pending.wait()
+        self.latency_seconds += time.perf_counter() - pending.started
         self.requests += 1
-        self.bytes_sent += int(tokens.numel() * tokens.element_size())
+        self.bytes_sent += int(
+            pending.tokens.numel() * pending.tokens.element_size()
+        )
         self.bytes_received += int(output.numel() * output.element_size())
+        self._active_sends = max(0, self._active_sends - 1)
         return output
+
+    def compute_chunk(
+        self,
+        layer_idx: int,
+        expert_ids: Sequence[int],
+        tokens: torch.Tensor,
+        counts: Sequence[int],
+    ) -> torch.Tensor:
+        return self.wait_chunk(
+            self.submit_chunk(layer_idx, expert_ids, tokens, counts)
+        )
 
     def close(self) -> None:
         header = _pack_header({"stop": True}).to(f"cuda:{self.device}")
@@ -115,6 +153,7 @@ class NCCLExpertClient:
             "bytes_sent": self.bytes_sent,
             "bytes_received": self.bytes_received,
             "latency_seconds": self.latency_seconds,
+            "active_sends": self._active_sends,
         }
 
 

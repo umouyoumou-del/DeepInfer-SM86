@@ -2173,7 +2173,12 @@ class DeepSeekV2LiteGGUFRuntime:
         chunk_tokens: torch.Tensor,
         chunk_counts: Sequence[int],
     ) -> torch.Tensor:
-        """Split one ECS expert chunk by owner GPU and gather the outputs."""
+        """Split one ECS expert chunk by owner GPU and gather the outputs.
+
+        Remote expert chunks are submitted asynchronously first, then local
+        expert groups are executed while the remote rank computes.  The final
+        wait is therefore overlapped with local MoE work.
+        """
 
         groups: dict[int, list[int]] = {}
         for local_index, expert_id in enumerate(chunk_ids):
@@ -2184,37 +2189,76 @@ class DeepSeekV2LiteGGUFRuntime:
             dtype=chunk_tokens.dtype,
             device=chunk_tokens.device,
         )
+        remote_pending = None
+        remote_position = None
+        remote_ids: list[int] = []
+        remote_counts: list[int] = []
+        local_groups: list[tuple[int, list[int]]] = []
         for device_index, positions in sorted(groups.items()):
+            position_tensor = torch.tensor(
+                positions, dtype=torch.long, device=chunk_tokens.device
+            )
+            group_tokens = chunk_tokens.index_select(0, position_tensor)
+            group_ids = [int(chunk_ids[index]) for index in positions]
+            group_counts = [int(chunk_counts[index]) for index in positions]
+            is_remote = (
+                self.remote_expert_client is not None
+                and self.remote_expert_device == device_index
+            )
+            if is_remote:
+                if hasattr(self.remote_expert_client, "submit_chunk"):
+                    remote_pending = self.remote_expert_client.submit_chunk(
+                        layer_idx,
+                        group_ids,
+                        group_tokens,
+                        group_counts,
+                    )
+                else:
+                    remote_pending = self.remote_expert_client.compute_chunk(
+                        layer_idx,
+                        group_ids,
+                        group_tokens,
+                        group_counts,
+                    )
+                remote_position = position_tensor
+                remote_ids = group_ids
+                remote_counts = group_counts
+            else:
+                local_groups.append((device_index, positions))
+
+        for device_index, positions in local_groups:
             position_tensor = torch.tensor(
                 positions, dtype=torch.long, device=chunk_tokens.device
             )
             group_ids = [int(chunk_ids[index]) for index in positions]
             group_tokens = chunk_tokens.index_select(0, position_tensor)
             group_counts = [int(chunk_counts[index]) for index in positions]
-            if (
-                self.remote_expert_client is not None
-                and self.remote_expert_device == device_index
-            ):
-                piece = self.remote_expert_client.compute_chunk(
-                    layer_idx,
-                    group_ids,
-                    group_tokens,
-                    group_counts,
-                )
-                self.remote_expert_chunks += 1
-            else:
-                target = torch.device(f"cuda:{device_index}")
-                piece = self._fused_expert_chunk(
-                    layer_idx,
-                    group_ids,
-                    group_tokens,
-                    group_counts,
-                    target_device=target,
-                )
+            piece = self._fused_expert_chunk(
+                layer_idx,
+                group_ids,
+                group_tokens,
+                group_counts,
+                target_device=torch.device(f"cuda:{device_index}"),
+            )
             output.index_copy_(0, position_tensor, piece.to(chunk_tokens.device))
             self.expert_device_chunks += 1
             self.expert_device_counts[device_index] = (
                 self.expert_device_counts.get(device_index, 0) + len(group_ids)
+            )
+
+        if remote_pending is not None:
+            if hasattr(self.remote_expert_client, "wait_chunk"):
+                piece = self.remote_expert_client.wait_chunk(remote_pending)
+            else:
+                piece = remote_pending
+            output.index_copy_(
+                0, remote_position, piece.to(chunk_tokens.device)
+            )
+            self.remote_expert_chunks += 1
+            self.expert_device_chunks += 1
+            self.expert_device_counts[int(self.remote_expert_device)] = (
+                self.expert_device_counts.get(int(self.remote_expert_device), 0)
+                + len(remote_ids)
             )
         return output
 

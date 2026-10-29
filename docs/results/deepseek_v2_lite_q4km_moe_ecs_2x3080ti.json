@@ -169,15 +169,18 @@
     "expert_sharded_token_parity": true,
     "expert_sharded_uses_both_gpus": true,
     "nccl_expert_parallel_token_parity": true,
-    "remote_worker_does_not_load_full_model": true
+    "remote_worker_does_not_load_full_model": true,
+    "nccl_async_token_parity": true,
+    "nccl_async_beats_single_decode": true,
+    "long_context_token_parity": true
   },
   "notes": [
     "The dual GPU pool runs one independent DeepSeek runtime per GPU and assigns requests by queue depth.",
     "The layer-pipeline benchmark runs layers 0-12 on GPU0 and layers 13-26 + LM head on GPU1 and produces token-for-token parity with the single-GPU baseline.",
     "The NCCL all-to-all smoke validates real ExpertPacket transport and hot-expert token sharding across both GPUs.",
     "The expert-sharded runtime splits routed expert chunks by ECS owner across GPU0/GPU1; the in-model activation exchange was subsequently moved to NCCL point-to-point between coordinator and remote expert worker.",
-    "The NCCL expert-parallel run has exact token parity, 294 remote expert requests, and only ~39.6 MB peak GPU allocation on the remote rank because it does not load the transformer model.",
-    "Remaining work: turn the blocking request/reply into a pipelined collective all-to-all and improve decode throughput beyond the single-GPU baseline; this host has no P2P/NVLink."
+    "The asynchronous NCCL revision overlaps remote expert requests with local expert chunks: exact token parity, 4.90 tok/s decode, 2.02 s prefill, and ~39.6 MB peak GPU allocation on the remote rank.",
+    "Long-context (45 prompt tokens) also preserves exact token parity; async NCCL decode is 4.28 tok/s vs 4.50 single-GPU, so short-decode wins but long-context still needs optimization. Remaining work: multi-request NCCL scheduling, heartbeat/restart, and collective all-to-all."
   ],
   "layer_pipeline": {
     "prompt": "只回答数字：5-2=?",
@@ -310,5 +313,84 @@
       },
       "tick": 4652
     }
+  },
+  "nccl_expert_parallel_async": {
+    "transport": "NCCL point-to-point activation exchange with isend/irecv overlapping local expert chunks",
+    "text": " 5-2=3",
+    "token_ids": [
+      207,
+      20,
+      12,
+      17,
+      28,
+      18,
+      100001
+    ],
+    "prompt_tokens": 17,
+    "prefill_seconds": 2.0240187123417854,
+    "decode_seconds": 1.2239435836672783,
+    "decode_tokens_per_second": 4.902186734802202,
+    "coordinator_peak_gpu_allocated_bytes": 2371221504,
+    "remote_worker_peak_gpu_allocated_bytes": 39552000,
+    "remote_requests": 294,
+    "remote_bytes_sent": 21344256,
+    "remote_bytes_received": 21344256,
+    "remote_latency_seconds": 1.4777158722281456,
+    "remote_active_sends": 0,
+    "remote_expert_chunks": 294,
+    "expert_device_chunks": 591,
+    "expert_device_0_experts": 996,
+    "expert_device_1_experts": 984,
+    "token_parity_single_gpu": true,
+    "speedup_vs_single_decode": 1.1671620222360533,
+    "ecs": {
+      "backend": "cpp",
+      "tier_bytes": {
+        "L1": 0,
+        "L2": 0,
+        "L3": 3244572672
+      },
+      "device_bytes": {
+        "0": 3244572672,
+        "1": 0
+      },
+      "entries": 3365,
+      "metrics": {
+        "l1_hits": 0.0,
+        "l2_hits": 0.0,
+        "l3_reads": 2988.0,
+        "l1_promotions": 0.0,
+        "evictions": 0.0,
+        "chunk_plans": 182.0,
+        "cross_device_packets": 0.0,
+        "cross_device_bytes": 0.0,
+        "hot_replications": 0.0
+      },
+      "tick": 4652
+    }
+  },
+  "long_context_nccl": {
+    "prompt_tokens": 45,
+    "completion_tokens": 4,
+    "single_gpu_decode_tokens_per_second": 4.496929810086769,
+    "nccl_async_decode_tokens_per_second": 4.282470658341619,
+    "nccl_prefill_seconds": 2.7121760845184326,
+    "single_gpu_token_ids": [
+      207,
+      28272,
+      10900,
+      39322
+    ],
+    "nccl_async_token_ids": [
+      207,
+      28272,
+      10900,
+      39322
+    ],
+    "token_parity": true,
+    "remote_requests": 268,
+    "remote_bytes_sent": 59961344,
+    "remote_worker_peak_gpu_allocated_bytes": 33469952,
+    "coordinator_peak_gpu_allocated_bytes": 2370534400
   }
 }

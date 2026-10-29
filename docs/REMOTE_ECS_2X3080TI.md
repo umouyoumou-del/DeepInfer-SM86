@@ -168,10 +168,43 @@ The remote rank does not load the transformer model: its peak allocation is
 only the expert staging buffer and CUDA context.  This addresses the previous
 duplicate-non-routed-weight problem.
 
-The exchange is currently blocking NCCL point-to-point request/reply, not a
-pipelined collective all-to-all.  It is correct but slower than the single-GPU
-baseline (4.20 tok/s); removing blocking and overlapping expert chunks is the
-next throughput task.
+The first version used blocking NCCL request/reply and decoded at 3.44 tok/s.
+The asynchronous revision submits the remote chunk with `isend`/`irecv`, then
+executes local expert groups while rank 1 computes, and waits only before
+merging the output.
+
+| Async NCCL metric | Value |
+|---|---:|
+| Output | `5-2=3` |
+| Token parity | exact |
+| Prefill | 2.02 s |
+| Decode | **4.90 tok/s** |
+| Single-GPU baseline | 4.20 tok/s |
+| Async speedup | 1.17× |
+| Remote requests | 294 |
+| Remote active sends at finish | 0 |
+| Accumulated request latency | 1.48 s |
+| Remote worker peak | **37.7 MiB** |
+
+This is the first dual-GPU path that beats the single-GPU decode baseline.
+The accumulated request latency is larger than wall decode time because the
+requests overlap local compute; wall time is what matters.
+
+The transport is still point-to-point request/reply rather than a collective
+all-to-all.
+
+Long-context smoke (45 prompt tokens, 4 generated tokens):
+
+| Metric | Single GPU | Async NCCL expert |
+|---|---:|---:|
+| Token IDs | `[207, 28272, 10900, 39322]` | same |
+| Prefill | 1.76 s | 2.71 s |
+| Decode | 4.50 tok/s | 4.28 tok/s |
+| Peak GPU | 2.23 GiB | 2.28 GiB coordinator |
+
+The 45-token case still has exact token parity but loses the short-decode
+throughput win.  Multi-request NCCL scheduling and remote-worker
+heartbeat/restart are still unmeasured.
 
 ## What is and is not validated
 
@@ -188,14 +221,14 @@ Still not validated:
 
 - NVLink/P2P (this host reports no P2P);
 - 8×P100 or any multi-node fabric;
-- a pipelined collective All-to-All as the in-model activation exchange
-  (the current NCCL expert-parallel path uses blocking point-to-point
-  send/receive; the separate ExpertPacket all-to-all smoke did pass);
-- throughput above the single-GPU baseline (expert parallelism currently adds
-  request/reply latency);
+- a collective All-to-All as the in-model activation exchange (the async NCCL
+  path uses point-to-point isend/irecv; the separate ExpertPacket all-to-all
+  smoke did pass);
+- multi-request expert-parallel scheduling;
+- heartbeat/restart handling when the remote expert rank dies;
 - production heartbeat/worker restart for the dual-GPU pool.
 
-The next target is pipelining the NCCL expert requests (or switching to a
-collective all-to-all) so expert chunks overlap with coordinator attention,
-then measuring whether the two-GPU path beats the 4.20 tok/s single-GPU
-baseline.
+Next: test long context and multiple queued requests, add heartbeat/timeout
+for the remote rank, and evaluate a collective all-to-all or multi-chunk
+pipeline.  The current async path already beats the 4.20 tok/s single-GPU
+decode baseline on the 8-token smoke.

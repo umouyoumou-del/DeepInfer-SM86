@@ -332,7 +332,7 @@ MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比�
 - `tests/moe/` 新增 GGUF 索引、截断拒绝、expert slice、Q4_K/Q5_0/Q8_0
   GPU 反量化、dense/MoE 层布局、CPU MLP fallback、per-expert fused 和
   grouped MoE kernel 对照测试；
-- 全套测试：**109 passed**；
+- 全套测试：**110 passed**；
 - 新增文章：
   `docs/ARTICLE_9_DEEPSEEK_V2_LITE_MOE_CPU_GPU_OFFLOAD.md`；
 - 结构化结果：
@@ -599,7 +599,7 @@ PyTorch 2.5.1+cu121、CuPy 14.2）上完成了真实多设备验证：
 | hot expert 7 token shard | 2/2 跨卡 |
 | 单模型 expert sharding | GPU0/GPU1 1416/1415 expert dispatches |
 | expert sharding token parity | 与单卡完全一致 |
-| NCCL expert-parallel | 294 remote requests，token parity 一致 |
+| NCCL expert-parallel async | 4.90 tok/s，超过单卡 4.20 |
 | remote worker peak | 37.7 MiB（不加载完整模型） |
 
 真实执行路径包括：
@@ -617,13 +617,22 @@ PyTorch 2.5.1+cu121、CuPy 14.2）上完成了真实多设备验证：
 拷贝，所以 decode 3.25 tok/s，暂时慢于单卡 4.20 tok/s。
 
 进一步把 in-model activation exchange 改为 NCCL：rank0 保留 attention /
-shared experts / LM head，rank1 只加载 routed expert bytes。实测输出 token
-与单卡完全一致，294 个 remote expert requests，rank1 peak 仅 37.7 MiB；
-decode 3.44 tok/s。当前是阻塞式 request/reply，不是 collective all-to-all，
-所以吞吐仍低于单卡。
+shared experts / LM head，rank1 只加载 routed expert bytes。随后把 remote
+request 改成 `isend/irecv` 异步：先提交 remote expert chunk，再计算 local
+expert chunk，最后等待 remote output。实测输出 token 与单卡完全一致，
+294 个 remote expert requests，rank1 peak 仅 37.7 MiB。
 
-下一步是把 expert request pipeline 化或改成 collective all-to-all，
-让 remote expert 计算与 coordinator attention 重叠。双卡机没有 P2P/NVLink。
+| 路径 | Decode |
+|---|---:|
+| 单卡 | 4.20 tok/s |
+| 阻塞 NCCL expert | 3.44 tok/s |
+| 异步 NCCL expert | **4.90 tok/s** |
+
+异步路径 prefill 2.02 s，已超过单卡 decode 基线。45-token long-context
+smoke 也保持 token parity，但 decode 4.28 tok/s，略低于单卡4.50 tok/s；
+short-decode 的收益还没有稳定扩展到长上下文。当前仍是 point-to-point
+request/reply，不是 collective all-to-all；多请求 NCCL 调度和 remote
+worker heartbeat/restart 尚未验证。双卡机没有 P2P/NVLink。
 
 复现与硬件细节：`docs/REMOTE_ECS_2X3080TI.md`  
 结果：`docs/results/deepseek_v2_lite_q4km_moe_ecs_2x3080ti.json`
