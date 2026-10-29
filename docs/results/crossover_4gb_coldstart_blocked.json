@@ -1,0 +1,36 @@
+{
+  "attempt": "flush Windows standby/page cache before each cold-start run",
+  "tool": "tools/flush_standby.ps1 (NtSetSystemInformation, SystemMemoryListInformation 0x50, command 4)",
+  "result": "BLOCKED: shell is not elevated; call returns 0xC0000061 STATUS_PRIVILEGE_NOT_HELD",
+  "consequence": "Cold-start figures from both backends cannot be made repeatable on this machine without elevation.",
+  "options": [
+    "Run tools/flush_standby.ps1 from an elevated PowerShell, then repeat each measurement 3x.",
+    "Admin-free alternative: copy the GGUF to a fresh path per run so the file cannot be in the page cache; delete between runs. Needs ~10 GB free and ~2 min per copy."
+  ],
+  "repeatability_data_that_is_valid": {
+    "ecs_fresh_process_startup": [
+      {
+        "run": 0,
+        "wall_s": 81.1,
+        "load_s": 20.2,
+        "warmup_s": 13.1,
+        "peak_rss_gib": 3.14
+      },
+      {
+        "run": 1,
+        "wall_s": 49.3,
+        "load_s": 18.1,
+        "warmup_s": 4.4,
+        "peak_rss_gib": 3.0
+      },
+      {
+        "run": 2,
+        "wall_s": 50.0,
+        "load_s": 18.0,
+        "warmup_s": 4.5,
+        "peak_rss_gib": 3.34
+      }
+    ],
+    "note": "load is stable (18-20 s); warmup swings 4.4-13.1 s with page-cache state, which is exactly why a cold-start claim is not defensible without a cache flush."
+  }
+}
