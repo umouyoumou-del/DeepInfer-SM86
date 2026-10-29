@@ -1817,6 +1817,7 @@ python scripts\export_sm86_kernels.py
 ## 结果与文档
 
 - ECS 二卡推进全过程（paged KV / 前缀共享 / 三次押错）：`docs/ARTICLE_10_ECS_PAGED_KV_AND_TRANSPORT.md`
+- 项目介绍视频制作脚本（分镜 / 旁白 / 录制清单）：`docs/VIDEO_INTRO_SCRIPT.md`
 - 上篇（内核/量化）：`docs/ARTICLE_1_DEEPINFER_SM86_KERNEL.md`
 - 下篇（生产力/基准）：`docs/ARTICLE_2_DEEPINFER_SM86_PRODUCTIVITY.md`
 - 扩展篇（通用化/Llama）：`docs/ARTICLE_3_DEEPINFER_SM86_GENERIC.md`
