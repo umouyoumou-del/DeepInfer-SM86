@@ -292,6 +292,7 @@ class PagedContinuousBatchEngine:
         prefix_cache_blocks: int = 0,
         prefix_namespace: str = "",
         admission_grace_ms: float = 0.0,
+        overlap_prefill: bool = False,
     ) -> None:
         if prefill_mode not in {"batched", "paged"}:
             raise ValueError("prefill_mode must be 'batched' or 'paged'")
@@ -332,6 +333,35 @@ class PagedContinuousBatchEngine:
         )
         self.prefix_namespace = str(prefix_namespace)
         self.admission_grace_ms = max(0.0, float(admission_grace_ms))
+        # Overlapped prefill runs in its own thread on its own CUDA stream.  The
+        # expert store isolates staging per thread, so the two forwards never
+        # share a pinned slot or a copy stream.
+        self.overlap_prefill = bool(overlap_prefill) and (
+            torch.cuda.is_available() and self.manager.device.type == "cuda"
+        )
+        if self.overlap_prefill and getattr(
+            runtime, "remote_expert_client", None
+        ) is not None:
+            # The NCCL expert transport is a single-producer request/reply
+            # channel: the worker serves one chunk at a time and interleaved
+            # sends from two threads abort the process inside the NCCL
+            # watchdog.  Refuse instead of dying asynchronously.
+            raise ValueError(
+                "overlap_prefill is not supported with a remote expert client: "
+                "the NCCL expert transport is single-producer"
+            )
+        self._prefill_stream: Any = None
+        self._prefill_job: Any = None
+        self._prefill_pending: list[PagedRequest] = []
+        self._prefill_executor: Any = None
+        self._overlap_steps = 0
+        if self.overlap_prefill:
+            from concurrent.futures import ThreadPoolExecutor
+
+            self._prefill_stream = torch.cuda.Stream(device=self.manager.device)
+            self._prefill_executor = ThreadPoolExecutor(
+                max_workers=1, thread_name_prefix="ecs-prefill"
+            )
         self._prefix_hits = 0
         self._prefix_reused_tokens = 0
         self.queue: queue.Queue[PagedRequest | None] = queue.Queue()
@@ -769,6 +799,60 @@ class PagedContinuousBatchEngine:
         self._max_active_seen = max(self._max_active_seen, len(self._active))
         return len(admitted)
 
+    def _launch_prefill(self, pending: Sequence[PagedRequest]) -> None:
+        """Start an admission prefill on the background stream."""
+
+        self._prefill_pending = list(pending)
+        mode = self.prefill_mode
+        stream = self._prefill_stream
+        device = self.device
+
+        def work() -> list[PagedRequest]:
+            torch.cuda.set_device(device)
+            with torch.cuda.stream(stream):
+                if mode == "batched":
+                    return self._prefill_batched(pending)
+                return self._prefill_paged(pending)
+
+        self._prefill_job = self._prefill_executor.submit(work)
+
+    def _adopt_prefill(self) -> bool:
+        """Fold a finished overlapped prefill into the active set."""
+
+        job = self._prefill_job
+        if job is None or not job.done():
+            return False
+        self._prefill_job = None
+        pending = self._prefill_pending
+        self._prefill_pending = []
+        for _ in pending:
+            self.queue.task_done()
+        try:
+            admitted = job.result()
+        except SlotOutOfBlocks as exc:
+            for request in pending:
+                self.allocator.release(request)
+                self._fail(request, exc)
+            return False
+        except BaseException as exc:  # noqa: BLE001
+            for request in pending:
+                self.allocator.release(request)
+                self._fail(request, exc)
+            return False
+        # The main stream reads blocks written on the prefill stream.
+        if self._prefill_stream is not None:
+            torch.cuda.current_stream().wait_stream(self._prefill_stream)
+        ready = [request for request in admitted if not request.finished]
+        early = [request for request in admitted if request.finished]
+        for request in early:
+            self.allocator.release(request)
+            self._finish(request)
+        self._active.extend(ready)
+        self._admissions += len(admitted)
+        self._max_active_seen = max(self._max_active_seen, len(self._active))
+        self._overlap_steps += 1
+        return True
+
     def _fail(self, request: PagedRequest, exc: BaseException) -> None:
         self._failed += 1
         self._last_error = f"{type(exc).__name__}: {exc}"
@@ -794,17 +878,29 @@ class PagedContinuousBatchEngine:
             pass
         while not self._stop.is_set():
             try:
+                if self.overlap_prefill:
+                    self._adopt_prefill()
                 # Decode first: an arrival must never delay a step whose rows
                 # are already resident.
                 if self._active:
                     self._decode_step()
-                pending = self._collect_pending(
-                    self.max_batch_size - len(self._active),
-                    idle=not self._active,
+                free = (
+                    self.max_batch_size
+                    - len(self._active)
+                    - len(self._prefill_pending)
                 )
-                if pending:
-                    self._admit(pending)
-                elif not self._active:
+                busy = self._prefill_job is not None
+                if free > 0 and not busy:
+                    pending = self._collect_pending(
+                        free,
+                        idle=not self._active and not busy,
+                    )
+                    if pending:
+                        if self.overlap_prefill:
+                            self._launch_prefill(pending)
+                        else:
+                            self._admit(pending)
+                elif not self._active and not busy:
                     time.sleep(0.005)
             except Exception as exc:  # noqa: BLE001
                 self._failed += 1
@@ -813,6 +909,15 @@ class PagedContinuousBatchEngine:
                     self.allocator.release(request)
                     self._fail(request, exc)
                 self._active = []
+        if self._prefill_job is not None:
+            try:
+                self._prefill_job.result(timeout=120.0)
+            except BaseException:  # noqa: BLE001
+                pass
+            self._prefill_job = None
+        if self._prefill_executor is not None:
+            self._prefill_executor.shutdown(wait=True)
+            self._prefill_executor = None
         while self._active:
             request = self._active.pop()
             self.allocator.release(request)
@@ -836,6 +941,8 @@ class PagedContinuousBatchEngine:
             "prefill_forwards": self._prefill_forwards,
             "prefill_rows": self._prefill_rows,
             "decode_steps": self._decode_steps,
+            "overlap_prefill": self.overlap_prefill,
+            "overlap_admissions": self._overlap_steps,
             "max_active_seen": self._max_active_seen,
             "kv": self.allocator.stats(),
             "prefix_cache": {

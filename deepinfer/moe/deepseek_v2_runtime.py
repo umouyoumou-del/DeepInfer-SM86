@@ -259,19 +259,27 @@ class GGUFExpertStore:
             max_workers=self.parallel_read_workers,
             thread_name_prefix="deepinfer-moe-read",
         )
-        self._pinned_buffers: dict[tuple[str, int], torch.Tensor] = {}
-        self._pinned_copy_events: dict[tuple[str, int], torch.cuda.Event] = {}
+        self._pinned_buffers: dict[tuple[Any, ...], torch.Tensor] = {}
+        self._pinned_copy_events: dict[tuple[Any, ...], torch.cuda.Event] = {}
         self._pinned_slot_count = 2
         self._pinned_slot = 0
+        self._copy_streams_enabled = device.type == "cuda"
         self._copy_streams = (
             [torch.cuda.Stream(device=device) for _ in range(self._pinned_slot_count)]
-            if device.type == "cuda"
+            if self._copy_streams_enabled
             else []
         )
+        # Staging buffers, slot counters and copy streams are per thread.  Two
+        # forwards running concurrently (scheduler decode + overlapped prefill)
+        # would otherwise rotate through the same two slots and overwrite a
+        # buffer another stream is still reading.
+        self._stage_local = threading.local()
+        self._copy_streams_by_thread: dict[int, list[Any]] = {}
+        self._stage_lock = threading.RLock()
         self._prefetch_slot_count = 2
         self._prefetch_slot = 0
-        self._prefetch_buffers: dict[tuple[str, int], torch.Tensor] = {}
-        self._prefetch_events: dict[tuple[str, int], torch.cuda.Event] = {}
+        self._prefetch_buffers: dict[tuple[Any, ...], torch.Tensor] = {}
+        self._prefetch_events: dict[tuple[Any, ...], torch.cuda.Event] = {}
         self._predictive_cache_limit = max(
             0, int(predictive_cache_mb)
         ) * _MIB
@@ -308,6 +316,39 @@ class GGUFExpertStore:
             "predictive_cache_misses": 0.0,
             "predictive_prefetch_reads": 0.0,
         }
+
+    def _stage_tag(self) -> int:
+        """Identity of the calling thread's staging arena."""
+
+        return threading.get_ident()
+
+    def _stage_counter(self, name: str) -> int:
+        counters = getattr(self._stage_local, "counters", None)
+        if counters is None:
+            counters = {"pinned": 0, "prefetch": 0}
+            self._stage_local.counters = counters
+        value = counters[name]
+        counters[name] = value + 1
+        return value
+
+    def _stage_streams(self) -> list[Any]:
+        """Copy streams owned by the calling thread."""
+
+        if not self._copy_streams_enabled:
+            return []
+        tag = self._stage_tag()
+        with self._stage_lock:
+            streams = self._copy_streams_by_thread.get(tag)
+            if streams is None:
+                streams = [
+                    torch.cuda.Stream(device=self.device)
+                    for _ in range(self._pinned_slot_count)
+                ]
+                self._copy_streams_by_thread[tag] = streams
+            return streams
+
+    def _stage_key(self, *parts: Any) -> tuple[Any, ...]:
+        return (self._stage_tag(), *parts)
 
     def supports_fused_moe(self) -> bool:
         supported_types = {"Q4_K", "Q5_0", "Q8_0"}
@@ -799,12 +840,11 @@ class GGUFExpertStore:
                     for spec in specs
                 )
             )
-        slot = self._prefetch_slot % self._prefetch_slot_count
-        self._prefetch_slot += 1
+        slot = self._stage_counter("prefetch") % self._prefetch_slot_count
         buffers: list[torch.Tensor] = []
         for projection, spec in zip(projections, specs, strict=True):
             total_bytes = spec.bytes_per_expert * len(source_ids)
-            key = (projection, slot)
+            key = self._stage_key(projection, slot)
             previous_copy = self._prefetch_events.get(key)
             if previous_copy is not None:
                 previous_copy.synchronize()
@@ -887,8 +927,7 @@ class GGUFExpertStore:
                 # Predictive mode can cover only a subset.  Build an actual-
                 # order pinned staging buffer from prefetched/cache bytes and
                 # read only the remaining experts.
-                slot = self._pinned_slot % self._pinned_slot_count
-                self._pinned_slot += 1
+                slot = self._stage_counter("pinned") % self._pinned_slot_count
                 packed_cpu_tensors = []
                 source_positions = {
                     expert_id: position
@@ -900,7 +939,7 @@ class GGUFExpertStore:
                     zip(projections, specs, strict=True)
                 ):
                     total_bytes = spec.bytes_per_expert * expert_count
-                    key = (projection, slot)
+                    key = self._stage_key(projection, slot)
                     previous_copy = self._pinned_copy_events.get(key)
                     if previous_copy is not None:
                         previous_copy.synchronize()
@@ -962,12 +1001,11 @@ class GGUFExpertStore:
                     self._cache_put(layer_idx, cache_key, data)
             self.timings["expert_read_seconds"] += time.perf_counter() - started
         else:
-            slot = self._pinned_slot % self._pinned_slot_count
-            self._pinned_slot += 1
+            slot = self._stage_counter("pinned") % self._pinned_slot_count
             packed_cpu_tensors: list[torch.Tensor] = []
             for projection, spec in zip(projections, specs, strict=True):
                 total_bytes = spec.bytes_per_expert * expert_count
-                key = (projection, slot)
+                key = self._stage_key(projection, slot)
                 previous_copy = self._pinned_copy_events.get(key)
                 if previous_copy is not None:
                     # Two slots let the reader prepare chunk N+1 while chunk N
@@ -1031,9 +1069,10 @@ class GGUFExpertStore:
         if use_cuda:
             started = time.perf_counter()
             compute_stream = torch.cuda.current_stream()
+            _streams = self._stage_streams() if self._overlap_down_copy else []
             copy_stream = (
-                self._copy_streams[slot]
-                if self._overlap_down_copy and target_device == self.device
+                _streams[slot]
+                if _streams and target_device == self.device
                 else None
             )
             if async_gate_up and copy_stream is not None:
@@ -1093,9 +1132,9 @@ class GGUFExpertStore:
             event_store = (
                 self._prefetch_events if prefetched is not None else self._pinned_copy_events
             )
-            event_store[("gate", slot)] = gate_ready
-            event_store[("up", slot)] = up_ready
-            event_store[("down", slot)] = down_ready
+            event_store[self._stage_key("gate", slot)] = gate_ready
+            event_store[self._stage_key("up", slot)] = up_ready
+            event_store[self._stage_key("down", slot)] = down_ready
             self.timings["expert_h2d_seconds"] += time.perf_counter() - started
         else:
             packed_gate, packed_up, packed_down = (

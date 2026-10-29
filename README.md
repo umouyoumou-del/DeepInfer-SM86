@@ -731,7 +731,27 @@ grace 窗口稳定赢 2–5%，但没有追平 dense；这台机器本身重复�
 
 **还没解决的**：paged 引擎的 prefill 仍在主 stream 上，每次 admission 都会
 把正在 decode 的行卡住。17-token prompt 一次 prefill 约 0.86 s，这是剩下的
-结构性开销，要靠 prefill/decode stream overlap 解决，不是继续改 allocator。
+结构性开销。
+
+#### prefill/decode overlap：做了，但被 expert transport 挡住
+
+- 先把 `GGUFExpertStore` 的 staging 改成按线程隔离（槽位计数器、pinned
+  buffer、copy event、copy stream 全部 per-thread）——双 forward 并发时原来
+  会互相覆盖仍在读的 slot。
+- 再实现 `--overlap-prefill`：admission 放到独立线程 + 独立 CUDA stream，
+  decode 继续跑，完成后用 `wait_stream` 跨流同步再并进活跃集。
+- **双卡 NCCL 上直接 SIGABRT**（NCCL watchdog，exit -6）：远端 expert
+  transport 是单生产者 request/reply，一个 worker 一次服务一个 chunk，两个
+  线程同时发消息就是协议违规。
+
+所以现在引擎直接拒绝这个组合（`remote_expert_client` 存在时抛
+`ValueError`）。结论：prefill/decode overlap 在这个架构上不是调度问题，需要
+
+1. 多路复用 transport（请求 id、乱序回包、多请求在飞），或
+2. 每个生产者 stream 一条独立通道，或
+3. 单一远端队列 + 单线程 drain。
+
+per-thread staging 是前提条件，已经就位并全量回归通过。
 
 复现与硬件细节：`docs/REMOTE_ECS_2X3080TI.md`  
 结果：`docs/results/deepseek_v2_lite_q4km_moe_ecs_2x3080ti.json`
@@ -1144,6 +1164,7 @@ lm_head           : 3-bit, group 128
 | paged KV slot allocator | ✅ | 每请求独立 block list、按需增长、行不重排；长上下文 1.17×，短上下文持平 |
 | 前缀块共享（paged 引擎） | ✅ | block hash 精确匹配 + retain/LRU；89-token 共享前缀 wall −26%、prefill −53%；仅 paged prefill 模式 |
 | admission 合并 / grace 窗口 | ✅ | 空闲期合并到达，先 decode 后 admit；+2–5%，未追平 dense |
+| prefill/decode overlap | ❌ | 已实现 per-thread staging + 独立 stream；NCCL expert transport 单生产者，双卡上 SIGABRT，引擎显式拒绝 |
 | prefill/decode stream overlap | ✅ | 双 CUDA stream launch；4 GB 带宽受限，收益按场景测量 |
 | tiled W4/W3 prefill GEMM | ✅ | 32×64 CTA tile，shared-memory 权重量化 tile |
 | KV memory budget | ✅ | 启动预算、block 预留、admission/runtime OOM 隔离 |

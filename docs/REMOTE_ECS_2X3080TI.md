@@ -510,6 +510,55 @@ admission blocks the rows that are already decoding.  At 0.86 s per 17-token
 prefill that is the remaining structural cost, and it needs prefill/decode
 stream overlap rather than more allocator work.
 
+### Prefill/decode overlap: blocked by the expert transport
+
+The remaining structural cost after the paged allocator is that a prefill runs
+on the scheduler's main stream, so every admission freezes the rows that are
+already decoding (about 0.86 s per 17-token prefill on this host).  The
+follow-up attempt was to move admission prefill into its own thread on its own
+CUDA stream while the main stream keeps decoding.
+
+Two changes were made:
+
+1. **Per-thread expert staging.** `GGUFExpertStore` rotated through two pinned
+   slots with a single process-wide counter, so two concurrent forwards would
+   pick slots out of step with each other and overwrite a pinned buffer that
+   another stream was still reading.  Slot counters, pinned buffers, copy
+   events and copy streams are now per thread (`_stage_tag`,
+   `_stage_counter`, `_stage_streams`, `_stage_key`).  Single-threaded
+   behaviour is unchanged and the full suite still passes.
+2. **Overlapped admission** (`--overlap-prefill`): admission runs in a
+   one-worker executor on a dedicated stream, the decode loop keeps stepping,
+   and finished prefills are adopted with a cross-stream `wait_stream` before
+   their rows are decoded.
+
+On the two-GPU NCCL host this **aborts the process**: the run dies with
+`SIGABRT` from the NCCL watchdog (exit code -6) instead of producing output.
+The expert transport is a single-producer request/reply channel -- one remote
+worker serves one chunk at a time, and two threads issuing sends on the same
+process group interleave into a protocol violation.
+
+The engine therefore refuses the combination up front:
+
+```python
+if overlap_prefill and runtime.remote_expert_client is not None:
+    raise ValueError(
+        "overlap_prefill is not supported with a remote expert client: "
+        "the NCCL expert transport is single-producer"
+    )
+```
+
+What that means for the roadmap: prefill/decode overlap is not a scheduler
+change on this architecture.  It needs one of
+
+- a multiplexed transport (request ids, out-of-order replies, many in flight),
+- one request channel per producer stream, or
+- a single remote-facing queue that both streams feed and one thread drains.
+
+Until then the honest statement is that continuous batching on this host is
+bounded by admission prefill blocking decode, and the per-thread staging work
+is a prerequisite that is already in place.
+
 ## What is and is not validated
 
 Validated on hardware:

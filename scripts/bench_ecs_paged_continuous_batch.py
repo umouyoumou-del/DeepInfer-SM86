@@ -67,6 +67,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--prefix-cache-blocks", type=int, default=0)
     parser.add_argument("--prefix-namespace", default="")
     parser.add_argument("--admission-grace-ms", type=float, default=0.0)
+    parser.add_argument("--overlap-prefill", action="store_true")
     parser.add_argument("--single-gpu", action="store_true")
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument(
@@ -117,6 +118,7 @@ def _run_engine(engine, args, *, load_seconds: float, transport) -> dict[str, ob
         "prefill_mode": engine.prefill_mode,
         "prefix_cache_blocks": args.prefix_cache_blocks,
         "admission_grace_ms": args.admission_grace_ms,
+        "overlap_prefill": args.overlap_prefill,
         "block_size": args.block_size,
         "batch_size_capacity": args.max_batch_size,
         "arrival_delay_seconds": args.arrival_delay,
@@ -223,6 +225,7 @@ def main() -> int:
             prefix_cache_blocks=args.prefix_cache_blocks,
             prefix_namespace=args.prefix_namespace,
             admission_grace_ms=args.admission_grace_ms,
+            overlap_prefill=args.overlap_prefill,
         )
         payload = _run_engine(
             engine,
@@ -284,6 +287,7 @@ def _run_single_gpu(args) -> int:
             prefix_cache_blocks=args.prefix_cache_blocks,
             prefix_namespace=args.prefix_namespace,
             admission_grace_ms=args.admission_grace_ms,
+            overlap_prefill=args.overlap_prefill,
         )
         payload = _run_engine(engine, args, load_seconds=load_seconds, transport=None)
         payload["device"] = str(args.device)
