@@ -267,6 +267,8 @@ GPU 侧只负责计算当前传入的专家。两者之间通过明确的回调�
 | Qwen2.5-7B | 整体 4-bit | 3.92 GiB | 7.94 tok/s（持续 paging） |
 | DeepSeek-V2-Lite | Q4_K_M + grouped fused | 2.23 GiB | 2.64–3.01 tok/s |
 
+![单卡实测](figures/fig4_single_gpu.svg)
+
 MoE 路径的消融（同一份 Q4_K_M、贪心解码、单请求）：
 
 | 变体 | 解码 |
@@ -276,6 +278,8 @@ MoE 路径的消融（同一份 Q4_K_M、贪心解码、单请求）：
 | **grouped fused + 双缓冲** | **2.64–3.01 tok/s** |
 | 整层 CPU offload（1 层） | 1.86 tok/s |
 | 冷热专家切分（2 层 × 1 cold） | 2.50 tok/s |
+
+![MoE 消融](figures/fig5_moe_ablation.svg)
 
 **对照基线**：同一份 Q4_K_M 在 llama.cpp CPU 路径为 9–13 tok/s。
 因此单卡 MoE 路径的结论应表述为「在不 OOM 的前提下可运行」，而非性能优势。
@@ -293,6 +297,8 @@ MoE 路径的消融（同一份 Q4_K_M、贪心解码、单请求）：
 | 固定 batch 2 | 6.32 tok/s（聚合） | 1.50× |
 | 固定 batch 4 | 16.60 tok/s（聚合） | 3.95× |
 | **固定 batch 8** | **25.90 tok/s（聚合）** | **6.17×** |
+
+![固定批扩展](figures/fig6_batch_scaling.svg)
 
 所有路径的输出 token 与单卡基线完全一致。
 
@@ -321,12 +327,16 @@ token 完全一致、心跳与监督重启可用），而不是"ECS 在显存受
 | paged KV，**44-token prompt** | **5.97 s** | **4.53 tok/s** |
 | dense，44-token prompt | 7.00 s | 3.86 tok/s |
 
+![paged vs dense](figures/fig7_paged_vs_dense.svg)
+
 前缀共享（4 个请求共享 89-token 前置说明）：
 
 | 配置 | wall | 每请求 prefill |
 |---|---:|---|
 | 无前缀缓存 | 8.36 s | 2.52 / 1.17 / 1.22 / 1.21 s |
 | **前缀缓存（复用 5 个 block）** | **6.15 s** | 2.47 / **0.58 / 0.52 / 0.54** s |
+
+![前缀共享](figures/fig8_prefix_cache.svg)
 
 ### 5.5 正确性
 
@@ -567,6 +577,7 @@ PYTHONPATH=$PWD torchrun --standalone --nproc_per_node=2 \
 - 完整实验日志（含失败实验）：`docs/REMOTE_ECS_2X3080TI.md`
 - 二卡定版范围：`docs/ECS_TWO_GPU_RELEASE.md`
 - 结构化结果：`docs/results/ecs_*.json`
+- 图（SVG，`scripts/make_figures.py` / `scripts/make_paper_figures.py` 生成）：`docs/figures/fig1..8_*.svg`
 - 实现记录（十篇）：`docs/ARTICLE_1..10_*.md`
 
 ## 参考文献

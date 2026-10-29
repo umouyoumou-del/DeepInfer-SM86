@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="336" viewBox="0 0 900 336" font-family="'Microsoft YaHei','PingFang SC','Noto Sans CJK SC',sans-serif">
+<rect width="900" height="336" fill="#ffffff"/>
+<text x="300" y="42" font-size="20" fill="#1f2328" font-weight="bold" text-anchor="start">单卡实测：4 GB RTX 3050 Laptop</text>
+<text x="300" y="64" font-size="13" fill="#57606a" font-weight="normal" text-anchor="start">四条路径的目标不同，不能直接互相比较；括号内为峰值显存</text>
+<text x="284" y="113.0" font-size="13.5" fill="#1f2328" font-weight="normal" text-anchor="end">Qwen2.5-3B  W4A16 + GQA + Graph</text>
+<rect x="300" y="92" width="726" height="30" rx="4" fill="#2da44e" opacity="0.85"/>
+<text x="1037.9" y="113.0" font-size="13" fill="#1f2328" font-weight="bold" text-anchor="start">42.7 tok/s  ·  2.49 GiB</text>
+<text x="284" y="159.0" font-size="13.5" fill="#1f2328" font-weight="normal" text-anchor="end">Qwen2.5-7B  混合 4/3 bit</text>
+<rect x="300" y="138" width="441" height="30" rx="4" fill="#2f6feb" opacity="0.85"/>
+<text x="753.3199999999999" y="159.0" font-size="13" fill="#1f2328" font-weight="bold" text-anchor="start">26.0 tok/s  ·  3.20 GiB</text>
+<text x="284" y="205.0" font-size="13.5" fill="#1f2328" font-weight="normal" text-anchor="end">Qwen2.5-7B  整体 Q4</text>
+<rect x="300" y="184" width="135" height="30" rx="4" fill="#8c959f" opacity="0.85"/>
+<text x="446.98" y="205.0" font-size="13" fill="#1f2328" font-weight="bold" text-anchor="start">7.9 tok/s  ·  3.92 GiB（持续 paging）</text>
+<text x="284" y="251.0" font-size="13.5" fill="#1f2328" font-weight="normal" text-anchor="end">DeepSeek-V2-Lite  MoE Q4_K_M</text>
+<rect x="300" y="230" width="48" height="30" rx="4" fill="#d2691e" opacity="0.85"/>
+<text x="359.94" y="251.0" font-size="13" fill="#1f2328" font-weight="bold" text-anchor="start">2.64–3.01 tok/s  ·  2.23 GiB</text>
+<text x="300" y="312" font-size="11.5" fill="#57606a" font-weight="normal" text-anchor="start">数据来源：README《结果速览》、docs/results/</text>
+
+</svg>

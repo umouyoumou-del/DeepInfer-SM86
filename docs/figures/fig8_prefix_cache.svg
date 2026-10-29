@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="470" viewBox="0 0 860 470" font-family="'Microsoft YaHei','PingFang SC','Noto Sans CJK SC',sans-serif">
+<rect width="860" height="470" fill="#ffffff"/>
+<text x="140" y="42" font-size="20" fill="#1f2328" font-weight="bold" text-anchor="start">前缀块共享：4 个请求共享 89-token 前置说明</text>
+<text x="140" y="64" font-size="13" fill="#57606a" font-weight="normal" text-anchor="start">上：总耗时；下：每个请求的 prefill 耗时（秒）</text>
+<rect x="140" y="113" width="90" height="217" rx="4" fill="#8c959f" opacity="0.85"/>
+<text x="185.0" y="102.64000000000001" font-size="14" fill="#1f2328" font-weight="bold" text-anchor="middle">8.36 s</text>
+<text x="185.0" y="352" font-size="12.5" fill="#57606a" font-weight="normal" text-anchor="middle">无前缀缓存</text>
+<rect x="360" y="170" width="90" height="160" rx="4" fill="#2da44e" opacity="0.85"/>
+<text x="405.0" y="160.1" font-size="14" fill="#1f2328" font-weight="bold" text-anchor="middle">6.15 s</text>
+<text x="405.0" y="352" font-size="12.5" fill="#57606a" font-weight="normal" text-anchor="middle">有前缀缓存</text>
+<line x1="100" y1="330" x2="800" y2="330" stroke="#1f2328" stroke-width="1"/>
+<text x="120" y="416" font-size="12" fill="#57606a" font-weight="normal" text-anchor="end">无缓存</text>
+<rect x="140" y="386" width="88" height="40" rx="4" fill="#8c959f" opacity="0.85"/>
+<text x="184" y="381.68" font-size="11" fill="#1f2328" font-weight="normal" text-anchor="middle">2.52</text>
+<rect x="245" y="407" width="88" height="19" rx="4" fill="#8c959f" opacity="0.85"/>
+<text x="289" y="403.28" font-size="11" fill="#1f2328" font-weight="normal" text-anchor="middle">1.17</text>
+<rect x="350" y="406" width="88" height="20" rx="4" fill="#8c959f" opacity="0.85"/>
+<text x="394" y="402.48" font-size="11" fill="#1f2328" font-weight="normal" text-anchor="middle">1.22</text>
+<rect x="455" y="407" width="88" height="19" rx="4" fill="#8c959f" opacity="0.85"/>
+<text x="499" y="402.64" font-size="11" fill="#1f2328" font-weight="normal" text-anchor="middle">1.21</text>
+<text x="120" y="478" font-size="12" fill="#57606a" font-weight="normal" text-anchor="end">有缓存</text>
+<rect x="140" y="448" width="88" height="40" rx="4" fill="#8c959f" opacity="0.85"/>
+<text x="184" y="444.48" font-size="11" fill="#1f2328" font-weight="normal" text-anchor="middle">2.47</text>
+<rect x="245" y="479" width="88" height="9" rx="4" fill="#2da44e" opacity="0.85"/>
+<text x="289" y="474.72" font-size="11" fill="#1f2328" font-weight="normal" text-anchor="middle">0.58</text>
+<rect x="350" y="480" width="88" height="8" rx="4" fill="#2da44e" opacity="0.85"/>
+<text x="394" y="475.68" font-size="11" fill="#1f2328" font-weight="normal" text-anchor="middle">0.52</text>
+<rect x="455" y="479" width="88" height="9" rx="4" fill="#2da44e" opacity="0.85"/>
+<text x="499" y="475.36" font-size="11" fill="#1f2328" font-weight="normal" text-anchor="middle">0.54</text>
+<text x="100" y="458" font-size="12" fill="#d2691e" font-weight="normal" text-anchor="start">命中后 3 个请求的 prefill 从 1.17 s 降到 0.52–0.58 s（−53%）；第 1 个请求仍需全价</text>
+
+</svg>

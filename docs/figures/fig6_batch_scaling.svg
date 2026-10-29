@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="420" viewBox="0 0 860 420" font-family="'Microsoft YaHei','PingFang SC','Noto Sans CJK SC',sans-serif">
+<rect width="860" height="420" fill="#ffffff"/>
+<text x="110" y="42" font-size="20" fill="#1f2328" font-weight="bold" text-anchor="start">双卡固定批扩展（聚合解码吞吐）</text>
+<text x="110" y="64" font-size="13" fill="#57606a" font-weight="normal" text-anchor="start">批 1 为单请求基线 4.20 tok/s；柱上标注相对单卡加速比</text>
+<rect x="110" y="246" width="110" height="84" rx="4" fill="#2f6feb" opacity="0.85"/>
+<text x="165.0" y="220.0" font-size="15" fill="#1f2328" font-weight="bold" text-anchor="middle">4.20</text>
+<text x="165.0" y="238.0" font-size="12" fill="#57606a" font-weight="bold" text-anchor="middle">1.00×</text>
+<text x="165.0" y="352" font-size="14" fill="#1f2328" font-weight="normal" text-anchor="middle">batch 1</text>
+<rect x="280" y="204" width="110" height="126" rx="4" fill="#2f6feb" opacity="0.85"/>
+<text x="335.0" y="177.6" font-size="15" fill="#1f2328" font-weight="bold" text-anchor="middle">6.32</text>
+<text x="335.0" y="195.6" font-size="12" fill="#2da44e" font-weight="bold" text-anchor="middle">1.50×</text>
+<text x="335.0" y="352" font-size="14" fill="#1f2328" font-weight="normal" text-anchor="middle">batch 2</text>
+<rect x="450" y="-2" width="110" height="332" rx="4" fill="#2f6feb" opacity="0.85"/>
+<text x="505.0" y="-28.0" font-size="15" fill="#1f2328" font-weight="bold" text-anchor="middle">16.60</text>
+<text x="505.0" y="-10.0" font-size="12" fill="#2da44e" font-weight="bold" text-anchor="middle">3.95×</text>
+<text x="505.0" y="352" font-size="14" fill="#1f2328" font-weight="normal" text-anchor="middle">batch 4</text>
+<rect x="620" y="-188" width="110" height="518" rx="4" fill="#2da44e" opacity="0.85"/>
+<text x="675.0" y="-214.0" font-size="15" fill="#1f2328" font-weight="bold" text-anchor="middle">25.90</text>
+<text x="675.0" y="-196.0" font-size="12" fill="#2da44e" font-weight="bold" text-anchor="middle">6.17×</text>
+<text x="675.0" y="352" font-size="14" fill="#1f2328" font-weight="normal" text-anchor="middle">batch 8</text>
+<line x1="90" y1="330" x2="820" y2="330" stroke="#1f2328" stroke-width="1"/>
+<text x="90" y="382" font-size="12" fill="#57606a" font-weight="normal" text-anchor="start">所有批大小的输出 token 与单卡基线完全一致</text>
+
+</svg>
