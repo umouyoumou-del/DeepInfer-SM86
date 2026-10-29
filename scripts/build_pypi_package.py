@@ -57,6 +57,7 @@ def main() -> int:
         "grouped_moe.py",
         "layout.py",
         "continuous_batching.py",
+        "paged_continuous_batching.py",
         "nccl_expert_transport.py",
         "nccl_request_service.py",
         "ptr_grouped_moe.py",

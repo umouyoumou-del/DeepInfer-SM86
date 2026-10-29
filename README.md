@@ -665,8 +665,37 @@ heartbeat healthy。批量 admission prefill 把 remote requests 从478降到391
 cache padding/selection 和 admission 同步仍是瓶颈。
 
 当前仍是 point-to-point request/reply，不是 collective all-to-all；
-true continuous batching、in-flight 请求续跑和 hybrid 长上下文吞吐仍待做。
+in-flight 请求续跑和 collective all-to-all 仍待做。
 双卡机没有 P2P/NVLink。
+
+#### Paged KV slot allocator
+
+`continuous_batching.py` 的 dense slot cache 每次 admission 都要重排整批
+KV。新增 `paged_continuous_batching.py` 换成真正的 block 分配器：每个请求
+持有自己的 `block_ids`，按需一页页增长，decode 时只重建 `[batch, max_blocks]`
+block table，由 native paged MLA kernel 直接从 pool 读，行永远不搬。
+
+同机同 prompt 对照（双卡 3080 Ti，4 个 staggered 请求）：
+
+| 负载 | dense wall | paged wall | dense agg. | paged agg. |
+|---|---:|---:|---:|---:|
+| 4 prompt × 17 tok，8 new | 5.127 s | 5.133 s | 5.071 tok/s | 5.065 tok/s |
+| 8 prompt × 17 tok，16 new | 5.609 s | 5.657 s | 9.093 tok/s | 9.016 tok/s |
+| 4 prompt × 44 tok，8 new | 7.004 s | **5.965 s** | 3.855 tok/s | **4.526 tok/s** |
+
+结论（和之前的猜测不一样，如实记录）：
+
+- **paged 只在 KV 长的时候赢**：44-token prompt 下快 1.17×；
+- **17-token prompt 下两者无差别**，所以"cache padding/selection 是 4.2 tok/s
+  平台的瓶颈"这个假设在小规模上不成立，真正的差距在 admission 同步和
+  每个 iteration 只推进一步 decode；
+- batched admission prefill（6.37 s → 5.13 s）比 decode 侧省拷贝更重要；
+- 每次运行结束 `used_blocks=0`，pool 完整归还；
+- capacity=1 串行跑的 token 与单请求基线完全一致，batch 下才出现
+  `2 + 3 = 5` 的空格变体，dense 引擎同样如此。
+
+复现：`scripts/bench_ecs_paged_continuous_batch.py`；
+结果：`docs/results/ecs_paged_*.json`
 
 复现与硬件细节：`docs/REMOTE_ECS_2X3080TI.md`  
 结果：`docs/results/deepseek_v2_lite_q4km_moe_ecs_2x3080ti.json`
@@ -1076,6 +1105,7 @@ lm_head           : 3-bit, group 128
 | paged / elastic KV | ✅ | block table、引用计数、OOM 隔离 |
 | prefix cache | ✅ | 完整 prompt block LRU 共享 |
 | continuous batching | ✅ | 可变 batch decode + chunked prefill 交替 |
+| paged KV slot allocator | ✅ | 每请求独立 block list、按需增长、行不重排；长上下文 1.17×，短上下文持平 |
 | prefill/decode stream overlap | ✅ | 双 CUDA stream launch；4 GB 带宽受限，收益按场景测量 |
 | tiled W4/W3 prefill GEMM | ✅ | 32×64 CTA tile，shared-memory 权重量化 tile |
 | KV memory budget | ✅ | 启动预算、block 预留、admission/runtime OOM 隔离 |

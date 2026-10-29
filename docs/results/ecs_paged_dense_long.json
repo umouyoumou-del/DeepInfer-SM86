@@ -1,0 +1,100 @@
+{
+  "mode": "continuous_batch",
+  "batch_size_capacity": 4,
+  "arrival_delay_seconds": 0.15,
+  "load_seconds": 16.178525529801846,
+  "wall_seconds": 7.003702864050865,
+  "completed": 4,
+  "failed": 0,
+  "aggregate_decode_tokens_per_second": 3.8551035822190056,
+  "remote_transport": {
+    "requests": 474,
+    "bytes_sent": 519184384,
+    "bytes_received": 519184384,
+    "latency_seconds": 13.89235995709896,
+    "active_sends": 0,
+    "heartbeat": {
+      "path": "/root/autodl-tmp/results/nccl_continuous_heartbeat",
+      "age_seconds": 0.16201257705688477,
+      "healthy": true,
+      "timeout_seconds": 5.0
+    }
+  },
+  "records": [
+    {
+      "prompt": "请先仔细阅读下面这段话再作答。这段话只是用来占位，目的并不是让你理解它，而是为了让上下文变长一些，从而观察长上下文在双卡ECS流水线里的表现。现在我提一个问题：请只回答数字，五减二等于几？",
+      "text": " 五减二等于三。",
+      "token_ids": [
+        207,
+        4041,
+        5510,
+        2547,
+        37360,
+        1937,
+        398,
+        100001
+      ],
+      "prompt_tokens": 71,
+      "completion_tokens": 8,
+      "prefill_seconds": 2.9382133707404137,
+      "decode_seconds": 3.653150111436844,
+      "decode_tokens_per_second": 1.9161544931004177
+    },
+    {
+      "prompt": "请先仔细阅读下面这段话再作答。这段话只是用来占位，目的并不是让你理解它，而是为了让上下文变长一些，从而观察长上下文在双卡ECS流水线里的表现。现在我提一个问题：请只回答数字，五减二等于几？",
+      "text": " 五减二等于三。",
+      "token_ids": [
+        207,
+        4041,
+        5510,
+        2547,
+        37360,
+        1937,
+        398,
+        100001
+      ],
+      "prompt_tokens": 71,
+      "completion_tokens": 8,
+      "prefill_seconds": 1.2445096597075462,
+      "decode_seconds": 2.4297907426953316,
+      "decode_tokens_per_second": 2.880906522935799
+    },
+    {
+      "prompt": "只回答数字：5-2=?",
+      "text": " 5-2=3",
+      "token_ids": [
+        207,
+        20,
+        12,
+        17,
+        28,
+        18,
+        100001
+      ],
+      "prompt_tokens": 17,
+      "completion_tokens": 7,
+      "prefill_seconds": 1.2445096597075462,
+      "decode_seconds": 2.143804870545864,
+      "decode_tokens_per_second": 2.798762183272891
+    },
+    {
+      "prompt": "只回答数字：2+3=?",
+      "text": " 2 + 3 = 5",
+      "token_ids": [
+        207,
+        17,
+        919,
+        207,
+        18,
+        403,
+        207,
+        20
+      ],
+      "prompt_tokens": 17,
+      "completion_tokens": 8,
+      "prefill_seconds": 1.2445096597075462,
+      "decode_seconds": 2.4300046116113663,
+      "decode_tokens_per_second": 2.8806529693613268
+    }
+  ]
+}

@@ -140,6 +140,66 @@ def select_caches(cache: DynamicCache, indices: Sequence[int]) -> DynamicCache:
     return selected
 
 
+def build_generation_result(runtime: Any, request: Any) -> GenerationResult:
+    """Build the public :class:`GenerationResult` for a finished request.
+
+    Shared by the dense slot engine and the paged KV engine so both report
+    identical runtime counters.
+    """
+
+    eos = int(runtime.tokenizer.eos_token_id)
+    output_ids = [token for token in request.generated if token != eos]
+    text = runtime.tokenizer.decode(output_ids, skip_special_tokens=True)
+    total_decode_tokens = max(0, len(request.generated) - 1)
+    decode_seconds = max(0.0, request.decode_seconds)
+    aggregate = (
+        total_decode_tokens / decode_seconds if decode_seconds > 0 else 0.0
+    )
+    return GenerationResult(
+        text=text,
+        prompt_tokens=request.prompt_tokens,
+        completion_tokens=len(request.generated),
+        prefill_seconds=request.prefill_seconds,
+        decode_seconds=decode_seconds,
+        decode_tokens_per_second=aggregate,
+        peak_gpu_allocated_bytes=int(torch.cuda.max_memory_allocated()),
+        peak_gpu_reserved_bytes=int(torch.cuda.max_memory_reserved()),
+        gpu_free_bytes_after_load=runtime.gpu_free_bytes_after_load,
+        shared_experts_device=runtime.shared_experts_device,
+        lm_head_device=runtime.lm_head_device,
+        token_ids=list(request.generated),
+        timings={
+            **(
+                dict(runtime.expert_store.timings)
+                if runtime.expert_store is not None
+                else {}
+            ),
+            "cpu_moe_seconds": float(runtime.cpu_moe_seconds),
+            "expert_device_chunks": float(runtime.expert_device_chunks),
+            "remote_expert_chunks": float(runtime.remote_expert_chunks),
+            **{
+                f"expert_device_{device}_experts": float(count)
+                for device, count in runtime.expert_device_counts.items()
+            },
+        },
+        dense_layer_indices=list(runtime.dense_layer_indices),
+        moe_layer_indices=list(runtime.moe_layer_indices),
+        dense_mlp_devices=dict(runtime.dense_mlp_devices),
+        fused_moe_enabled=runtime.fused_moe_enabled,
+        fused_moe_chunks=runtime.fused_moe_chunks,
+        fallback_moe_chunks=runtime.fallback_moe_chunks,
+        cpu_moe_layers=len(runtime.cpu_moe_layer_indices),
+        cpu_moe_chunks=runtime.cpu_moe_chunks,
+        cpu_experts_per_layer=runtime.requested_cpu_experts_per_layer,
+        cpu_expert_chunks=runtime.cpu_expert_chunks,
+        ecs=(
+            runtime.ecs_controller.snapshot()
+            if runtime.ecs_controller is not None
+            else None
+        ),
+    )
+
+
 class ContinuousBatchEngine:
     """A bounded continuous-batch scheduler over one runtime."""
 
@@ -289,58 +349,7 @@ class ContinuousBatchEngine:
         return admitted
 
     def _finish(self, request: ContinuousRequest) -> None:
-        runtime = self.runtime
-        eos = int(runtime.tokenizer.eos_token_id)
-        output_ids = [token for token in request.generated if token != eos]
-        text = runtime.tokenizer.decode(output_ids, skip_special_tokens=True)
-        total_decode_tokens = max(0, len(request.generated) - 1)
-        decode_seconds = max(0.0, request.decode_seconds)
-        aggregate = (
-            total_decode_tokens / decode_seconds if decode_seconds > 0 else 0.0
-        )
-        result = GenerationResult(
-            text=text,
-            prompt_tokens=request.prompt_tokens,
-            completion_tokens=len(request.generated),
-            prefill_seconds=request.prefill_seconds,
-            decode_seconds=decode_seconds,
-            decode_tokens_per_second=aggregate,
-            peak_gpu_allocated_bytes=int(torch.cuda.max_memory_allocated()),
-            peak_gpu_reserved_bytes=int(torch.cuda.max_memory_reserved()),
-            gpu_free_bytes_after_load=runtime.gpu_free_bytes_after_load,
-            shared_experts_device=runtime.shared_experts_device,
-            lm_head_device=runtime.lm_head_device,
-            token_ids=list(request.generated),
-            timings={
-                **(
-                    dict(runtime.expert_store.timings)
-                    if runtime.expert_store is not None
-                    else {}
-                ),
-                "cpu_moe_seconds": float(runtime.cpu_moe_seconds),
-                "expert_device_chunks": float(runtime.expert_device_chunks),
-                "remote_expert_chunks": float(runtime.remote_expert_chunks),
-                **{
-                    f"expert_device_{device}_experts": float(count)
-                    for device, count in runtime.expert_device_counts.items()
-                },
-            },
-            dense_layer_indices=list(runtime.dense_layer_indices),
-            moe_layer_indices=list(runtime.moe_layer_indices),
-            dense_mlp_devices=dict(runtime.dense_mlp_devices),
-            fused_moe_enabled=runtime.fused_moe_enabled,
-            fused_moe_chunks=runtime.fused_moe_chunks,
-            fallback_moe_chunks=runtime.fallback_moe_chunks,
-            cpu_moe_layers=len(runtime.cpu_moe_layer_indices),
-            cpu_moe_chunks=runtime.cpu_moe_chunks,
-            cpu_experts_per_layer=runtime.requested_cpu_experts_per_layer,
-            cpu_expert_chunks=runtime.cpu_expert_chunks,
-            ecs=(
-                runtime.ecs_controller.snapshot()
-                if runtime.ecs_controller is not None
-                else None
-            ),
-        )
+        result = build_generation_result(self.runtime, request)
         if request.future is not None:
             request.future.set_result(result)
         self._completed += 1
@@ -478,6 +487,7 @@ __all__ = [
     "ContinuousBatchEngine",
     "ContinuousRequest",
     "append_caches",
+    "build_generation_result",
     "pack_caches",
     "select_caches",
 ]

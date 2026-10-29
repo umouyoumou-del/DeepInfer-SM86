@@ -1,0 +1,129 @@
+{
+  "mode": "paged_continuous_batch",
+  "prefill_mode": "paged",
+  "block_size": 16,
+  "batch_size_capacity": 4,
+  "arrival_delay_seconds": 0.15,
+  "load_seconds": 15.385079063475132,
+  "wall_seconds": 6.3694373071193695,
+  "completed": 4,
+  "failed": 0,
+  "aggregate_decode_tokens_per_second": 3.924993495431146,
+  "engine_status": {
+    "engine": "paged",
+    "prefill_mode": "paged",
+    "max_batch_size": 4,
+    "max_cache": 128,
+    "active": 0,
+    "queue_depth": 0,
+    "completed": 4,
+    "failed": 0,
+    "last_error": null,
+    "admissions": 4,
+    "prefill_forwards": 2,
+    "prefill_rows": 4,
+    "decode_steps": 8,
+    "max_active_seen": 4,
+    "kv": {
+      "block_size": 16,
+      "max_length": 128,
+      "capacity_blocks_per_request": 8,
+      "num_blocks": 32,
+      "used_blocks": 0,
+      "free_blocks": 32,
+      "peak_blocks": 8,
+      "allocations": 4,
+      "releases": 4,
+      "growth_events": 4,
+      "rejected": 0
+    }
+  },
+  "records": [
+    {
+      "prompt": "只回答数字：5-2=?",
+      "text": " 5-2=3",
+      "token_ids": [
+        207,
+        20,
+        12,
+        17,
+        28,
+        18,
+        100001
+      ],
+      "prompt_tokens": 17,
+      "completion_tokens": 7,
+      "prefill_seconds": 1.8078208789229393,
+      "decode_seconds": 4.06733912229538,
+      "decode_tokens_per_second": 1.475165905668061
+    },
+    {
+      "prompt": "只回答数字：2+3=?",
+      "text": " 2+3=5",
+      "token_ids": [
+        207,
+        17,
+        10,
+        18,
+        28,
+        20,
+        100001
+      ],
+      "prompt_tokens": 17,
+      "completion_tokens": 7,
+      "prefill_seconds": 0.7397603765130043,
+      "decode_seconds": 1.8260222971439362,
+      "decode_tokens_per_second": 3.285830632728057
+    },
+    {
+      "prompt": "只回答数字：9-4=?",
+      "text": " 9-4=5",
+      "token_ids": [
+        207,
+        24,
+        12,
+        19,
+        28,
+        20,
+        100001
+      ],
+      "prompt_tokens": 17,
+      "completion_tokens": 7,
+      "prefill_seconds": 0.7256342694163322,
+      "decode_seconds": 1.826100878417492,
+      "decode_tokens_per_second": 3.2856892359635848
+    },
+    {
+      "prompt": "只回答数字：1+1=?",
+      "text": " 1+1=2。",
+      "token_ids": [
+        207,
+        16,
+        10,
+        16,
+        28,
+        17,
+        398,
+        100001
+      ],
+      "prompt_tokens": 17,
+      "completion_tokens": 8,
+      "prefill_seconds": 0.7377793937921524,
+      "decode_seconds": 2.0585306361317635,
+      "decode_tokens_per_second": 3.4004837611520204
+    }
+  ],
+  "remote_transport": {
+    "requests": 0,
+    "bytes_sent": 0,
+    "bytes_received": 0,
+    "latency_seconds": 0.0,
+    "active_sends": 0,
+    "heartbeat": {
+      "path": "/root/autodl-tmp/results/nccl_paged_heartbeat",
+      "age_seconds": 0.37422609329223633,
+      "healthy": true,
+      "timeout_seconds": 5.0
+    }
+  }
+}

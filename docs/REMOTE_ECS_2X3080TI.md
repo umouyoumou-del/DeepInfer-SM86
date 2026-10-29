@@ -376,6 +376,85 @@ The 45-token case still has exact token parity but loses the short-decode
 throughput win.  Multi-request NCCL scheduling and remote-worker
 heartbeat/restart are still unmeasured.
 
+### Paged KV slot allocator
+
+The slot engine above keeps every active row in one dense `DynamicCache`.
+Admission re-packs all live rows (and shifts them right when the newcomer is
+longer) and completion gathers the survivors.  `deepinfer/moe/paged_continuous_batching.py`
+replaces that with a real block allocator:
+
+- one `PagedKVCacheManager` pool owns the physical KV blocks;
+- each request holds its own `block_ids` and grows them one block at a time as
+  it decodes (`PagedSlotAllocator.reserve`), so a 17-token prompt never pins
+  128 tokens of cache;
+- a decode step builds one `[batch, max_blocks]` block table and lets the
+  native paged MLA kernel read straight out of the pool -- no row is ever
+  re-packed, shifted or re-indexed;
+- completion returns the blocks to the allocator and nothing else happens.
+
+Two prefill strategies are available.  `prefill_mode="batched"` (default)
+prefills the queued requests in one left-padded dense forward, then copies each
+row's valid suffix into its own blocks once, grouped by equal prompt length.
+`prefill_mode="paged"` skips the dense cache entirely and prefills each request
+through `runtime.forward_logits` with `seq_lens=0`.
+
+Command:
+
+```bash
+PYTHONPATH=$PWD /root/autodl-tmp/ecs-venv/bin/torchrun   --standalone --nproc_per_node=2   scripts/bench_ecs_paged_continuous_batch.py   --max-batch-size 4 --max-new-tokens 8 --arrival-delay 0.15 --max-cache 256   --output /root/autodl-tmp/results/ecs_paged_paged_b4.json
+```
+
+Same host, same prompts, dense slot engine versus the paged engine:
+
+| Workload | Dense wall | Paged wall | Dense agg. | Paged agg. |
+|---|---:|---:|---:|---:|
+| 4 prompts, 17 tok, 8 new | 5.127 s | 5.133 s | 5.071 tok/s | 5.065 tok/s |
+| 8 prompts, 17 tok, 16 new | 5.609 s | 5.657 s | 9.093 tok/s | 9.016 tok/s |
+| 4 prompts, 44 tok, 8 new | 7.004 s | **5.965 s** | 3.855 tok/s | **4.526 tok/s** |
+| 4 prompts, capacity 1 (parity) | -- | 8.505 s | -- | 2.940 tok/s |
+| 4 prompts, paged prefill | -- | 6.369 s | -- | 3.925 tok/s |
+
+All runs completed every request with zero failures, and every run ends with
+`used_blocks = 0`, i.e. the pool is fully returned.
+
+What this does and does not show:
+
+- Paging pays off exactly when the KV is long: at 44-token prompts the paged
+  engine is 1.17x faster (7.004 s to 5.965 s).  Copying
+  `[rows, heads, tokens, dim]` per layer per step is real work only once
+  `tokens` is large.
+- At 17-token prompts the two engines are indistinguishable (5.127 s vs
+  5.133 s).  The earlier hypothesis in this document -- that cache padding and
+  row selection dominate the 4.2 tok/s plateau -- is **not** supported at that
+  scale.  The remaining gap to fixed-batch (9.09 tok/s at batch 8, 25.90 tok/s
+  in the fixed-batch harness) sits in admission synchronization and one decode
+  step per scheduling iteration, not in KV copies.
+- Paged prefill (6.369 s) is 24% slower than batched admission prefill
+  (5.133 s), so keeping the grouped dense prefill and writing it through once
+  is the right default.
+- Grouping the write-through by prompt length mattered: before grouping the
+  batch-8 run was 5.807 s, after it 5.657 s.
+
+Numerical parity: the capacity-1 run reproduces the single-request outputs
+exactly (`5-2=3`, `2+3=5`, `9-4=5`, `1+1=2。`) and the `5-2` token IDs stay
+`[207, 20, 12, 17, 28, 18, 100001]` at every batch size.  The spaced variant
+`2 + 3 = 5` appears only once rows are batched, and it appears identically in
+the dense engine, so it is a batching-order effect in the expert path rather
+than something the paged KV introduced.
+
+Known costs and limits:
+
+- the MLA pool pads the key head dimension up to `max(key_dim, value_dim)`
+  (192 to 512 here), so key storage carries a 2.7x overhead;
+- a 16-token block across 27 layers, 16 heads and 512 dims is 14.2 MB, so the
+  32-block default pool is ~453 MB;
+- the pool is sized from free memory at build time
+  (`--kv-memory-utilization`, default 0.30) and capped at
+  `max_batch_size x ceil(max_cache / block_size)`;
+- blocks are private per request: prefix sharing and block reuse across
+  requests are still not wired into this engine;
+- no in-flight KV resume after a worker restart.
+
 ## What is and is not validated
 
 Validated on hardware:
@@ -394,15 +473,15 @@ Still not validated:
 - a collective All-to-All as the in-model activation exchange (the async NCCL
   path uses point-to-point isend/irecv; the separate ExpertPacket all-to-all
   smoke did pass);
-- true continuous batching (the new batch generator is fixed-size and steps
-  all rows together; finished rows are padded);
+
 - in-flight request/KV resume after a restart (whole-request retry is
   implemented by the supervisor);
 - production heartbeat/worker restart for the dual-GPU pool.
 
-Next: implement true continuous batching (dynamic row admission/removal),
-in-flight request resume, hybrid long-context validation, and evaluate a
-collective all-to-all.  Fixed batch generation reaches 25.90 aggregate tok/s at
+Next: share KV blocks between requests (prefix cache on the paged engine),
+support in-flight request resume, validate a collective all-to-all, and cut the
+per-iteration admission synchronization that still separates continuous
+batching from the fixed-batch throughput.  Fixed batch generation reaches 25.90 aggregate tok/s at
 batch 8 (6.17x single GPU), the hybrid single-request path reaches 4.71 tok/s,
 and the supervisor recovers from a simulated rank-1 crash by whole-request
 retry.

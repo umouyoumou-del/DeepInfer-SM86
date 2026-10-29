@@ -1,0 +1,131 @@
+{
+  "mode": "paged_continuous_batch",
+  "prefill_mode": "batched",
+  "block_size": 16,
+  "batch_size_capacity": 4,
+  "arrival_delay_seconds": 0.15,
+  "load_seconds": 15.312013745307922,
+  "wall_seconds": 5.965242572128773,
+  "completed": 4,
+  "failed": 0,
+  "aggregate_decode_tokens_per_second": 4.526219960635181,
+  "engine_status": {
+    "engine": "paged",
+    "prefill_mode": "batched",
+    "max_batch_size": 4,
+    "max_cache": 256,
+    "active": 0,
+    "queue_depth": 0,
+    "completed": 4,
+    "failed": 0,
+    "last_error": null,
+    "admissions": 4,
+    "prefill_forwards": 2,
+    "prefill_rows": 4,
+    "decode_steps": 8,
+    "max_active_seen": 4,
+    "kv": {
+      "block_size": 16,
+      "max_length": 256,
+      "capacity_blocks_per_request": 16,
+      "num_blocks": 64,
+      "used_blocks": 0,
+      "free_blocks": 64,
+      "peak_blocks": 14,
+      "allocations": 4,
+      "releases": 4,
+      "growth_events": 4,
+      "rejected": 0
+    }
+  },
+  "records": [
+    {
+      "prompt": "请先仔细阅读下面这段话再作答。这段话只是用来占位，目的并不是让你理解它，而是为了让上下文变长一些，从而观察长上下文在双卡ECS流水线里的表现。现在我提一个问题：请只回答数字，五减二等于几？",
+      "text": " 五减二等于三。",
+      "token_ids": [
+        207,
+        4041,
+        5510,
+        2547,
+        37360,
+        1937,
+        398,
+        100001
+      ],
+      "prompt_tokens": 71,
+      "completion_tokens": 8,
+      "prefill_seconds": 2.0272982493042946,
+      "decode_seconds": 3.5476344898343086,
+      "decode_tokens_per_second": 1.9731457736298346
+    },
+    {
+      "prompt": "请先仔细阅读下面这段话再作答。这段话只是用来占位，目的并不是让你理解它，而是为了让上下文变长一些，从而观察长上下文在双卡ECS流水线里的表现。现在我提一个问题：请只回答数字，五减二等于几？",
+      "text": " 五减二等于三。",
+      "token_ids": [
+        207,
+        4041,
+        5510,
+        2547,
+        37360,
+        1937,
+        398,
+        100001
+      ],
+      "prompt_tokens": 71,
+      "completion_tokens": 8,
+      "prefill_seconds": 1.1825446262955666,
+      "decode_seconds": 2.3231958150863647,
+      "decode_tokens_per_second": 3.0130908271026544
+    },
+    {
+      "prompt": "只回答数字：5-2=?",
+      "text": " 5-2=3",
+      "token_ids": [
+        207,
+        20,
+        12,
+        17,
+        28,
+        18,
+        100001
+      ],
+      "prompt_tokens": 17,
+      "completion_tokens": 7,
+      "prefill_seconds": 1.1825446262955666,
+      "decode_seconds": 2.0845506861805916,
+      "decode_tokens_per_second": 2.878318114199215
+    },
+    {
+      "prompt": "只回答数字：2+3=?",
+      "text": " 2 + 3 = 5",
+      "token_ids": [
+        207,
+        17,
+        919,
+        207,
+        18,
+        403,
+        207,
+        20
+      ],
+      "prompt_tokens": 17,
+      "completion_tokens": 8,
+      "prefill_seconds": 1.1825446262955666,
+      "decode_seconds": 2.3232625648379326,
+      "decode_tokens_per_second": 3.01300425786713
+    }
+  ],
+  "remote_transport": {
+    "requests": 0,
+    "bytes_sent": 0,
+    "bytes_received": 0,
+    "latency_seconds": 0.0,
+    "active_sends": 0,
+    "heartbeat": {
+      "path": "/root/autodl-tmp/results/nccl_paged_heartbeat",
+      "age_seconds": 0.3010575771331787,
+      "healthy": true,
+      "timeout_seconds": 5.0
+    }
+  }
+}
