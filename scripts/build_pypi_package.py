@@ -56,6 +56,7 @@ def main() -> int:
         "gpu_quant.py",
         "grouped_moe.py",
         "layout.py",
+        "continuous_batching.py",
         "nccl_expert_transport.py",
         "nccl_request_service.py",
         "ptr_grouped_moe.py",

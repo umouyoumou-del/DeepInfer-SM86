@@ -183,7 +183,8 @@
     "fixed_batch_first_sequence_parity": true,
     "fixed_batch_beats_single": true,
     "batch8_beats_single": true,
-    "batch8_five_minus_two_parity": true
+    "batch8_five_minus_two_parity": true,
+    "continuous_batch_completed": true
   },
   "notes": [
     "The dual GPU pool runs one independent DeepSeek runtime per GPU and assigns requests by queue depth.",
@@ -191,7 +192,7 @@
     "The NCCL all-to-all smoke validates real ExpertPacket transport and hot-expert token sharding across both GPUs.",
     "The expert-sharded runtime splits routed expert chunks by ECS owner across GPU0/GPU1; the in-model activation exchange was subsequently moved to NCCL point-to-point between coordinator and remote expert worker.",
     "The asynchronous NCCL revision overlaps remote expert requests with local expert chunks: exact token parity, 4.90 tok/s decode, 2.02 s prefill, and ~39.6 MB peak GPU allocation on the remote rank.",
-    "Fixed batch scaling on 2x3080Ti: batch2=6.32, batch4=16.60, batch8=25.90 aggregate decode tok/s (6.17x single-GPU). Batch8 preserves 5-2 token parity; some duplicate prompts differ in spacing but remain semantically correct. True continuous batching and in-flight resume remain open."
+    "Continuous batching is now implemented: staggered requests enter fixed slots, finished rows are removed, and new prefills append to the live KV cache. Four staggered requests completed correctly with heartbeat healthy; aggregate decode 4.21 tok/s, still below fixed-batch throughput because of per-request prefill and cache reorder overhead."
   ],
   "layer_pipeline": {
     "prompt": "只回答数字：5-2=?",
@@ -833,5 +834,89 @@
     "best_aggregate_decode_tokens_per_second": 25.901889481122087,
     "best_speedup_vs_single": 6.166982887839956,
     "note": "Fixed-size batch generation, not continuous batching; all rows share equal decode steps."
+  },
+  "continuous_batch": {
+    "capacity": 4,
+    "arrival_delay_seconds": 0.15,
+    "wall_seconds": 5.94097301363945,
+    "completed": 4,
+    "failed": 0,
+    "aggregate_decode_tokens_per_second": 4.208064898225309,
+    "remote_requests": 478,
+    "remote_bytes_sent": 86953984,
+    "heartbeat": {
+      "path": "/root/autodl-tmp/results/nccl_continuous_heartbeat",
+      "age_seconds": 0.2821025848388672,
+      "healthy": true,
+      "timeout_seconds": 5.0
+    },
+    "records": [
+      {
+        "prompt": "只回答数字：5-2=?",
+        "text": " 5-2=3",
+        "token_ids": [
+          207,
+          20,
+          12,
+          17,
+          28,
+          18,
+          100001
+        ],
+        "prefill_seconds": 1.8206211030483246,
+        "decode_seconds": 1.613973282277584,
+        "decode_tokens_per_second": 3.717533658012606
+      },
+      {
+        "prompt": "只回答数字：2+3=?",
+        "text": " 2+3=5",
+        "token_ids": [
+          207,
+          17,
+          10,
+          18,
+          28,
+          20,
+          100001
+        ],
+        "prefill_seconds": 0.6873127296566963,
+        "decode_seconds": 1.6141827926039696,
+        "decode_tokens_per_second": 3.7170511465562783
+      },
+      {
+        "prompt": "只回答数字：9-4=?",
+        "text": " 9-4=5",
+        "token_ids": [
+          207,
+          24,
+          12,
+          19,
+          28,
+          20,
+          100001
+        ],
+        "prefill_seconds": 0.7444948330521584,
+        "decode_seconds": 1.6143350899219513,
+        "decode_tokens_per_second": 3.7167004777738453
+      },
+      {
+        "prompt": "只回答数字：1+1=?",
+        "text": " 1+1=2。",
+        "token_ids": [
+          207,
+          16,
+          10,
+          16,
+          28,
+          17,
+          398,
+          100001
+        ],
+        "prefill_seconds": 0.7781107872724533,
+        "decode_seconds": 1.8841452896595001,
+        "decode_tokens_per_second": 3.7152124299634184
+      }
+    ],
+    "note": "Staggered arrivals are admitted into free slots while other rows continue decoding. Correctness passed; aggregate throughput is lower than fixed batch because each new request gets an individual prefill and cache padding/reorder overhead."
   }
 }

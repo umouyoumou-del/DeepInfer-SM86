@@ -1046,7 +1046,7 @@ fused 之后 decode 的瓶颈更偏向 packed expert 读取和 H2D，而不是 G
   - 5 个质量 prompt 的 token IDs 完全一致；
   - 64-token 长故事生成 token IDs 完全一致；
   - `--no-fused-moe` 可随时回退到旧路径。
-- 全套测试：**112 passed**。
+- 全套测试：**113 passed**。
 
 ### 11.4 Grouped multi-expert kernel
 
@@ -1153,7 +1153,7 @@ opt-in 实验项保留，默认关闭。
 
 - double-buffer 路径与 grouped、per-expert、dequant+bmm 的 token IDs 一致；
 - 512 MB cache 路径 token IDs 也一致；
-- 全套测试：**112 passed**。
+- 全套测试：**113 passed**。
 
 ## 13. GPU packed cache + pointer-array grouped kernel
 
@@ -1196,7 +1196,7 @@ H2D 进来。
 
 - pointer-array gate/up 和 down 都有独立 GPU 单测；
 - GPU cache 路径与无 cache 路径 token IDs 完全一致；
-- 全套测试：**112 passed**。
+- 全套测试：**113 passed**。
 
 ## 14. 质量回归（mini suite）
 
@@ -1685,8 +1685,12 @@ failed=0，heartbeat age 0.44 s。但 coordinator 仍一次执行一个请求，
 | 8 | 1.89 s | **25.90 tok/s** | **6.17×** |
 
 Batch8 的 `5-2` token 与单卡完全一致；部分重复 prompt 的空格渲染会变化，
-但语义正确。这是 fixed-size batch，不是 continuous batching，
-finished rows 仍作为 padding 继续。
+但语义正确。这是 fixed-size batch，不是 continuous batching。
+
+新增 `continuous_batching.py`：4 个 staggered 请求在运行中进入空闲 slot，
+完成后移除 KV row，新请求单独 prefill 后 append 到 live cache。4 个请求
+全部正确，heartbeat healthy；但 aggregate decode 4.21 tok/s，低于 fixed
+batch，因为每个新请求都要单独 prefill，并且有 cache 重排/拷贝开销。
 
 当前仍是 point-to-point request/reply，不是 collective all-to-all；
 true continuous batching、in-flight 请求续跑和 hybrid 长上下文吞吐仍待做。

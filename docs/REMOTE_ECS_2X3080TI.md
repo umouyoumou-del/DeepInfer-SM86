@@ -298,6 +298,41 @@ semantically correct.
 All rows are fixed-size: they start together and use equal decode steps.
 Finished rows remain padded; this is not continuous batching.
 
+### Continuous batching
+
+`deepinfer/moe/continuous_batching.py` now implements a slot-based continuous
+scheduler:
+
+- up to `max_batch_size` active rows;
+- staggered requests are admitted into free slots;
+- each new request is prefetched through the same NCCL expert worker;
+- KV caches are left-padded, appended, and row-selected as requests finish;
+- completed futures are returned independently.
+
+Smoke command:
+
+```bash
+PYTHONPATH=$PWD /root/autodl-tmp/ecs-venv/bin/torchrun   --standalone --nproc_per_node=2 scripts/bench_ecs_continuous_batch.py   --max-batch-size 4 --max-new-tokens 8 --arrival-delay 0.15
+```
+
+| Continuous metric | Value |
+|---|---:|
+| Capacity | 4 |
+| Staggered arrivals | 4 |
+| Completed / failed | 4 / 0 |
+| Wall time | 5.94 s |
+| Aggregate decode | 4.21 tok/s |
+| Remote requests | 478 |
+| Heartbeat | healthy |
+
+All four outputs were correct:
+`5-2=3`, `2+3=5`, `9-4=5`, `1+1=2。`.
+
+The continuous scheduler is functionally working, but aggregate throughput is
+lower than fixed batch (`6.32–25.90 tok/s`) because each arriving request pays
+an individual prefill and the cache append/reorder path.  Optimizing admission
+prefill batching and removing cache copies is the next performance task.
+
 ### Supervised restart
 
 `scripts/run_ecs_expert_parallel_supervised.py` launches the coordinator and

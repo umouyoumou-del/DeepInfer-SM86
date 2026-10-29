@@ -332,7 +332,7 @@ MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比�
 - `tests/moe/` 新增 GGUF 索引、截断拒绝、expert slice、Q4_K/Q5_0/Q8_0
   GPU 反量化、dense/MoE 层布局、CPU MLP fallback、per-expert fused 和
   grouped MoE kernel 对照测试；
-- 全套测试：**112 passed**；
+- 全套测试：**113 passed**；
 - 新增文章：
   `docs/ARTICLE_9_DEEPSEEK_V2_LITE_MOE_CPU_GPU_OFFLOAD.md`；
 - 结构化结果：
@@ -656,8 +656,12 @@ failed=0，heartbeat age 0.44 s。但 coordinator 仍然一次执行一个请求
 | 8 | 1.89 s | **25.90 tok/s** | **6.17×** |
 
 Batch8 的 `5-2` token 与单卡完全一致；部分重复 prompt 的空格渲染会变化，
-但语义正确。这是 fixed-size batch，不是 continuous batching，
-finished rows 仍作为 padding 继续。
+但语义正确。这是 fixed-size batch，不是 continuous batching。
+
+新增 `continuous_batching.py`：4 个 staggered 请求在运行中进入空闲 slot，
+完成后移除 KV row，新请求单独 prefill 后 append 到 live cache。4 个请求
+全部正确，heartbeat healthy；但 aggregate decode 4.21 tok/s，低于 fixed
+batch，因为每个新请求都要单独 prefill，并且有 cache 重排/拷贝开销。
 
 当前仍是 point-to-point request/reply，不是 collective all-to-all；
 true continuous batching、in-flight 请求续跑和 hybrid 长上下文吞吐仍待做。
