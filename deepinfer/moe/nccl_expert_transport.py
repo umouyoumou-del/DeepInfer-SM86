@@ -167,6 +167,10 @@ class NCCLExpertClient:
     any thread and wait independently on their own event.
     """
 
+    # Submissions are queued and drained by one I/O thread, so callers may
+    # submit from several threads at once without corrupting the FIFO protocol.
+    supports_concurrent_submit = True
+
     def __init__(
         self,
         *,

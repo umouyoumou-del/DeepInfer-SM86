@@ -550,19 +550,31 @@ if overlap_prefill and runtime.remote_expert_client is not None:
 
 A first transport change landed after that: `NCCLExpertClient` now queues
 submissions and drains them on one dedicated I/O thread (`_TransportRequest`,
-`_io_loop`), so the wire protocol still sees a single ordered producer while
-callers may submit from any thread and wait on their own event.  The serial
-path is unaffected and still produces correct output with a healthy heartbeat.
+`_io_loop`), so the wire protocol sees a single ordered producer while callers
+may submit from any thread and wait on their own event.  The serial path is
+unaffected: correct output, healthy heartbeat, full suite green.
 
-Overlap still fails with the multiplexed client: the run now dies with a
-`ChildFailedError` from `torchrun` rather than the NCCL watchdog `SIGABRT`,
-i.e. the send-side interleaving is no longer the trigger, and the underlying
-exception has not been isolated yet.  Treat `--overlap-prefill` as experimental
-and unsupported on the NCCL path until that is diagnosed.  The likely remaining
-suspects are the coordinator's own expert staging (now per thread, so probably
-not), the shared ECS heat/LRU controller under two threads, and the single
-remote worker serialising both streams anyway -- in which case overlap would
-buy little even once it is correct.
+**Correction.** An earlier revision of this section claimed overlapping with
+the multiplexed client died in the NCCL watchdog.  That run had actually been
+stopped by the engine's own guard, which raised
+`ValueError("overlap_prefill is not supported ...")` before any forward ran --
+`torchrun` merely wrapped it as `ChildFailedError`.  The guard has since been
+replaced by a capability check (`transport.supports_concurrent_submit`), and
+the experiment was repeated properly.
+
+With the guard relaxed and the single-I/O-thread client in place, overlapped
+prefill still aborts: exit code -6, `Signal 6 (SIGABRT)`, rank 0.  So
+send-side interleaving was **not** the trigger.  The likely remaining cause is
+NCCL itself: a `ProcessGroupNCCL` runs all point-to-point work on one internal
+communication stream, and two forwards that need expert exchanges at the same
+time cannot share it no matter which thread issues the calls.  A client-side
+queue cannot fix that; it needs either one process group per producer or a
+worker that pipeline-serves several in-flight requests on its own schedule.
+
+`--overlap-prefill` therefore stays experimental and off by default.  The
+capability flag remains useful: it tells a scheduler whether a transport *can*
+be driven from several threads at all, which is a prerequisite even if it is
+not sufficient.
 
 What that means for the roadmap: prefill/decode overlap is not a scheduler
 change on this architecture.  It needs one of
