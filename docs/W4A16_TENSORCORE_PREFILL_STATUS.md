@@ -60,3 +60,37 @@ mma.h(55): catastrophic error: cannot open source file "crt/mma.h"
 
 **投入更多时间前应当先做一件事**：测一下 3B prefill 里 GEMM 占多少时间。
 如果占比低于 30%，即使 Tensor Core 把 GEMM 提速 3 倍，端到端也只能快不到 10%。
+
+## 测量尝试（受阻）
+
+脚本已写好：`scripts/measure_prefill_gemm_share.py`。
+做法是用 CUDA Event 包住 `_native_w4a16_tiled_gemm`，累计调用耗时，
+再与整次 prefill forward 的墙钟比较，输出 `gemm_share_pct`。
+
+**执行受阻**：本机 3B W4A16 checkpoint 不完整。
+
+```
+D:\Qwen2.5-3B-DeepInfer-SM86\model  manifest.json        # layer_files 列出 layer_00..layer_35
+  norm.safetensors     # 1.6 MB
+  merges.txt / tokenizer / config.json
+  （36 个 layer_XX.safetensors 全部缺失）
+```
+
+`Qwen2ForCausalLM.load_model` 直接报错：
+`missing 434 model parameters`。
+
+需要一份完整的 3B W4A16 checkpoint（或用 harness 从 dense 模型现场量化）才能测。
+在有 checkpoint 的机器上，脚本可直接运行。
+
+## 解析估算（未实测，仅供决策）
+
+按 3B 规模粗算：36 层，每层 attention 约 4×2048²、MLP 约 3×2048×11008，
+每 token 约 6 GFLOP；128 token 的 prefill 约 770 GFLOP。
+RTX 3050 Laptop 的 FP32 约 9 TFLOPS（无 Tensor Core），
+当前 kernel 是 CUDA core + FP32 累加、单线程 8 次 FMA，实际效率通常只有 15–30%，
+对应 GEMM 耗时 **250–500 ms**。
+
+若整次 prefill 在 0.6–0.9 s 量级，则 **GEMM 占比大约 30–60%**。
+
+这个区间跨过了 30% 的决策阈值，**既不能证明值得做，也不能证明不值得**——
+所以仍然需要实测。在此之前不建议投入 Tensor Core 的实现工作。
