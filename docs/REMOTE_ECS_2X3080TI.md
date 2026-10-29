@@ -136,6 +136,43 @@ The current path uses direct `Tensor.to()` copies between the two GPUs.  The
 NCCL ExpertPacket All-to-All above is the transport path for the next revision
 of in-model activation exchange.
 
+## NCCL expert-parallel runtime
+
+The next revision removes the duplicated non-routed weights from the remote
+rank.  Rank 0 keeps attention, shared experts and the LM head; rank 1 is a
+lightweight routed-expert executor that only opens the GGUF expert bytes.
+Requests and activation tensors travel over NCCL send/receive.
+
+Command:
+
+```bash
+PYTHONPATH=$PWD /root/autodl-tmp/ecs-venv/bin/torchrun   --standalone --nproc_per_node=2   scripts/bench_ecs_expert_parallel_nccl.py   --max-new-tokens 8 --max-cache 128   --output /root/autodl-tmp/results/ecs_expert_parallel_nccl.json
+```
+
+| Metric | Value |
+|---|---:|
+| Output | `5-2=3` |
+| Token IDs | `[207, 20, 12, 17, 28, 18, 100001]` |
+| Token parity vs single GPU | exact |
+| Remote expert requests | 294 |
+| Expert chunk dispatches | 591 |
+| GPU0 / GPU1 expert dispatches | 996 / 984 |
+| NCCL bytes each way | 21,344,256 |
+| NCCL request/reply latency | 0.375 s total |
+| Prefill | 2.62 s |
+| Decode | 3.44 tok/s |
+| Coordinator peak | 2.21 GiB |
+| Remote worker peak | **37.7 MiB** |
+
+The remote rank does not load the transformer model: its peak allocation is
+only the expert staging buffer and CUDA context.  This addresses the previous
+duplicate-non-routed-weight problem.
+
+The exchange is currently blocking NCCL point-to-point request/reply, not a
+pipelined collective all-to-all.  It is correct but slower than the single-GPU
+baseline (4.20 tok/s); removing blocking and overlapping expert chunks is the
+next throughput task.
+
 ## What is and is not validated
 
 Validated on hardware:
@@ -151,13 +188,14 @@ Still not validated:
 
 - NVLink/P2P (this host reports no P2P);
 - 8×P100 or any multi-node fabric;
-- NCCL All-to-All as the *in-model* activation exchange (the separate NCCL
-  packet smoke passed, but the expert-sharded runtime currently uses direct
-  cross-GPU tensor copies);
-- a memory-optimized loader that does not duplicate the full runtime on both
-  GPUs;
+- a pipelined collective All-to-All as the in-model activation exchange
+  (the current NCCL expert-parallel path uses blocking point-to-point
+  send/receive; the separate ExpertPacket all-to-all smoke did pass);
+- throughput above the single-GPU baseline (expert parallelism currently adds
+  request/reply latency);
 - production heartbeat/worker restart for the dual-GPU pool.
 
-The next Level-2 target is moving the in-model expert activation exchange onto
-the existing ECS packet/NCCL transport, then eliminating duplicated non-routed
-weights with a layer-sharded loader.
+The next target is pipelining the NCCL expert requests (or switching to a
+collective all-to-all) so expert chunks overlap with coordinator attention,
+then measuring whether the two-GPU path beats the 4.20 tok/s single-GPU
+baseline.

@@ -1046,7 +1046,7 @@ fused 之后 decode 的瓶颈更偏向 packed expert 读取和 H2D，而不是 G
   - 5 个质量 prompt 的 token IDs 完全一致；
   - 64-token 长故事生成 token IDs 完全一致；
   - `--no-fused-moe` 可随时回退到旧路径。
-- 全套测试：**108 passed**。
+- 全套测试：**109 passed**。
 
 ### 11.4 Grouped multi-expert kernel
 
@@ -1153,7 +1153,7 @@ opt-in 实验项保留，默认关闭。
 
 - double-buffer 路径与 grouped、per-expert、dequant+bmm 的 token IDs 一致；
 - 512 MB cache 路径 token IDs 也一致；
-- 全套测试：**108 passed**。
+- 全套测试：**109 passed**。
 
 ## 13. GPU packed cache + pointer-array grouped kernel
 
@@ -1196,7 +1196,7 @@ H2D 进来。
 
 - pointer-array gate/up 和 down 都有独立 GPU 单测；
 - GPU cache 路径与无 cache 路径 token IDs 完全一致；
-- 全套测试：**108 passed**。
+- 全套测试：**109 passed**。
 
 ## 14. 质量回归（mini suite）
 
@@ -1624,6 +1624,8 @@ PyTorch 2.5.1+cu121、CuPy 14.2、Python 3.12。
 | hot expert token shard | 2/2 跨卡 |
 | 单模型 expert sharding | GPU0/GPU1 1416/1415 dispatches |
 | expert sharding token parity | 与单卡完全一致 |
+| NCCL expert-parallel | 294 remote requests，token parity 一致 |
+| remote worker peak | 37.7 MiB |
 
 Layer pipeline 的 token IDs 与单卡基线相同：
 `[207, 20, 12, 17, 28, 18, 100001]`。这说明跨 GPU hidden-state
@@ -1643,8 +1645,14 @@ Expert-sharded 路径也已跑通：ECS route placement 把 routed expert
 token IDs 与单卡完全一致；代价是跨 PCIe activation/output 拷贝，
 decode 3.25 tok/s，暂时慢于单卡 4.20 tok/s。
 
-仍未完成：把 in-model activation exchange 改成 NCCL All-to-All，
-以及做不重复加载非 routed 权重的 layer-sharded loader。该机没有 P2P/NVLink。
+进一步把 in-model activation exchange 改为 NCCL：rank0 保留 attention /
+shared experts / LM head，rank1 只加载 routed expert bytes。输出 token
+与单卡完全一致，294 个 remote expert requests；remote rank 峰值仅
+37.7 MiB，decode 3.44 tok/s。当前是阻塞式 NCCL request/reply，
+不是 collective all-to-all，因此吞吐仍低于单卡 4.20 tok/s。
+
+剩余工作：pipeline 化 expert request 或改成 collective all-to-all，
+让 remote expert 计算与 coordinator attention 重叠。该机没有 P2P/NVLink。
 
 结果文件：
 `docs/results/deepseek_v2_lite_q4km_moe_ecs_smoke.json`、

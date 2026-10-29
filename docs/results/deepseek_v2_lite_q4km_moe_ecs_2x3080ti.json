@@ -167,14 +167,17 @@
     ],
     "layer_pipeline_token_parity": true,
     "expert_sharded_token_parity": true,
-    "expert_sharded_uses_both_gpus": true
+    "expert_sharded_uses_both_gpus": true,
+    "nccl_expert_parallel_token_parity": true,
+    "remote_worker_does_not_load_full_model": true
   },
   "notes": [
     "The dual GPU pool runs one independent DeepSeek runtime per GPU and assigns requests by queue depth.",
     "The layer-pipeline benchmark runs layers 0-12 on GPU0 and layers 13-26 + LM head on GPU1 and produces token-for-token parity with the single-GPU baseline.",
     "The NCCL all-to-all smoke validates real ExpertPacket transport and hot-expert token sharding across both GPUs.",
-    "The expert-sharded runtime now splits routed expert chunks by ECS owner across GPU0/GPU1, with 1416/1415 expert dispatches and exact token parity.",
-    "Remaining work: route the in-model activation exchange through NCCL All-to-All and implement a memory-optimized layer-sharded loader; this host has no P2P/NVLink."
+    "The expert-sharded runtime splits routed expert chunks by ECS owner across GPU0/GPU1; the in-model activation exchange was subsequently moved to NCCL point-to-point between coordinator and remote expert worker.",
+    "The NCCL expert-parallel run has exact token parity, 294 remote expert requests, and only ~39.6 MB peak GPU allocation on the remote rank because it does not load the transformer model.",
+    "Remaining work: turn the blocking request/reply into a pipelined collective all-to-all and improve decode throughput beyond the single-GPU baseline; this host has no P2P/NVLink."
   ],
   "layer_pipeline": {
     "prompt": "只回答数字：5-2=?",
@@ -251,6 +254,61 @@
         "hot_replications": 0.0
       },
       "tick": 10157
+    }
+  },
+  "nccl_expert_parallel": {
+    "transport": "torch.distributed NCCL point-to-point expert activation request/reply",
+    "rank0_role": "coordinator: attention, shared experts, LM head, local expert subset",
+    "rank1_role": "remote expert executor: routed expert bytes only, no transformer model",
+    "text": " 5-2=3",
+    "token_ids": [
+      207,
+      20,
+      12,
+      17,
+      28,
+      18,
+      100001
+    ],
+    "prompt_tokens": 17,
+    "prefill_seconds": 2.62265208363533,
+    "decode_seconds": 1.744134582579136,
+    "decode_tokens_per_second": 3.4401015035935534,
+    "coordinator_peak_gpu_allocated_bytes": 2370990592,
+    "remote_worker_peak_gpu_allocated_bytes": 39552000,
+    "remote_requests": 294,
+    "remote_bytes_sent": 21344256,
+    "remote_bytes_received": 21344256,
+    "remote_latency_seconds": 0.3754838556051254,
+    "remote_expert_chunks": 294,
+    "expert_device_chunks": 591,
+    "expert_device_0_experts": 996,
+    "expert_device_1_experts": 984,
+    "token_parity_single_gpu": true,
+    "ecs": {
+      "backend": "cpp",
+      "tier_bytes": {
+        "L1": 0,
+        "L2": 0,
+        "L3": 3244572672
+      },
+      "device_bytes": {
+        "0": 3244572672,
+        "1": 0
+      },
+      "entries": 3365,
+      "metrics": {
+        "l1_hits": 0.0,
+        "l2_hits": 0.0,
+        "l3_reads": 2988.0,
+        "l1_promotions": 0.0,
+        "evictions": 0.0,
+        "chunk_plans": 182.0,
+        "cross_device_packets": 0.0,
+        "cross_device_bytes": 0.0,
+        "hot_replications": 0.0
+      },
+      "tick": 4652
     }
   }
 }

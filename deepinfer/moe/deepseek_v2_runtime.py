@@ -1207,6 +1207,8 @@ class DeepSeekV2LiteGGUFRuntime:
         meta_dir: str | Path | None = None,
         device: str = "cuda",
         expert_devices: Sequence[int] | None = None,
+        remote_expert_client: Any = None,
+        remote_expert_device: int | None = None,
         max_cache: int = 256,
         cpu_threads: int = 6,
         expert_chunk_size: int = 8,
@@ -1256,6 +1258,13 @@ class DeepSeekV2LiteGGUFRuntime:
         if not self.expert_devices:
             raise ValueError("at least one expert device is required")
         self._multi_device_experts = len(self.expert_devices) > 1
+        self.remote_expert_client = remote_expert_client
+        self.remote_expert_device = (
+            int(remote_expert_device)
+            if remote_expert_device is not None
+            else None
+        )
+        self.remote_expert_chunks = 0
         self.expert_device_chunks = 0
         self.expert_device_counts: dict[int, int] = {
             int(index): 0 for index in self.expert_devices
@@ -2182,14 +2191,26 @@ class DeepSeekV2LiteGGUFRuntime:
             group_ids = [int(chunk_ids[index]) for index in positions]
             group_tokens = chunk_tokens.index_select(0, position_tensor)
             group_counts = [int(chunk_counts[index]) for index in positions]
-            target = torch.device(f"cuda:{device_index}")
-            piece = self._fused_expert_chunk(
-                layer_idx,
-                group_ids,
-                group_tokens,
-                group_counts,
-                target_device=target,
-            )
+            if (
+                self.remote_expert_client is not None
+                and self.remote_expert_device == device_index
+            ):
+                piece = self.remote_expert_client.compute_chunk(
+                    layer_idx,
+                    group_ids,
+                    group_tokens,
+                    group_counts,
+                )
+                self.remote_expert_chunks += 1
+            else:
+                target = torch.device(f"cuda:{device_index}")
+                piece = self._fused_expert_chunk(
+                    layer_idx,
+                    group_ids,
+                    group_tokens,
+                    group_counts,
+                    target_device=target,
+                )
             output.index_copy_(0, position_tensor, piece.to(chunk_tokens.device))
             self.expert_device_chunks += 1
             self.expert_device_counts[device_index] = (
@@ -2824,6 +2845,7 @@ class DeepSeekV2LiteGGUFRuntime:
                     ),
                     "cpu_moe_seconds": float(self.cpu_moe_seconds),
                     "expert_device_chunks": float(self.expert_device_chunks),
+                    "remote_expert_chunks": float(self.remote_expert_chunks),
                     **{
                         f"expert_device_{device}_experts": float(count)
                         for device, count in self.expert_device_counts.items()

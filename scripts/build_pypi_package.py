@@ -56,6 +56,7 @@ def main() -> int:
         "gpu_quant.py",
         "grouped_moe.py",
         "layout.py",
+        "nccl_expert_transport.py",
         "ptr_grouped_moe.py",
         "paged_adapter.py",
         "paged_mla_kernel.py",
