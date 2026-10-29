@@ -1688,9 +1688,10 @@ Batch8 的 `5-2` token 与单卡完全一致；部分重复 prompt 的空格渲�
 但语义正确。这是 fixed-size batch，不是 continuous batching。
 
 新增 `continuous_batching.py`：4 个 staggered 请求在运行中进入空闲 slot，
-完成后移除 KV row，新请求单独 prefill 后 append 到 live cache。4 个请求
-全部正确，heartbeat healthy；但 aggregate decode 4.21 tok/s，低于 fixed
-batch，因为每个新请求都要单独 prefill，并且有 cache 重排/拷贝开销。
+完成后移除 KV row，新请求 append 到 live cache。4 个请求全部正确，
+heartbeat healthy。批量 admission prefill 把 remote requests 从478降到391，
+但 wall 仍约6.1s、aggregate decode约4.2 tok/s，低于 fixed batch；
+cache padding/selection 和 admission 同步仍是瓶颈。
 
 当前仍是 point-to-point request/reply，不是 collective all-to-all；
 true continuous batching、in-flight 请求续跑和 hybrid 长上下文吞吐仍待做。

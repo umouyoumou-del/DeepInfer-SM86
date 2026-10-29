@@ -184,7 +184,8 @@
     "fixed_batch_beats_single": true,
     "batch8_beats_single": true,
     "batch8_five_minus_two_parity": true,
-    "continuous_batch_completed": true
+    "continuous_batch_completed": true,
+    "continuous_batched_admission_completed": true
   },
   "notes": [
     "The dual GPU pool runs one independent DeepSeek runtime per GPU and assigns requests by queue depth.",
@@ -192,7 +193,7 @@
     "The NCCL all-to-all smoke validates real ExpertPacket transport and hot-expert token sharding across both GPUs.",
     "The expert-sharded runtime splits routed expert chunks by ECS owner across GPU0/GPU1; the in-model activation exchange was subsequently moved to NCCL point-to-point between coordinator and remote expert worker.",
     "The asynchronous NCCL revision overlaps remote expert requests with local expert chunks: exact token parity, 4.90 tok/s decode, 2.02 s prefill, and ~39.6 MB peak GPU allocation on the remote rank.",
-    "Continuous batching is now implemented: staggered requests enter fixed slots, finished rows are removed, and new prefills append to the live KV cache. Four staggered requests completed correctly with heartbeat healthy; aggregate decode 4.21 tok/s, still below fixed-batch throughput because of per-request prefill and cache reorder overhead."
+    "Continuous batching now batches queued admission prefills (remote requests 478->391), but wall time and aggregate decode remain ~4.2 tok/s; per-request prefills and cache padding/selection dominate. Fixed batch remains 25.90 tok/s at batch 8. In-flight resume and cached slot allocation are the next performance work."
   ],
   "layer_pipeline": {
     "prompt": "只回答数字：5-2=?",
@@ -918,5 +919,90 @@
       }
     ],
     "note": "Staggered arrivals are admitted into free slots while other rows continue decoding. Correctness passed; aggregate throughput is lower than fixed batch because each new request gets an individual prefill and cache padding/reorder overhead."
+  },
+  "continuous_batch_batched_admission": {
+    "capacity": 4,
+    "arrival_delay_seconds": 0.15,
+    "wall_seconds": 6.127431713044643,
+    "completed": 4,
+    "failed": 0,
+    "aggregate_decode_tokens_per_second": 4.243213342492059,
+    "remote_requests": 391,
+    "remote_bytes_sent": 93442048,
+    "heartbeat": {
+      "path": "/root/autodl-tmp/results/nccl_continuous_heartbeat",
+      "age_seconds": 0.17324018478393555,
+      "healthy": true,
+      "timeout_seconds": 5.0
+    },
+    "records": [
+      {
+        "prompt": "只回答数字：5-2=?",
+        "text": " 5-2=3",
+        "token_ids": [
+          207,
+          20,
+          12,
+          17,
+          28,
+          18,
+          100001
+        ],
+        "prefill_seconds": 1.9607261344790459,
+        "decode_seconds": 3.2825664952397346,
+        "decode_tokens_per_second": 1.827838067774406
+      },
+      {
+        "prompt": "只回答数字：2+3=?",
+        "text": " 2 + 3 = 5",
+        "token_ids": [
+          207,
+          17,
+          919,
+          207,
+          18,
+          403,
+          207,
+          20
+        ],
+        "prefill_seconds": 0.9332823380827904,
+        "decode_seconds": 2.79093074798584,
+        "decode_tokens_per_second": 2.508123859773935
+      },
+      {
+        "prompt": "只回答数字：9-4=?",
+        "text": " 9-4=5",
+        "token_ids": [
+          207,
+          24,
+          12,
+          19,
+          28,
+          20,
+          100001
+        ],
+        "prefill_seconds": 0.9332823380827904,
+        "decode_seconds": 2.441530078649521,
+        "decode_tokens_per_second": 2.4574753563219542
+      },
+      {
+        "prompt": "只回答数字：1+1=?",
+        "text": " 1+1=2。",
+        "token_ids": [
+          207,
+          16,
+          10,
+          16,
+          28,
+          17,
+          398,
+          100001
+        ],
+        "prefill_seconds": 0.9332823380827904,
+        "decode_seconds": 2.7911760434508324,
+        "decode_tokens_per_second": 2.5079034396360202
+      }
+    ],
+    "note": "Batch admission prefill reduced remote requests from 478 to 391 but did not improve wall time; cache row selection/padding remains the bottleneck."
   }
 }

@@ -187,48 +187,72 @@ class ContinuousBatchEngine:
         self.queue.put(request)
         return future
 
-    def _prefill(self, request: ContinuousRequest) -> tuple[ContinuousRequest, DynamicCache]:
+    def _prefill_batch(
+        self, requests: Sequence[ContinuousRequest]
+    ) -> list[tuple[ContinuousRequest, DynamicCache]]:
+        """Prefill all queued requests in one model forward."""
+
+        if not requests:
+            return []
         runtime = self.runtime
-        prompt_text = runtime.tokenizer.apply_chat_template(
-            request.messages, tokenize=False, add_generation_prompt=True
-        )
-        encoded = runtime.tokenizer(
-            prompt_text, return_tensors="pt", add_special_tokens=False
-        )
+        texts = [
+            runtime.tokenizer.apply_chat_template(
+                request.messages, tokenize=False, add_generation_prompt=True
+            )
+            for request in requests
+        ]
+        old_padding_side = runtime.tokenizer.padding_side
+        runtime.tokenizer.padding_side = "left"
+        try:
+            encoded = runtime.tokenizer(
+                texts,
+                return_tensors="pt",
+                padding=True,
+                add_special_tokens=False,
+            )
+        finally:
+            runtime.tokenizer.padding_side = old_padding_side
         input_ids = encoded["input_ids"].to(torch.long)
-        prompt_tokens = int(input_ids.shape[1])
-        mask = torch.ones((1, prompt_tokens), dtype=torch.long, device=runtime.device)
-        cache = DynamicCache()
+        attention_mask = encoded["attention_mask"].to(torch.long)
+        prompt_lengths = attention_mask.sum(dim=1).to(torch.long)
+        attention_mask = attention_mask.to(runtime.device)
+        position_ids = attention_mask.cumsum(dim=-1) - 1
+        position_ids = position_ids.masked_fill(attention_mask == 0, 0)
         started = time.perf_counter()
         hidden = runtime._embed_tokens(input_ids)
         outputs = runtime.model.model(
             inputs_embeds=hidden,
-            attention_mask=mask,
-            position_ids=torch.arange(prompt_tokens, device=runtime.device).unsqueeze(0),
-            past_key_values=cache,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+            past_key_values=DynamicCache(),
             use_cache=True,
             return_dict=True,
         )
         logits = runtime._logits(outputs.last_hidden_state)
-        token = runtime._sample(
-            logits[0],
-            temperature=request.temperature,
-            top_p=request.top_p,
-            top_k=request.top_k,
-        )
-        request.prompt_tokens = prompt_tokens
-        request.generated = [token]
-        request.cache_len = prompt_tokens
-        request.prefill_seconds = time.perf_counter() - started
-        request.finished = (
-            token == int(runtime.tokenizer.eos_token_id)
-            or len(request.generated) >= request.max_new_tokens
-        )
-        return request, outputs.past_key_values
+        elapsed = time.perf_counter() - started
+        batch_cache = outputs.past_key_values
+        results: list[tuple[ContinuousRequest, DynamicCache]] = []
+        eos = int(runtime.tokenizer.eos_token_id)
+        for index, request in enumerate(requests):
+            token = runtime._sample(
+                logits[index, 0],
+                temperature=request.temperature,
+                top_p=request.top_p,
+                top_k=request.top_k,
+            )
+            request.prompt_tokens = int(prompt_lengths[index].item())
+            request.generated = [token]
+            request.cache_len = request.prompt_tokens
+            request.prefill_seconds = elapsed
+            request.finished = (
+                token == eos or len(request.generated) >= request.max_new_tokens
+            )
+            results.append((request, select_caches(batch_cache, [index])))
+        return results
+
 
     def _admit(self, max_count: int) -> list[ContinuousRequest]:
-        admitted: list[ContinuousRequest] = []
-        caches: list[DynamicCache] = []
+        pending: list[ContinuousRequest] = []
         for _ in range(max_count):
             try:
                 request = self.queue.get_nowait()
@@ -236,9 +260,13 @@ class ContinuousBatchEngine:
                 break
             if request is None:
                 break
-            request, cache = self._prefill(request)
-            admitted.append(request)
-            caches.append(cache)
+            pending.append(request)
+        if not pending:
+            return []
+        prefetched = self._prefill_batch(pending)
+        admitted = [request for request, _ in prefetched]
+        caches = [cache for _, cache in prefetched]
+        for _ in pending:
             self.queue.task_done()
         if not admitted:
             return []

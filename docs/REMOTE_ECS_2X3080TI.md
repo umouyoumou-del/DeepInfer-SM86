@@ -328,10 +328,18 @@ PYTHONPATH=$PWD /root/autodl-tmp/ecs-venv/bin/torchrun   --standalone --nproc_pe
 All four outputs were correct:
 `5-2=3`, `2+3=5`, `9-4=5`, `1+1=2。`.
 
-The continuous scheduler is functionally working, but aggregate throughput is
-lower than fixed batch (`6.32–25.90 tok/s`) because each arriving request pays
-an individual prefill and the cache append/reorder path.  Optimizing admission
-prefill batching and removing cache copies is the next performance task.
+A batched-admission revision groups queued prefills into one forward.  It
+reduced remote requests from 478 to 391, but did not improve wall time:
+
+| Continuous revision | Wall | Aggregate decode | Remote requests |
+|---|---:|---:|---:|
+| Individual admission | 5.94 s | 4.21 tok/s | 478 |
+| Batched admission | 6.13 s | 4.24 tok/s | 391 |
+
+The scheduler is functionally correct, but aggregate throughput remains below
+fixed batch (`6.32–25.90 tok/s`) because per-row cache padding/selection and
+admission synchronization dominate.  A paged KV slot allocator and batched
+decode admission are the next performance tasks.
 
 ### Supervised restart
 
