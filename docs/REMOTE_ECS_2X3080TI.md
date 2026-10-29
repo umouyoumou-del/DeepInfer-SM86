@@ -548,6 +548,22 @@ if overlap_prefill and runtime.remote_expert_client is not None:
     )
 ```
 
+A first transport change landed after that: `NCCLExpertClient` now queues
+submissions and drains them on one dedicated I/O thread (`_TransportRequest`,
+`_io_loop`), so the wire protocol still sees a single ordered producer while
+callers may submit from any thread and wait on their own event.  The serial
+path is unaffected and still produces correct output with a healthy heartbeat.
+
+Overlap still fails with the multiplexed client: the run now dies with a
+`ChildFailedError` from `torchrun` rather than the NCCL watchdog `SIGABRT`,
+i.e. the send-side interleaving is no longer the trigger, and the underlying
+exception has not been isolated yet.  Treat `--overlap-prefill` as experimental
+and unsupported on the NCCL path until that is diagnosed.  The likely remaining
+suspects are the coordinator's own expert staging (now per thread, so probably
+not), the shared ECS heat/LRU controller under two threads, and the single
+remote worker serialising both streams anyway -- in which case overlap would
+buy little even once it is correct.
+
 What that means for the roadmap: prefill/decode overlap is not a scheduler
 change on this architecture.  It needs one of
 
