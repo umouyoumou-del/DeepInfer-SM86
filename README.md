@@ -531,6 +531,15 @@ Wheel 已在隔离 target 中验证：
 python -m twine upload dist/*
 ```
 
+### 6.2.1 ECS 二卡定版范围
+
+二卡形态（1 协调 + 1 远端 expert worker）是当前**受支持的配置**，范围、实测数据、
+未验证项和升级路径都写在 `docs/ECS_TWO_GPU_RELEASE.md`。
+
+一句话结论：能跑、可复现、token 精确，**不是吞吐机器**——单个远端 worker 串行服务
+所有 expert chunk，超过饱和点再加请求只换来延迟。多卡版本（worker 池化、激活分片、
+collective all-to-all、in-flight 续跑）单列在升级路径里，未计入定版。
+
 ### 6.3 ECS：Expert Coordination System
 
 ECS 是这一轮新增的控制面/数据面分层：
@@ -1164,7 +1173,7 @@ lm_head           : 3-bit, group 128
 | paged KV slot allocator | ✅ | 每请求独立 block list、按需增长、行不重排；长上下文 1.17×，短上下文持平 |
 | 前缀块共享（paged 引擎） | ✅ | block hash 精确匹配 + retain/LRU；89-token 共享前缀 wall −26%、prefill −53%；仅 paged prefill 模式 |
 | admission 合并 / grace 窗口 | ✅ | 空闲期合并到达，先 decode 后 admit；+2–5%，未追平 dense |
-| expert worker pool | ⚠️ | `PooledExpertClient` 按 in-flight 分发 + 回包归属 + 不平衡指标；仅单测，需 ≥3 卡验证 |
+| expert worker pool | 🧪 | `PooledExpertClient` 分发器已有单测；无 ≥3 卡环境，**未接真流量**；不属于二卡定版范围 |
 | prefill/decode overlap | ❌ | 已实现 per-thread staging + 独立 stream；NCCL expert transport 单生产者，双卡上 SIGABRT，引擎显式拒绝 |
 | prefill/decode stream overlap | ✅ | 双 CUDA stream launch；4 GB 带宽受限，收益按场景测量 |
 | tiled W4/W3 prefill GEMM | ✅ | 32×64 CTA tile，shared-memory 权重量化 tile |
