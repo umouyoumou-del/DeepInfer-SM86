@@ -1,0 +1,206 @@
+{
+  "model": "DeepSeek-V2-Lite-Chat Q4_K_M",
+  "model_sha256": "30b4fb4ab1fbe1c6a827303ea898296c9faf8f54d6cdf8b9fbdda7a7ebfb292a",
+  "host": {
+    "gpu": "2x NVIDIA GeForce RTX 3080 Ti 12GB",
+    "compute_capability": "8.6",
+    "cpu": "Intel Xeon Silver 4214R, 48 threads",
+    "ram_gib": 440,
+    "os": "Ubuntu 22.04.4",
+    "torch": "2.5.1+cu121",
+    "cuda": "12.1",
+    "python": "3.12.3",
+    "cupy": "14.2.0"
+  },
+  "single_gpu": {
+    "load_seconds": 16.47505582123995,
+    "warmup_seconds": 2.0199065059423447,
+    "text": " 5-2=3",
+    "prompt_tokens": 17,
+    "completion_tokens": 7,
+    "prefill_seconds": 0.9007249623537064,
+    "decode_seconds": 1.4285404682159424,
+    "decode_tokens_per_second": 4.200091025417855,
+    "peak_gpu_allocated_bytes": 2363186688,
+    "gpu_free_bytes_after_load": 9834004480,
+    "fused_moe": true,
+    "token_ids": [
+      207,
+      20,
+      12,
+      17,
+      28,
+      18,
+      100001
+    ]
+  },
+  "dual_gpu_worker_pool": {
+    "devices": [
+      0,
+      1
+    ],
+    "elapsed_seconds": 4.772276416420937,
+    "assigned_devices": [
+      0,
+      1
+    ],
+    "results": [
+      {
+        "device": 0,
+        "text": " 5-2=3",
+        "token_ids": [
+          207,
+          20,
+          12,
+          17,
+          28,
+          18,
+          100001
+        ],
+        "decode_tokens_per_second": 2.8837851956476652
+      },
+      {
+        "device": 1,
+        "text": " 2+3=5",
+        "token_ids": [
+          207,
+          17,
+          10,
+          18,
+          28,
+          20,
+          100001
+        ],
+        "decode_tokens_per_second": 2.8187249247734014
+      }
+    ],
+    "status": {
+      "devices": [
+        0,
+        1
+      ],
+      "workers": {
+        "0": {
+          "healthy": true,
+          "queue_depth": 0,
+          "completed": 1,
+          "failed": 0,
+          "last_error": null,
+          "last_latency_seconds": 4.6814698576927185
+        },
+        "1": {
+          "healthy": true,
+          "queue_depth": 0,
+          "completed": 1,
+          "failed": 0,
+          "last_error": null,
+          "last_latency_seconds": 4.76521509885788
+        }
+      }
+    },
+    "gpu_names": [
+      "NVIDIA GeForce RTX 3080 Ti",
+      "NVIDIA GeForce RTX 3080 Ti"
+    ]
+  },
+  "all_to_all": {
+    "rank0": {
+      "rank": 0,
+      "world_size": 2,
+      "gpu": "NVIDIA GeForce RTX 3080 Ti",
+      "transport": "TorchCollectiveAllToAll",
+      "sent_packets": 3,
+      "received_packets": 1,
+      "received": [
+        {
+          "src": 0,
+          "dst": 0,
+          "expert": 7,
+          "tokens": [
+            103,
+            104
+          ]
+        }
+      ],
+      "hot_replications": 1,
+      "latency_ms": 811.171755194664
+    },
+    "rank1": {
+      "rank": 1,
+      "world_size": 2,
+      "gpu": "NVIDIA GeForce RTX 3080 Ti",
+      "transport": "TorchCollectiveAllToAll",
+      "sent_packets": 0,
+      "received_packets": 2,
+      "received": [
+        {
+          "src": 0,
+          "dst": 1,
+          "expert": 7,
+          "tokens": [
+            101,
+            102
+          ]
+        },
+        {
+          "src": 0,
+          "dst": 1,
+          "expert": 8,
+          "tokens": [
+            201,
+            202
+          ]
+        }
+      ],
+      "hot_replications": 1,
+      "latency_ms": 391.61189645528793
+    },
+    "note": "real torch.distributed NCCL object all-to-all across two physical GPUs; hot expert 7 was sharded 2/2 tokens, expert 8 routed to rank1"
+  },
+  "validation": {
+    "single_output_correct": true,
+    "dual_results_correct": true,
+    "all_to_all_cross_device_packets": true,
+    "devices_used": [
+      0,
+      1
+    ],
+    "layer_pipeline_token_parity": true
+  },
+  "notes": [
+    "The dual GPU pool runs one independent DeepSeek runtime per GPU and assigns requests by queue depth.",
+    "The layer-pipeline benchmark runs layers 0-12 on GPU0 and layers 13-26 + LM head on GPU1 in one process and produces token-for-token parity with the single-GPU baseline.",
+    "The NCCL all-to-all smoke validates real ExpertPacket transport and hot-expert token sharding across both GPUs.",
+    "A fully expert-sharded single-model data plane (routed experts split across ranks inside each layer) remains the next Level-2 milestone."
+  ],
+  "layer_pipeline": {
+    "prompt": "只回答数字：5-2=?",
+    "split": 13,
+    "load_seconds": 32.891125567257404,
+    "prefill_seconds": 1.6072556152939796,
+    "decode_seconds": 1.2618031427264214,
+    "decode_tokens_per_second": 4.755099901745049,
+    "text": " 5-2=3",
+    "token_ids": [
+      207,
+      20,
+      12,
+      17,
+      28,
+      18,
+      100001
+    ],
+    "gpus": [
+      "NVIDIA GeForce RTX 3080 Ti",
+      "NVIDIA GeForce RTX 3080 Ti"
+    ],
+    "peak_allocated": [
+      2383651328,
+      2382147584
+    ],
+    "stage_devices": [
+      "cuda:0",
+      "cuda:1"
+    ]
+  }
+}

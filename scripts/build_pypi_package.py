@@ -75,6 +75,7 @@ def main() -> int:
         "core.py",
         "controller.py",
         "transport.py",
+        "worker_pool.py",
         "ecs_core.cpp",
     ):
         copy_file(f"deepinfer/ecs/{name}")

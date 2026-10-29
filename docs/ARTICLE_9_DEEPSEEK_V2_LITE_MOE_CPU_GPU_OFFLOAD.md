@@ -1046,7 +1046,7 @@ fused 之后 decode 的瓶颈更偏向 packed expert 读取和 H2D，而不是 G
   - 5 个质量 prompt 的 token IDs 完全一致；
   - 64-token 长故事生成 token IDs 完全一致；
   - `--no-fused-moe` 可随时回退到旧路径。
-- 全套测试：**106 passed**。
+- 全套测试：**107 passed**。
 
 ### 11.4 Grouped multi-expert kernel
 
@@ -1153,7 +1153,7 @@ opt-in 实验项保留，默认关闭。
 
 - double-buffer 路径与 grouped、per-expert、dequant+bmm 的 token IDs 一致；
 - 512 MB cache 路径 token IDs 也一致；
-- 全套测试：**106 passed**。
+- 全套测试：**107 passed**。
 
 ## 13. GPU packed cache + pointer-array grouped kernel
 
@@ -1196,7 +1196,7 @@ H2D 进来。
 
 - pointer-array gate/up 和 down 都有独立 GPU 单测；
 - GPU cache 路径与无 cache 路径 token IDs 完全一致；
-- 全套测试：**106 passed**。
+- 全套测试：**107 passed**。
 
 ## 14. 质量回归（mini suite）
 
@@ -1607,13 +1607,42 @@ cache/profile smoke 实测：
 | heat profile | 已写盘并可 load |
 | 默认 ECS | 关闭 |
 
-多设备部分必须说清楚：本机只有一张 RTX 3050，本轮实现了 device
-abstraction、packet encoding、模拟 all-to-all 和 torch collective adapter，
-但没有 8 卡 P100/NCCL 实机验收；Level 2 仍需多卡环境。
+### 双卡 RTX 3080 Ti 实机验证
+
+临时双卡机：2×RTX 3080 Ti 12GB、440GB RAM、Ubuntu 22.04、
+PyTorch 2.5.1+cu121、CuPy 14.2、Python 3.12。
+
+| 项目 | 结果 |
+|---|---:|
+| 单卡 17-token prompt prefill | 0.90 s |
+| 单卡 decode | 4.20 tok/s |
+| 单卡 peak | 2.20 GiB |
+| 两层 pipeline（0–12 / 13–26） | 4.76 tok/s |
+| pipeline token parity | 与单卡完全一致 |
+| 双 runtime worker pool | 两请求并发，分别落 GPU0/GPU1 |
+| NCCL ExpertPacket all-to-all | rank1 收到 2 个跨卡包 |
+| hot expert token shard | 2/2 跨卡 |
+
+Layer pipeline 的 token IDs 与单卡基线相同：
+`[207, 20, 12, 17, 28, 18, 100001]`。这说明跨 GPU hidden-state
+传输、两层 stage 的 KV cache、norm/LM head 与 ECS expert streaming 能
+保持数值结果一致。
+
+验证到的真实路径：
+
+- Linux 上编译的 C++ ECS core；
+- `TorchCollectiveAllToAll` + NCCL 的真实跨卡 package exchange；
+- 每卡一个独立 DeepSeek runtime 的 queue-depth worker pool；
+- embedding+layers0–12 / layers13–26+norm+LM head 的两卡 layer pipeline。
+
+仍未完成：**同一个模型的 routed expert 在单层内真正分片到两张卡**。
+双卡结果不是完整 expert-sharded Level-2；该机也没有 P2P/NVLink。
 
 结果文件：
 `docs/results/deepseek_v2_lite_q4km_moe_ecs_smoke.json`、
-`docs/results/deepseek_v2_lite_q4km_moe_ecs_cache_profile.json`。
+`docs/results/deepseek_v2_lite_q4km_moe_ecs_cache_profile.json`、
+`docs/results/deepseek_v2_lite_q4km_moe_ecs_2x3080ti.json`。
+复现细节：`docs/REMOTE_ECS_2X3080TI.md`。
 PyPI 库本地0.2.0已构建，正式 PyPI 仍为0.1.0，待上传。
 
 ## 22. 一句话结论

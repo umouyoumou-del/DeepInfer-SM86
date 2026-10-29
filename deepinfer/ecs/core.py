@@ -46,6 +46,7 @@ def _build_library() -> Path:
     command = [
         compiler,
         "-O3",
+        "-fPIC",
         "-std=c++17",
         "-shared",
         "-o",

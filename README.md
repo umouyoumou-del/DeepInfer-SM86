@@ -332,7 +332,7 @@ MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比�
 - `tests/moe/` 新增 GGUF 索引、截断拒绝、expert slice、Q4_K/Q5_0/Q8_0
   GPU 反量化、dense/MoE 层布局、CPU MLP fallback、per-expert fused 和
   grouped MoE kernel 对照测试；
-- 全套测试：**106 passed**；
+- 全套测试：**107 passed**；
 - 新增文章：
   `docs/ARTICLE_9_DEEPSEEK_V2_LITE_MOE_CPU_GPU_OFFLOAD.md`；
 - 结构化结果：
@@ -560,7 +560,8 @@ deepinfer/ecs/ecs_core.cpp     CPU policy core
 python scripts/smoke_deepseek_v2_lite_moe.py `
   --ecs --ecs-l1-mb 128 --ecs-l2-mb 512 `
   --ecs-chunk-max-tokens 128 `
-  --ecs-profile E:\DeepInfer-MoEesults\ecs_profile.json `
+  --ecs-profile E:\DeepInfer-MoE
+esults\ecs_profile.json `
   --cpu-experts-per-layer 1 --cpu-expert-layers 2 ...
 ```
 
@@ -581,6 +582,36 @@ adapter。ECS 的 Level 2 仍需要多卡硬件和 NCCL/Gloo 环境才能验收�
 结果文件：
 `docs/results/deepseek_v2_lite_q4km_moe_ecs_smoke.json`、
 `docs/results/deepseek_v2_lite_q4km_moe_ecs_cache_profile.json`。
+
+#### 双卡 RTX 3080 Ti 实机验证
+
+在临时双卡机（2×RTX 3080 Ti 12GB、440GB RAM、Ubuntu 22.04、
+PyTorch 2.5.1+cu121、CuPy 14.2）上完成了真实多设备验证：
+
+| 项目 | 结果 |
+|---|---:|
+| 单卡 DeepSeek-V2-Lite Q4_K_M | 4.20 tok/s |
+| 单卡 prefill / peak | 0.90 s / 2.20 GiB |
+| 两层 pipeline（0–12 / 13–26） | 4.76 tok/s |
+| pipeline token parity | 完全一致 |
+| 双 runtime worker pool | 两请求并发，分别落到 GPU0/GPU1 |
+| NCCL ExpertPacket all-to-all | rank1 收到 2 个跨卡包 |
+| hot expert 7 token shard | 2/2 跨卡 |
+
+真实执行路径包括：
+
+- `cpp` ECS core 在 Linux 上编译；
+- `TorchCollectiveAllToAll` + NCCL 真实跨卡包交换；
+- 两个 GPU 上各一个 DeepSeek runtime 的 queue-depth worker pool；
+- 跨 GPU layer pipeline：GPU0 做 embedding+前 13 层，GPU1 做后 14 层
+  + norm + LM head，输出 token 与单卡完全一致。
+
+仍未完成：**单个模型的 routed experts 在层内真正分片到两张卡**。
+当前双卡结果是 worker pool + layer pipeline + packet transport，不是完整
+expert-sharded Level-2。双卡机也没有 P2P/NVLink。
+
+复现与硬件细节：`docs/REMOTE_ECS_2X3080TI.md`  
+结果：`docs/results/deepseek_v2_lite_q4km_moe_ecs_2x3080ti.json`
 
 ### 7. Paged scheduler 接入
 

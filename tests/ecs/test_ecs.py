@@ -137,3 +137,39 @@ def test_resilient_all_to_all_reroutes_failed_worker() -> None:
     assert resilient.metrics["failovers"] == 1
     assert resilient.metrics["retries"] >= 1
     assert all(packet.dst_device == 0 for packet in inbox[0])
+
+
+def test_ecs_worker_pool_queue_scheduling() -> None:
+    from types import SimpleNamespace
+
+    from deepinfer.ecs import ECSRuntimeWorkerPool
+
+    class FakeRuntime:
+        def __init__(self, device):
+            self.device = device
+            self.closed = False
+
+        def generate(self, messages, **kwargs):
+            return SimpleNamespace(
+                text=f"gpu{self.device}:{messages[0]['content']}",
+                token_ids=[self.device],
+            )
+
+        def close(self):
+            self.closed = True
+
+    pool = ECSRuntimeWorkerPool(
+        lambda device: FakeRuntime(device), devices=(0, 1), max_queue_size=2
+    )
+    try:
+        assert pool.wait_ready(timeout=5)
+        futures = [
+            pool.submit([{"role": "user", "content": str(index)}])
+            for index in range(2)
+        ]
+        assert [future.result(timeout=5).token_ids[0] for future, _ in futures] == [0, 1]
+        status = pool.status()
+        assert status["workers"]["0"]["completed"] == 1
+        assert status["workers"]["1"]["completed"] == 1
+    finally:
+        pool.close()

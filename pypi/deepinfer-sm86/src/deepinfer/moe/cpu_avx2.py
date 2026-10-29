@@ -53,16 +53,20 @@ def _compile() -> Path:
     command = [
         compiler,
         "-O3",
+        "-fPIC",
         "-mavx2",
         "-mfma",
         "-std=c++17",
         "-shared",
         "-fopenmp",
-        "-static",
         "-o",
         str(target),
         *(str(source) for source in _SOURCES),
     ]
+    if os.name == "nt":
+        command.insert(-1, "-static")
+    else:
+        command[-1:-1] = ["-static-libgcc", "-static-libstdc++"]
     completed = subprocess.run(
         command,
         stdout=subprocess.PIPE,
