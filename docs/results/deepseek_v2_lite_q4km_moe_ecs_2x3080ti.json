@@ -181,7 +181,9 @@
     "supervised_restart_recovered": true,
     "supervised_restart_heartbeat_healthy": true,
     "fixed_batch_first_sequence_parity": true,
-    "fixed_batch_beats_single": true
+    "fixed_batch_beats_single": true,
+    "batch8_beats_single": true,
+    "batch8_five_minus_two_parity": true
   },
   "notes": [
     "The dual GPU pool runs one independent DeepSeek runtime per GPU and assigns requests by queue depth.",
@@ -189,7 +191,7 @@
     "The NCCL all-to-all smoke validates real ExpertPacket transport and hot-expert token sharding across both GPUs.",
     "The expert-sharded runtime splits routed expert chunks by ECS owner across GPU0/GPU1; the in-model activation exchange was subsequently moved to NCCL point-to-point between coordinator and remote expert worker.",
     "The asynchronous NCCL revision overlaps remote expert requests with local expert chunks: exact token parity, 4.90 tok/s decode, 2.02 s prefill, and ~39.6 MB peak GPU allocation on the remote rank.",
-    "Fixed batch generation now steps two prompts together through the NCCL expert path: prefill 1.81 s, aggregate decode 6.32 tok/s (1.50x single GPU), heartbeat healthy, and the 5-2 sequence is token-identical. This is not continuous batching; both sequences share the same max length and finished rows are padded."
+    "Fixed batch scaling on 2x3080Ti: batch2=6.32, batch4=16.60, batch8=25.90 aggregate decode tok/s (6.17x single-GPU). Batch8 preserves 5-2 token parity; some duplicate prompts differ in spacing but remain semantically correct. True continuous batching and in-flight resume remain open."
   ],
   "layer_pipeline": {
     "prompt": "只回答数字：5-2=?",
@@ -614,5 +616,222 @@
     ],
     "five_minus_two_token_parity": true,
     "note": "Fixed-size batched generation (two sequences stepped together), not continuous batching. Aggregate decode throughput is 6.32 tok/s vs 4.20 single-GPU."
+  },
+  "fixed_batch_scaling": {
+    "rows": [
+      {
+        "batch_size": 2,
+        "prefill_seconds": 1.8125460296869278,
+        "decode_seconds": 2.0580997988581657,
+        "aggregate_decode_tokens_per_second": 6.316506132118764,
+        "speedup_vs_single_decode": 1.5038974379109684,
+        "coordinator_peak_gpu_allocated_bytes": 2398466048,
+        "remote_requests": 260,
+        "remote_worker_peak_gpu_allocated_bytes": 54503424,
+        "outputs": [
+          {
+            "text": " 5-2=3",
+            "token_ids": [
+              207,
+              20,
+              12,
+              17,
+              28,
+              18,
+              100001
+            ]
+          },
+          {
+            "text": " 2 + 3 = 5",
+            "token_ids": [
+              207,
+              17,
+              919,
+              207,
+              18,
+              403,
+              207,
+              20
+            ]
+          }
+        ]
+      },
+      {
+        "batch_size": 4,
+        "prefill_seconds": 1.949372686445713,
+        "decode_seconds": 1.4460967406630516,
+        "aggregate_decode_tokens_per_second": 16.59640003682999,
+        "speedup_vs_single_decode": 3.951438179885366,
+        "coordinator_peak_gpu_allocated_bytes": 2418980352,
+        "remote_requests": 231,
+        "remote_worker_peak_gpu_allocated_bytes": 58329088,
+        "outputs": [
+          {
+            "text": " 5-2=3",
+            "token_ids": [
+              207,
+              20,
+              12,
+              17,
+              28,
+              18,
+              100001
+            ]
+          },
+          {
+            "text": " 2+3=5",
+            "token_ids": [
+              207,
+              17,
+              10,
+              18,
+              28,
+              20,
+              100001
+            ]
+          },
+          {
+            "text": " 5-2=3",
+            "token_ids": [
+              207,
+              20,
+              12,
+              17,
+              28,
+              18,
+              100001
+            ]
+          },
+          {
+            "text": " 2+3=5",
+            "token_ids": [
+              207,
+              17,
+              10,
+              18,
+              28,
+              20,
+              100001
+            ]
+          }
+        ]
+      },
+      {
+        "batch_size": 8,
+        "prefill_seconds": 1.8882668316364288,
+        "decode_seconds": 2.007575549185276,
+        "aggregate_decode_tokens_per_second": 25.901889481122087,
+        "speedup_vs_single_decode": 6.166982887839956,
+        "coordinator_peak_gpu_allocated_bytes": 2486808576,
+        "remote_requests": 260,
+        "remote_worker_peak_gpu_allocated_bytes": 64653312,
+        "outputs": [
+          {
+            "text": " 5-2=3",
+            "token_ids": [
+              207,
+              20,
+              12,
+              17,
+              28,
+              18,
+              100001
+            ]
+          },
+          {
+            "text": " 2 + 3 = 5",
+            "token_ids": [
+              207,
+              17,
+              919,
+              207,
+              18,
+              403,
+              207,
+              20
+            ]
+          },
+          {
+            "text": " 5-2=3",
+            "token_ids": [
+              207,
+              20,
+              12,
+              17,
+              28,
+              18,
+              100001
+            ]
+          },
+          {
+            "text": " 2 + 3 = 5",
+            "token_ids": [
+              207,
+              17,
+              919,
+              207,
+              18,
+              403,
+              207,
+              20
+            ]
+          },
+          {
+            "text": " 5-2=3",
+            "token_ids": [
+              207,
+              20,
+              12,
+              17,
+              28,
+              18,
+              100001
+            ]
+          },
+          {
+            "text": " 2 + 3 = 5",
+            "token_ids": [
+              207,
+              17,
+              919,
+              207,
+              18,
+              403,
+              207,
+              20
+            ]
+          },
+          {
+            "text": " 5-2=3",
+            "token_ids": [
+              207,
+              20,
+              12,
+              17,
+              28,
+              18,
+              100001
+            ]
+          },
+          {
+            "text": " 2 + 3 = 5",
+            "token_ids": [
+              207,
+              17,
+              919,
+              207,
+              18,
+              403,
+              207,
+              20
+            ]
+          }
+        ]
+      }
+    ],
+    "best_batch_size": 8,
+    "best_aggregate_decode_tokens_per_second": 25.901889481122087,
+    "best_speedup_vs_single": 6.166982887839956,
+    "note": "Fixed-size batch generation, not continuous batching; all rows share equal decode steps."
   }
 }

@@ -647,10 +647,17 @@ failed=0，heartbeat age 0.44 s。但 coordinator 仍然一次执行一个请求
 第2次尝试成功，输出 token 正确，heartbeat healthy。它恢复的是整个请求，
 不是 in-flight KV/cache 续跑。
 
-新增 `generate_batch()`：2 个 prompt 共享一次 prefill/decode batch，
-prefill 1.81 s，aggregate decode **6.32 tok/s**，相对单卡 4.20 为
-**1.50×**；`5-2` 序列 token 与单卡完全一致。这是 fixed-size batch，
-不是 continuous batching，finished rows 仍作为 padding 继续。
+新增 `generate_batch()`：多个 prompt 共享一次 prefill/decode batch。
+
+| Batch | Prefill | Aggregate decode | Speedup vs 单卡 |
+|---:|---:|---:|---:|
+| 2 | 1.81 s | 6.32 tok/s | 1.50× |
+| 4 | 1.95 s | 16.60 tok/s | 3.95× |
+| 8 | 1.89 s | **25.90 tok/s** | **6.17×** |
+
+Batch8 的 `5-2` token 与单卡完全一致；部分重复 prompt 的空格渲染会变化，
+但语义正确。这是 fixed-size batch，不是 continuous batching，
+finished rows 仍作为 padding 继续。
 
 当前仍是 point-to-point request/reply，不是 collective all-to-all；
 true continuous batching、in-flight 请求续跑和 hybrid 长上下文吞吐仍待做。

@@ -281,21 +281,22 @@ Command:
 PYTHONPATH=$PWD /root/autodl-tmp/ecs-venv/bin/torchrun   --standalone --nproc_per_node=2 scripts/bench_ecs_batch_generate.py   --batch-size 2 --max-new-tokens 8 --max-cache 128   --output /root/autodl-tmp/results/ecs_batch_generate.json
 ```
 
-| Batch metric | Value |
-|---|---:|
-| Batch size | 2 |
-| Prefill | 1.81 s |
-| Decode wall | 2.06 s |
-| Aggregate decode | **6.32 tok/s** |
-| Single-GPU decode | 4.20 tok/s |
-| Aggregate speedup | 1.50× |
-| Remote requests | 260 |
-| Remote worker peak | 52.0 MiB |
-| Heartbeat | healthy |
+Batch scaling on the same two GPUs:
 
-The `5-2` sequence is token-identical to the single request:
-`[207, 20, 12, 17, 28, 18, 100001]`; the second sequence produced
-`2 + 3 = 5`.  Both sequences ran through the same NCCL remote expert worker.
+| Batch | Prefill | Decode wall | Aggregate decode | Speedup vs single | Remote peak |
+|---:|---:|---:|---:|---:|---:|
+| 2 | 1.81 s | 2.06 s | 6.32 tok/s | 1.50× | 52.0 MiB |
+| 4 | 1.95 s | 1.45 s | **16.60 tok/s** | 3.95× | 55.6 MiB |
+| 8 | 1.89 s | 2.01 s | **25.90 tok/s** | 6.17× | 61.7 MiB |
+
+Aggregate decode counts all generated tokens across rows; per-row throughput is
+lower.  Batch 8 preserves the `5-2` token IDs exactly:
+`[207, 20, 12, 17, 28, 18, 100001]`.  Some duplicate prompts in larger batches
+render spacing differently (`2+3=5` vs `2 + 3 = 5`) while remaining
+semantically correct.
+
+All rows are fixed-size: they start together and use equal decode steps.
+Finished rows remain padded; this is not continuous batching.
 
 ### Supervised restart
 
@@ -358,7 +359,7 @@ Still not validated:
 
 Next: implement true continuous batching (dynamic row admission/removal),
 in-flight request resume, hybrid long-context validation, and evaluate a
-collective all-to-all.  Fixed batch generation already reaches 6.32 aggregate
-tok/s (1.50x single GPU), the hybrid single-request path reaches 4.71 tok/s,
+collective all-to-all.  Fixed batch generation reaches 25.90 aggregate tok/s at
+batch 8 (6.17x single GPU), the hybrid single-request path reaches 4.71 tok/s,
 and the supervisor recovers from a simulated rank-1 crash by whole-request
 retry.
