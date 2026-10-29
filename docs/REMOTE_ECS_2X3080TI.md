@@ -455,6 +455,61 @@ Known costs and limits:
   requests are still not wired into this engine;
 - no in-flight KV resume after a worker restart.
 
+### Prefix block sharing and admission coalescing
+
+Two follow-ups to the paged allocator.
+
+**Shared prompt blocks.** The engine now hashes its prompt in block-sized
+chunks (`PrefixCache.block_hashes`), retains the longest cached prefix, and
+forwards only the remaining suffix at its true position instead of restarting
+from zero.  Blocks reused this way stay immutable: the matcher never hands back
+the final block of an exactly block-aligned prompt, because that block still
+has to receive the row's tail.  Complete prompt blocks are published back to
+the LRU after every admission, so a second request with the same preamble pays
+only for its question.
+
+Four requests sharing an 89-token preamble (5 full 16-token blocks reusable),
+`--prefill-mode paged`, same host:
+
+| Configuration | Wall | Aggregate | Prefill per request |
+|---|---:|---:|---|
+| paged, no prefix cache | 8.359 s | 1.555 tok/s | 2.52 / 1.17 / 1.22 / 1.21 s |
+| paged + `--prefix-cache-blocks 64` | **6.151 s** | **2.114 tok/s** | 2.47 / **0.58 / 0.52 / 0.54** s |
+| dense slot engine, same prompts | 6.299 s | 2.064 tok/s | 2.52 / 1.42 / 1.42 / 1.42 s |
+| paged + prefix cache, batched prefill (no reuse) | 6.087 s | 2.136 tok/s | 2.30 / 1.42 / 1.42 / 1.42 s |
+
+Prefix reuse cuts wall time by 26% and per-request prefill by 53% (1.17 s to
+0.55 s), and it brings the paged path level with the dense engine on this
+workload.  The first request still pays the full prefill, so the win scales
+with reuse count, not with a single prompt.
+
+Caveat: reuse only applies in `prefill_mode="paged"`.  The batched dense
+prefill writes every row from position 0, so it cannot start at an offset; the
+last row of the table above is that mode with the cache configured but unused.
+
+**Admission coalescing.** The scheduler loop now decodes before admitting, and
+an idle engine waits out a short `--admission-grace-ms` window so that a burst
+of arrivals becomes one prefill instead of N.  Only the idle engine waits:
+blocking for arrivals while rows are decoding stalls the batch, which cost
+~2.7 s on the batch-8 workload during development.
+
+Batch 8, 0.15 s arrival spacing, two paired repeats per configuration:
+
+| Run | dense | paged, grace 0 | paged, grace 300 ms |
+|---|---:|---:|---:|
+| 1 | 6.328 s / 8.059 tok/s | 6.762 s / 7.543 tok/s | 6.457 s / 7.898 tok/s |
+| 2 | 5.830 s / 8.748 tok/s | 6.090 s / 8.374 tok/s | 5.961 s / 8.556 tok/s |
+
+The grace window is a consistent 2-5% win over grace 0, but it does not close
+the gap to the dense engine, and the host's own run-to-run spread is now about
+8% (6.328 s vs 5.830 s for the identical dense configuration), so differences
+below ~5% should not be read as real.
+
+Postscript: the paged engine still *prefills on the main stream*, so every
+admission blocks the rows that are already decoding.  At 0.86 s per 17-token
+prefill that is the remaining structural cost, and it needs prefill/decode
+stream overlap rather than more allocator work.
+
 ## What is and is not validated
 
 Validated on hardware:

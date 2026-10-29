@@ -49,6 +49,7 @@ from transformers.cache_utils import DynamicCache
 from deepinfer.engine.kv_cache import (
     CacheOutOfMemoryError,
     PagedKVCacheManager,
+    PrefixCache,
 )
 from deepinfer.moe.continuous_batching import build_generation_result
 
@@ -81,6 +82,8 @@ class PagedRequest:
     block_ids: list[int] = field(default_factory=list)
     prefill_seconds: float = 0.0
     prefill_kind: str = ""
+    cached_tokens: int = 0
+    reused_blocks: int = 0
     decode_started_at: float = 0.0
     decode_seconds: float = 0.0
     finished: bool = False
@@ -286,6 +289,9 @@ class PagedContinuousBatchEngine:
         prefill_mode: str = "batched",
         kv_cache_dtype: str = "fp16",
         pool_device: str | torch.device | None = None,
+        prefix_cache_blocks: int = 0,
+        prefix_namespace: str = "",
+        admission_grace_ms: float = 0.0,
     ) -> None:
         if prefill_mode not in {"batched", "paged"}:
             raise ValueError("prefill_mode must be 'batched' or 'paged'")
@@ -312,6 +318,7 @@ class PagedContinuousBatchEngine:
             num_blocks=int(num_blocks),
             dtype=torch.float16,
             kv_cache_dtype=kv_cache_dtype,
+            prefix_cache_blocks=max(0, int(prefix_cache_blocks)),
             device=(
                 torch.device(pool_device)
                 if pool_device is not None
@@ -323,6 +330,10 @@ class PagedContinuousBatchEngine:
             block_size=int(block_size),
             max_length=self.max_cache,
         )
+        self.prefix_namespace = str(prefix_namespace)
+        self.admission_grace_ms = max(0.0, float(admission_grace_ms))
+        self._prefix_hits = 0
+        self._prefix_reused_tokens = 0
         self.queue: queue.Queue[PagedRequest | None] = queue.Queue()
         self._active: list[PagedRequest] = []
         self._stop = threading.Event()
@@ -474,7 +485,12 @@ class PagedContinuousBatchEngine:
         return list(requests)
 
     def _prefill_paged(self, requests: Sequence[PagedRequest]) -> list[PagedRequest]:
-        """Prefill each request on its own straight into the paged pool."""
+        """Prefill each request into the paged pool, reusing cached prefixes.
+
+        With a prefix cache enabled the longest cached block-aligned prefix is
+        matched, its blocks are retained, and only the remaining suffix is
+        forwarded -- at the position it belongs to, not from zero.
+        """
 
         runtime = self.runtime
         eos = int(runtime.tokenizer.eos_token_id)
@@ -488,16 +504,40 @@ class PagedContinuousBatchEngine:
             )
             input_ids = encoded["input_ids"].to(torch.long)
             length = int(input_ids.shape[1])
+            token_ids = [int(token) for token in input_ids[0].tolist()]
+            start_position = self._match_prefix(request, token_ids, length)
             self.allocator.reserve(request, length + 1)
-            positions = torch.arange(
-                length, dtype=torch.long, device=runtime.device
-            ).unsqueeze(0)
+            request.prompt_tokens = length
+            request.cached_tokens = start_position
+            request.prefill_kind = "paged"
             started = time.perf_counter()
-            views = self._make_views(
-                [request], [0], max_length=length, new_tokens=length
-            )
+            if start_position >= length:
+                # The whole prompt is cached; score the last token in place.
+                start_position = max(0, length - 1)
+                suffix = input_ids[:, start_position:]
+                views = self._make_views(
+                    [request],
+                    [start_position],
+                    max_length=length,
+                    new_tokens=1,
+                )
+                positions = torch.full(
+                    (1, 1), start_position, dtype=torch.long, device=runtime.device
+                )
+            else:
+                suffix = input_ids[:, start_position:]
+                new_tokens = length - start_position
+                views = self._make_views(
+                    [request],
+                    [start_position],
+                    max_length=length,
+                    new_tokens=new_tokens,
+                )
+                positions = torch.arange(
+                    start_position, length, dtype=torch.long, device=runtime.device
+                ).unsqueeze(0)
             logits = runtime.forward_logits(
-                input_ids.to(runtime.device), positions, kv_cache=views
+                suffix.to(runtime.device), positions, kv_cache=views
             )
             elapsed = time.perf_counter() - started
             token = runtime._sample(
@@ -506,18 +546,68 @@ class PagedContinuousBatchEngine:
                 top_p=request.top_p,
                 top_k=request.top_k,
             )
-            request.prompt_tokens = length
             request.generated = [token]
             request.cache_len = length
             request.prefill_seconds = elapsed
-            request.prefill_kind = "paged"
             request.finished = (
                 token == eos or len(request.generated) >= request.max_new_tokens
             )
+            self._register_prefix(request, token_ids)
             admitted.append(request)
             self._prefill_rows += 1
         self._prefill_forwards += 1
         return admitted
+
+    def _match_prefix(
+        self, request: PagedRequest, token_ids: list[int], length: int
+    ) -> int:
+        """Retain the longest cached prefix and return its token length."""
+
+        cache = self.manager.prefix_cache
+        if cache.max_blocks <= 0 or length <= 0:
+            return 0
+        hashes = PrefixCache.block_hashes(
+            token_ids,
+            self.manager.block_size,
+            namespace=self.prefix_namespace,
+        )
+        if not hashes:
+            return 0
+        matched = cache.match(hashes, max_blocks=max(0, cache.max_blocks))
+        if not matched:
+            return 0
+        start = len(matched) * self.manager.block_size
+        if start >= length and len(matched) > 1:
+            # Never hand back the final block: the engine still has to write
+            # this row's tail, and cached blocks must stay immutable.
+            cache.allocator.free(matched[-1:])
+            matched = matched[:-1]
+            start = len(matched) * self.manager.block_size
+        if start <= 0:
+            return 0
+        request.block_ids = [int(block) for block in matched]
+        request.reused_blocks = len(matched)
+        self._prefix_hits += 1
+        self._prefix_reused_tokens += start
+        return start
+
+    def _register_prefix(self, request: PagedRequest, token_ids: list[int]) -> None:
+        """Publish this request's complete prompt blocks to the prefix cache."""
+
+        cache = self.manager.prefix_cache
+        if cache.max_blocks <= 0:
+            return
+        hashes = PrefixCache.block_hashes(
+            token_ids,
+            self.manager.block_size,
+            namespace=self.prefix_namespace,
+        )
+        if not hashes:
+            return
+        blocks = request.block_ids[: len(hashes)]
+        if len(blocks) != len(hashes):
+            return
+        cache.register(hashes, blocks)
 
     # ----------------------------------------------------------------- decode
 
@@ -599,16 +689,56 @@ class PagedContinuousBatchEngine:
 
     # --------------------------------------------------------------- lifecycle
 
-    def _admit(self, max_count: int) -> int:
+    def _collect_pending(self, max_count: int, *, idle: bool) -> list[PagedRequest]:
+        """Drain the queue, optionally waiting out an admission grace window.
+
+        When rows are already resident this must stay non-blocking: a decode
+        step is often faster than the arrival interval, and waiting for the
+        next request there would stall the whole batch.  Only an idle engine
+        blocks for work, and only an idle engine applies the grace window --
+        it coalesces a burst into one prefill instead of paying the full
+        prefill cost per request.
+        """
+
+        if max_count <= 0 or self._stop.is_set():
+            return []
         pending: list[PagedRequest] = []
-        for _ in range(max(0, int(max_count))):
+        try:
+            first = self.queue.get(timeout=0.5) if idle else self.queue.get_nowait()
+        except queue.Empty:
+            return []
+        if first is None:
+            self._stop.set()
+            return []
+        pending.append(first)
+        grace = self.admission_grace_ms / 1000.0 if idle else 0.0
+        if grace <= 0.0:
+            while len(pending) < max_count:
+                try:
+                    request = self.queue.get_nowait()
+                except queue.Empty:
+                    break
+                if request is None:
+                    self._stop.set()
+                    break
+                pending.append(request)
+            return pending
+        deadline = time.perf_counter() + grace
+        while len(pending) < max_count and not self._stop.is_set():
+            remaining = deadline - time.perf_counter()
+            if remaining <= 0.0:
+                break
             try:
-                request = self.queue.get_nowait()
+                request = self.queue.get(timeout=remaining)
             except queue.Empty:
                 break
             if request is None:
+                self._stop.set()
                 break
             pending.append(request)
+        return pending
+
+    def _admit(self, pending: Sequence[PagedRequest]) -> int:
         if not pending:
             return 0
         try:
@@ -664,16 +794,18 @@ class PagedContinuousBatchEngine:
             pass
         while not self._stop.is_set():
             try:
-                if not self._active:
-                    first = self.queue.get(timeout=0.5)
-                    if first is None:
-                        break
-                    self.queue.put(first)
-                self._admit(self.max_batch_size - len(self._active))
+                # Decode first: an arrival must never delay a step whose rows
+                # are already resident.
                 if self._active:
                     self._decode_step()
-                else:
-                    time.sleep(0.01)
+                pending = self._collect_pending(
+                    self.max_batch_size - len(self._active),
+                    idle=not self._active,
+                )
+                if pending:
+                    self._admit(pending)
+                elif not self._active:
+                    time.sleep(0.005)
             except Exception as exc:  # noqa: BLE001
                 self._failed += 1
                 self._last_error = f"{type(exc).__name__}: {exc}"
@@ -706,6 +838,11 @@ class PagedContinuousBatchEngine:
             "decode_steps": self._decode_steps,
             "max_active_seen": self._max_active_seen,
             "kv": self.allocator.stats(),
+            "prefix_cache": {
+                **self.manager.prefix_cache.stats(),
+                "hits_this_engine": self._prefix_hits,
+                "reused_tokens": self._prefix_reused_tokens,
+            },
         }
 
     def close(self, timeout: float = 30.0) -> None:

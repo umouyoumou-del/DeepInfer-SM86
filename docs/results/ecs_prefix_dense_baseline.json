@@ -1,0 +1,86 @@
+{
+  "mode": "continuous_batch",
+  "batch_size_capacity": 4,
+  "arrival_delay_seconds": 0.15,
+  "load_seconds": 17.53850169479847,
+  "wall_seconds": 6.298770993947983,
+  "completed": 4,
+  "failed": 0,
+  "aggregate_decode_tokens_per_second": 2.0638946887401883,
+  "remote_transport": {
+    "requests": 423,
+    "bytes_sent": 441085952,
+    "bytes_received": 441085952,
+    "latency_seconds": 12.076184511184692,
+    "active_sends": 0,
+    "heartbeat": {
+      "path": "/root/autodl-tmp/results/nccl_continuous_heartbeat",
+      "age_seconds": 0.317410945892334,
+      "healthy": true,
+      "timeout_seconds": 5.0
+    }
+  },
+  "records": [
+    {
+      "prompt": "你是一个严谨的数学助手。回答时先在心里计算，不要解释步骤，只输出最终数字。以下是一些无关的背景信息，用来把上下文撑长一些：今天的天气很好，火车站在夜里依然亮着灯，远处的钟楼敲了十二下，站台上没有别人。本节结束。现在请你只回答数字： 5-2=?",
+      "text": " 3",
+      "token_ids": [
+        207,
+        18,
+        100001
+      ],
+      "prompt_tokens": 89,
+      "completion_tokens": 3,
+      "prefill_seconds": 2.515528254210949,
+      "decode_seconds": 2.1279918402433395,
+      "decode_tokens_per_second": 0.9398532279011449
+    },
+    {
+      "prompt": "你是一个严谨的数学助手。回答时先在心里计算，不要解释步骤，只输出最终数字。以下是一些无关的背景信息，用来把上下文撑长一些：今天的天气很好，火车站在夜里依然亮着灯，远处的钟楼敲了十二下，站台上没有别人。本节结束。现在请你只回答数字： 2+3=?",
+      "text": " 5",
+      "token_ids": [
+        207,
+        20,
+        100001
+      ],
+      "prompt_tokens": 89,
+      "completion_tokens": 3,
+      "prefill_seconds": 1.424213469028473,
+      "decode_seconds": 0.6630759686231613,
+      "decode_tokens_per_second": 3.0162456409827123
+    },
+    {
+      "prompt": "你是一个严谨的数学助手。回答时先在心里计算，不要解释步骤，只输出最终数字。以下是一些无关的背景信息，用来把上下文撑长一些：今天的天气很好，火车站在夜里依然亮着灯，远处的钟楼敲了十二下，站台上没有别人。本节结束。现在请你只回答数字： 9-4=?",
+      "text": " 9 - 4 = 5",
+      "token_ids": [
+        207,
+        24,
+        570,
+        207,
+        19,
+        403,
+        207,
+        20
+      ],
+      "prompt_tokens": 89,
+      "completion_tokens": 8,
+      "prefill_seconds": 1.424213469028473,
+      "decode_seconds": 1.8959564864635468,
+      "decode_tokens_per_second": 3.692067855975337
+    },
+    {
+      "prompt": "你是一个严谨的数学助手。回答时先在心里计算，不要解释步骤，只输出最终数字。以下是一些无关的背景信息，用来把上下文撑长一些：今天的天气很好，火车站在夜里依然亮着灯，远处的钟楼敲了十二下，站台上没有别人。本节结束。现在请你只回答数字： 1+1=?",
+      "text": " 2",
+      "token_ids": [
+        207,
+        17,
+        100001
+      ],
+      "prompt_tokens": 89,
+      "completion_tokens": 3,
+      "prefill_seconds": 1.424213469028473,
+      "decode_seconds": 0.6632974296808243,
+      "decode_tokens_per_second": 3.0152385800174004
+    }
+  ]
+}

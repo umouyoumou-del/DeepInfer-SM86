@@ -1,0 +1,129 @@
+{
+  "mode": "paged_continuous_batch",
+  "prefill_mode": "batched",
+  "prefix_cache_blocks": 64,
+  "admission_grace_ms": 0.0,
+  "block_size": 16,
+  "batch_size_capacity": 4,
+  "arrival_delay_seconds": 0.15,
+  "load_seconds": 16.529736034572124,
+  "wall_seconds": 6.087476573884487,
+  "completed": 4,
+  "failed": 0,
+  "aggregate_decode_tokens_per_second": 2.135531831986099,
+  "engine_status": {
+    "engine": "paged",
+    "prefill_mode": "batched",
+    "max_batch_size": 4,
+    "max_cache": 256,
+    "active": 0,
+    "queue_depth": 0,
+    "completed": 4,
+    "failed": 0,
+    "last_error": null,
+    "admissions": 4,
+    "prefill_forwards": 2,
+    "prefill_rows": 4,
+    "decode_steps": 8,
+    "max_active_seen": 4,
+    "kv": {
+      "block_size": 16,
+      "max_length": 256,
+      "capacity_blocks_per_request": 16,
+      "num_blocks": 64,
+      "used_blocks": 0,
+      "free_blocks": 64,
+      "peak_blocks": 24,
+      "allocations": 4,
+      "releases": 4,
+      "growth_events": 4,
+      "rejected": 0
+    },
+    "prefix_cache": {
+      "max_blocks": 64,
+      "cached_blocks": 0,
+      "hits": 0,
+      "misses": 0,
+      "reused_blocks": 0,
+      "evictions": 0,
+      "hits_this_engine": 0,
+      "reused_tokens": 0
+    }
+  },
+  "records": [
+    {
+      "prompt": "你是一个严谨的数学助手。回答时先在心里计算，不要解释步骤，只输出最终数字。以下是一些无关的背景信息，用来把上下文撑长一些：今天的天气很好，火车站在夜里依然亮着灯，远处的钟楼敲了十二下，站台上没有别人。本节结束。现在请你只回答数字： 5-2=?",
+      "text": " 3",
+      "token_ids": [
+        207,
+        18,
+        100001
+      ],
+      "prompt_tokens": 89,
+      "completion_tokens": 3,
+      "prefill_seconds": 2.294901840388775,
+      "decode_seconds": 2.1170778423547745,
+      "decode_tokens_per_second": 0.9446983762181594
+    },
+    {
+      "prompt": "你是一个严谨的数学助手。回答时先在心里计算，不要解释步骤，只输出最终数字。以下是一些无关的背景信息，用来把上下文撑长一些：今天的天气很好，火车站在夜里依然亮着灯，远处的钟楼敲了十二下，站台上没有别人。本节结束。现在请你只回答数字： 2+3=?",
+      "text": " 5",
+      "token_ids": [
+        207,
+        20,
+        100001
+      ],
+      "prompt_tokens": 89,
+      "completion_tokens": 3,
+      "prefill_seconds": 1.4226902201771736,
+      "decode_seconds": 0.6299706846475601,
+      "decode_tokens_per_second": 3.1747509030819567
+    },
+    {
+      "prompt": "你是一个严谨的数学助手。回答时先在心里计算，不要解释步骤，只输出最终数字。以下是一些无关的背景信息，用来把上下文撑长一些：今天的天气很好，火车站在夜里依然亮着灯，远处的钟楼敲了十二下，站台上没有别人。本节结束。现在请你只回答数字： 9-4=?",
+      "text": " 9 - 4 = 5",
+      "token_ids": [
+        207,
+        24,
+        570,
+        207,
+        19,
+        403,
+        207,
+        20
+      ],
+      "prompt_tokens": 89,
+      "completion_tokens": 8,
+      "prefill_seconds": 1.4226902201771736,
+      "decode_seconds": 1.8596888184547424,
+      "decode_tokens_per_second": 3.7640705964003476
+    },
+    {
+      "prompt": "你是一个严谨的数学助手。回答时先在心里计算，不要解释步骤，只输出最终数字。以下是一些无关的背景信息，用来把上下文撑长一些：今天的天气很好，火车站在夜里依然亮着灯，远处的钟楼敲了十二下，站台上没有别人。本节结束。现在请你只回答数字： 1+1=?",
+      "text": " 2",
+      "token_ids": [
+        207,
+        17,
+        100001
+      ],
+      "prompt_tokens": 89,
+      "completion_tokens": 3,
+      "prefill_seconds": 1.4226902201771736,
+      "decode_seconds": 0.6301607862114906,
+      "decode_tokens_per_second": 3.173793171142789
+    }
+  ],
+  "remote_transport": {
+    "requests": 0,
+    "bytes_sent": 0,
+    "bytes_received": 0,
+    "latency_seconds": 0.0,
+    "active_sends": 0,
+    "heartbeat": {
+      "path": "/root/autodl-tmp/results/nccl_paged_heartbeat",
+      "age_seconds": 0.017457008361816406,
+      "healthy": true,
+      "timeout_seconds": 5.0
+    }
+  }
+}

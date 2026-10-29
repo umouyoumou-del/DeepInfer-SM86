@@ -697,6 +697,42 @@ block table，由 native paged MLA kernel 直接从 pool 读，行永远不搬�
 复现：`scripts/bench_ecs_paged_continuous_batch.py`；
 结果：`docs/results/ecs_paged_*.json`
 
+#### 前缀块共享 + admission 合并
+
+- **前缀复用**：把 prompt 按 block 切块做累积 hash，命中就 retain 最长前缀，
+  只对剩余后缀做前向（从真实位置开始，而不是从 0 重算）。复用到的 block
+  保持不可变——block 对齐的 prompt 不会把最后一块交出去，因为那一块还要
+  写入本行尾部。每次 admission 结束后把完整 prompt block 注册回 LRU。
+- **admission 合并**：调度循环改成先 decode 再 admission；空闲期加
+  `--admission-grace-ms` 窗口，把一串到达合并成一次 prefill。只有空闲时
+  才等——有活跃行时等待会拖死整批（开发中实测代价约 2.7 s）。
+
+4 个请求共享 89-token 前缀（可复用 5 个 16-token block）：
+
+| 配置 | wall | aggregate | 每请求 prefill |
+|---|---:|---:|---|
+| paged，无前缀缓存 | 8.359 s | 1.555 tok/s | 2.52 / 1.17 / 1.22 / 1.21 s |
+| paged + `--prefix-cache-blocks 64` | **6.151 s** | **2.114 tok/s** | 2.47 / **0.58 / 0.52 / 0.54** s |
+| dense slot 引擎，同 prompt | 6.299 s | 2.064 tok/s | 2.52 / 1.42 / 1.42 / 1.42 s |
+
+前缀复用把 wall 砍掉 26%，单请求 prefill 从 1.17 s 降到 0.55 s，追平 dense
+引擎。注意复用只在 `prefill_mode="paged"` 生效——batched dense prefill 从
+位置 0 写整行，无法从偏移开始。
+
+batch 8、0.15 s 间隔、每种配置两组配对重复：
+
+| 轮次 | dense | paged grace 0 | paged grace 300 ms |
+|---|---:|---:|---:|
+| 1 | 6.328 s / 8.059 t/s | 6.762 s / 7.543 t/s | 6.457 s / 7.898 t/s |
+| 2 | 5.830 s / 8.748 t/s | 6.090 s / 8.374 t/s | 5.961 s / 8.556 t/s |
+
+grace 窗口稳定赢 2–5%，但没有追平 dense；这台机器本身重复跑的波动已有约
+8%（同样配置 6.328 s vs 5.830 s），5% 以内不应当成真实差异。
+
+**还没解决的**：paged 引擎的 prefill 仍在主 stream 上，每次 admission 都会
+把正在 decode 的行卡住。17-token prompt 一次 prefill 约 0.86 s，这是剩下的
+结构性开销，要靠 prefill/decode stream overlap 解决，不是继续改 allocator。
+
 复现与硬件细节：`docs/REMOTE_ECS_2X3080TI.md`  
 结果：`docs/results/deepseek_v2_lite_q4km_moe_ecs_2x3080ti.json`
 
@@ -1106,6 +1142,8 @@ lm_head           : 3-bit, group 128
 | prefix cache | ✅ | 完整 prompt block LRU 共享 |
 | continuous batching | ✅ | 可变 batch decode + chunked prefill 交替 |
 | paged KV slot allocator | ✅ | 每请求独立 block list、按需增长、行不重排；长上下文 1.17×，短上下文持平 |
+| 前缀块共享（paged 引擎） | ✅ | block hash 精确匹配 + retain/LRU；89-token 共享前缀 wall −26%、prefill −53%；仅 paged prefill 模式 |
+| admission 合并 / grace 窗口 | ✅ | 空闲期合并到达，先 decode 后 admit；+2–5%，未追平 dense |
 | prefill/decode stream overlap | ✅ | 双 CUDA stream launch；4 GB 带宽受限，收益按场景测量 |
 | tiled W4/W3 prefill GEMM | ✅ | 32×64 CTA tile，shared-memory 权重量化 tile |
 | KV memory budget | ✅ | 启动预算、block 预留、admission/runtime OOM 隔离 |

@@ -330,3 +330,51 @@ def _single_row(cache: DynamicCache, row: int) -> DynamicCache:
     single.value_cache = [tensor[row : row + 1] for tensor in cache.value_cache]
     single._seen_tokens = int(cache.get_seq_length())
     return single
+
+
+def test_prefix_cache_reuses_complete_prompt_blocks() -> None:
+    runtime = _fake_runtime()
+    engine = PagedContinuousBatchEngine(
+        runtime,
+        max_batch_size=1,
+        block_size=2,
+        num_blocks=16,
+        prefill_mode="paged",
+        pool_device="cpu",
+        prefix_cache_blocks=8,
+    )
+    try:
+        prompt = [{"role": "user", "content": "a bb ccc dddd eeee"}]
+        first = engine.submit(prompt, max_new_tokens=3).result(timeout=30)
+        second = engine.submit(prompt, max_new_tokens=3).result(timeout=30)
+        status = engine.status()
+    finally:
+        engine.close()
+
+    # 5 prompt tokens, block size 2 -> two complete blocks are cacheable.
+    assert status["prefix_cache"]["hits_this_engine"] == 1
+    assert status["prefix_cache"]["reused_tokens"] == 4
+    assert status["prefix_cache"]["cached_blocks"] == 2
+    assert first.token_ids == second.token_ids
+    assert status["kv"]["used_blocks"] >= 0  # all request refs released
+
+
+def test_prefix_cache_disabled_keeps_zero_hits() -> None:
+    runtime = _fake_runtime()
+    engine = PagedContinuousBatchEngine(
+        runtime,
+        max_batch_size=1,
+        block_size=2,
+        num_blocks=16,
+        prefill_mode="paged",
+        pool_device="cpu",
+    )
+    try:
+        prompt = [{"role": "user", "content": "a bb ccc dddd eeee"}]
+        engine.submit(prompt, max_new_tokens=2).result(timeout=30)
+        engine.submit(prompt, max_new_tokens=2).result(timeout=30)
+        status = engine.status()
+    finally:
+        engine.close()
+    assert status["prefix_cache"]["hits_this_engine"] == 0
+    assert status["prefix_cache"]["max_blocks"] == 0

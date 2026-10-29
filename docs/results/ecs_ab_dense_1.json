@@ -1,0 +1,172 @@
+{
+  "mode": "continuous_batch",
+  "batch_size_capacity": 8,
+  "arrival_delay_seconds": 0.15,
+  "load_seconds": 17.218368008732796,
+  "wall_seconds": 6.328271076083183,
+  "completed": 8,
+  "failed": 0,
+  "aggregate_decode_tokens_per_second": 8.059073226611195,
+  "remote_transport": {
+    "requests": 435,
+    "bytes_sent": 199266304,
+    "bytes_received": 199266304,
+    "latency_seconds": 7.106527738273144,
+    "active_sends": 0,
+    "heartbeat": {
+      "path": "/root/autodl-tmp/results/nccl_continuous_heartbeat",
+      "age_seconds": 0.029852628707885742,
+      "healthy": true,
+      "timeout_seconds": 5.0
+    }
+  },
+  "records": [
+    {
+      "prompt": "只回答数字：5-2=?",
+      "text": " 5-2=3",
+      "token_ids": [
+        207,
+        20,
+        12,
+        17,
+        28,
+        18,
+        100001
+      ],
+      "prompt_tokens": 17,
+      "completion_tokens": 7,
+      "prefill_seconds": 1.8915025517344475,
+      "decode_seconds": 3.2806654423475266,
+      "decode_tokens_per_second": 1.8288972482688193
+    },
+    {
+      "prompt": "只回答数字：2+3=?",
+      "text": " 2 + 3 = 5",
+      "token_ids": [
+        207,
+        17,
+        919,
+        207,
+        18,
+        403,
+        207,
+        20,
+        100001
+      ],
+      "prompt_tokens": 17,
+      "completion_tokens": 9,
+      "prefill_seconds": 0.9235243424773216,
+      "decode_seconds": 3.084314204752445,
+      "decode_tokens_per_second": 2.59376946345909
+    },
+    {
+      "prompt": "只回答数字：9-4=?",
+      "text": " 9-4=5",
+      "token_ids": [
+        207,
+        24,
+        12,
+        19,
+        28,
+        20,
+        100001
+      ],
+      "prompt_tokens": 17,
+      "completion_tokens": 7,
+      "prefill_seconds": 0.9235243424773216,
+      "decode_seconds": 2.4653408601880074,
+      "decode_tokens_per_second": 2.4337405414772704
+    },
+    {
+      "prompt": "只回答数字：1+1=?",
+      "text": " 1+1=2。",
+      "token_ids": [
+        207,
+        16,
+        10,
+        16,
+        28,
+        17,
+        398,
+        100001
+      ],
+      "prompt_tokens": 17,
+      "completion_tokens": 8,
+      "prefill_seconds": 0.9235243424773216,
+      "decode_seconds": 2.8231183886528015,
+      "decode_tokens_per_second": 2.4795276132009527
+    },
+    {
+      "prompt": "只回答数字：7-6=?",
+      "text": " 7-6=1",
+      "token_ids": [
+        207,
+        22,
+        12,
+        21,
+        28,
+        16,
+        100001
+      ],
+      "prompt_tokens": 17,
+      "completion_tokens": 7,
+      "prefill_seconds": 0.9235243424773216,
+      "decode_seconds": 2.4654743671417236,
+      "decode_tokens_per_second": 2.433608752929736
+    },
+    {
+      "prompt": "只回答数字：4+4=?",
+      "text": " 4+4=8",
+      "token_ids": [
+        207,
+        19,
+        10,
+        19,
+        28,
+        23,
+        100001
+      ],
+      "prompt_tokens": 17,
+      "completion_tokens": 7,
+      "prefill_seconds": 0.9235243424773216,
+      "decode_seconds": 2.465538091957569,
+      "decode_tokens_per_second": 2.4335458533662995
+    },
+    {
+      "prompt": "只回答数字：8-3=?",
+      "text": " 8-3=5",
+      "token_ids": [
+        207,
+        23,
+        12,
+        18,
+        28,
+        20,
+        100001
+      ],
+      "prompt_tokens": 17,
+      "completion_tokens": 7,
+      "prefill_seconds": 0.9235243424773216,
+      "decode_seconds": 2.465599276125431,
+      "decode_tokens_per_second": 2.433485464608307
+    },
+    {
+      "prompt": "只回答数字：6+2=?",
+      "text": " 6+2=8",
+      "token_ids": [
+        207,
+        21,
+        10,
+        17,
+        28,
+        23,
+        100001
+      ],
+      "prompt_tokens": 17,
+      "completion_tokens": 7,
+      "prefill_seconds": 0.9235243424773216,
+      "decode_seconds": 2.4656594544649124,
+      "decode_tokens_per_second": 2.433426071526206
+    }
+  ]
+}

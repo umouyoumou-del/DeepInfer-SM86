@@ -64,6 +64,9 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("batched", "paged"),
         default="batched",
     )
+    parser.add_argument("--prefix-cache-blocks", type=int, default=0)
+    parser.add_argument("--prefix-namespace", default="")
+    parser.add_argument("--admission-grace-ms", type=float, default=0.0)
     parser.add_argument("--single-gpu", action="store_true")
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument(
@@ -112,6 +115,8 @@ def _run_engine(engine, args, *, load_seconds: float, transport) -> dict[str, ob
     payload = {
         "mode": "paged_continuous_batch",
         "prefill_mode": engine.prefill_mode,
+        "prefix_cache_blocks": args.prefix_cache_blocks,
+        "admission_grace_ms": args.admission_grace_ms,
         "block_size": args.block_size,
         "batch_size_capacity": args.max_batch_size,
         "arrival_delay_seconds": args.arrival_delay,
@@ -215,6 +220,9 @@ def main() -> int:
             max_cache=args.max_cache,
             device=local_rank,
             prefill_mode=args.prefill_mode,
+            prefix_cache_blocks=args.prefix_cache_blocks,
+            prefix_namespace=args.prefix_namespace,
+            admission_grace_ms=args.admission_grace_ms,
         )
         payload = _run_engine(
             engine,
@@ -273,6 +281,9 @@ def _run_single_gpu(args) -> int:
             max_cache=args.max_cache,
             device=int(str(args.device).split(":")[-1] or 0),
             prefill_mode=args.prefill_mode,
+            prefix_cache_blocks=args.prefix_cache_blocks,
+            prefix_namespace=args.prefix_namespace,
+            admission_grace_ms=args.admission_grace_ms,
         )
         payload = _run_engine(engine, args, load_seconds=load_seconds, transport=None)
         payload["device"] = str(args.device)
