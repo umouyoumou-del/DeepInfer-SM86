@@ -316,6 +316,7 @@ class GGUFExpertStore:
             for spec in self._specs.values()
         )
 
+
     def close(self) -> None:
         self._read_executor.shutdown(wait=True, cancel_futures=True)
         self._packed_cache.clear()
@@ -3083,6 +3084,207 @@ class DeepSeekV2LiteGGUFRuntime:
                 else None
             ),
         )
+
+    @torch.inference_mode()
+    def generate_batch(
+        self,
+        conversations: Sequence[Sequence[dict[str, str]]],
+        *,
+        max_new_tokens: int = 24,
+        temperature: float = 0.0,
+        top_p: float = 1.0,
+        top_k: int = 0,
+        stop_token_ids: Sequence[int] | None = None,
+    ) -> list[GenerationResult]:
+        """Batched greedy generation for several chat conversations.
+
+        This is fixed-batch generation, not continuous batching: all sequences
+        start together and are stepped together.  Finished sequences continue
+        as padding rows so the KV cache remains rectangular.
+        """
+
+        if not conversations:
+            raise ValueError("at least one conversation is required")
+        if max_new_tokens < 1:
+            raise ValueError("max_new_tokens must be >= 1")
+        texts = [
+            self.tokenizer.apply_chat_template(
+                list(messages), tokenize=False, add_generation_prompt=True
+            )
+            for messages in conversations
+        ]
+        old_padding_side = self.tokenizer.padding_side
+        self.tokenizer.padding_side = "left"
+        try:
+            encoded = self.tokenizer(
+                texts,
+                return_tensors="pt",
+                padding=True,
+                add_special_tokens=False,
+            )
+        finally:
+            self.tokenizer.padding_side = old_padding_side
+        input_ids = encoded["input_ids"].to(torch.long)
+        attention_mask = encoded["attention_mask"].to(torch.long)
+        batch_size, padded_length = input_ids.shape
+        prompt_lengths = attention_mask.sum(dim=1).to(torch.long)
+        if int(prompt_lengths.max().item()) + max_new_tokens > self.max_cache:
+            raise ValueError(
+                f"prompt+output exceeds max_cache={self.max_cache}"
+            )
+        stop_ids = set(int(token) for token in (stop_token_ids or ()))
+        stop_ids.add(int(self.tokenizer.eos_token_id))
+        eos_token_id = int(self.tokenizer.eos_token_id)
+
+        expert_store = self.expert_store
+        if expert_store is not None and expert_store.gpu_cache_configured():
+            expert_store.clear_gpu_cache()
+            expert_store.set_gpu_cache_active(False)
+        torch.cuda.reset_peak_memory_stats()
+        cache = DynamicCache()
+        attention_mask = attention_mask.to(self.device)
+        position_ids = attention_mask.cumsum(dim=-1) - 1
+        position_ids = position_ids.masked_fill(attention_mask == 0, 0)
+        prefill_start = time.perf_counter()
+        hidden = self._embed_tokens(input_ids)
+        outputs = self.model.model(
+            inputs_embeds=hidden,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+            past_key_values=cache,
+            use_cache=True,
+            return_dict=True,
+        )
+        cache = outputs.past_key_values
+        logits = self._logits(outputs.last_hidden_state)
+        next_tokens = [
+            self._sample(
+                logits[index, 0],
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
+            )
+            for index in range(batch_size)
+        ]
+        prefill_seconds = time.perf_counter() - prefill_start
+        if expert_store is not None and expert_store.gpu_cache_configured():
+            expert_store.clear_gpu_cache()
+            expert_store.set_gpu_cache_active(True)
+        generated = [[token] for token in next_tokens]
+        finished = [token in stop_ids for token in next_tokens]
+        decode_start = time.perf_counter()
+        for _ in range(max_new_tokens - 1):
+            if all(finished):
+                break
+            current = torch.tensor(
+                [
+                    [eos_token_id if finished[index] else generated[index][-1]]
+                    for index in range(batch_size)
+                ],
+                dtype=torch.long,
+                device=self.device,
+            )
+            attention_mask = torch.cat(
+                [
+                    attention_mask,
+                    torch.ones(
+                        (batch_size, 1), dtype=torch.long, device=self.device
+                    ),
+                ],
+                dim=1,
+            )
+            position_ids = torch.full(
+                (batch_size, 1),
+                int(attention_mask.shape[1] - 1),
+                dtype=torch.long,
+                device=self.device,
+            )
+            hidden = self._embed_tokens(current)
+            outputs = self.model.model(
+                inputs_embeds=hidden,
+                attention_mask=attention_mask,
+                position_ids=position_ids,
+                past_key_values=cache,
+                use_cache=True,
+                return_dict=True,
+            )
+            cache = outputs.past_key_values
+            logits = self._logits(outputs.last_hidden_state)
+            for index in range(batch_size):
+                if finished[index]:
+                    continue
+                token = self._sample(
+                    logits[index, 0],
+                    temperature=temperature,
+                    top_p=top_p,
+                    top_k=top_k,
+                )
+                generated[index].append(token)
+                if token in stop_ids:
+                    finished[index] = True
+        decode_seconds = time.perf_counter() - decode_start
+        total_decode_tokens = sum(max(0, len(tokens) - 1) for tokens in generated)
+        aggregate_tps = (
+            total_decode_tokens / decode_seconds if decode_seconds > 0 else 0.0
+        )
+        peak_allocated = int(torch.cuda.max_memory_allocated())
+        peak_reserved = int(torch.cuda.max_memory_reserved())
+        common_timings = {
+            **(
+                dict(self.expert_store.timings)
+                if self.expert_store is not None
+                else {}
+            ),
+            "cpu_moe_seconds": float(self.cpu_moe_seconds),
+            "expert_device_chunks": float(self.expert_device_chunks),
+            "remote_expert_chunks": float(self.remote_expert_chunks),
+            **{
+                f"expert_device_{device}_experts": float(count)
+                for device, count in self.expert_device_counts.items()
+            },
+        }
+        results: list[GenerationResult] = []
+        for index, tokens in enumerate(generated):
+            output_ids = [token for token in tokens if token not in stop_ids]
+            text = self.tokenizer.decode(output_ids, skip_special_tokens=True)
+            results.append(
+                GenerationResult(
+                    text=text,
+                    prompt_tokens=int(prompt_lengths[index].item()),
+                    completion_tokens=len(tokens),
+                    prefill_seconds=prefill_seconds,
+                    decode_seconds=decode_seconds,
+                    decode_tokens_per_second=aggregate_tps,
+                    peak_gpu_allocated_bytes=peak_allocated,
+                    peak_gpu_reserved_bytes=peak_reserved,
+                    gpu_free_bytes_after_load=self.gpu_free_bytes_after_load,
+                    shared_experts_device=self.shared_experts_device,
+                    lm_head_device=self.lm_head_device,
+                    token_ids=list(tokens),
+                    timings=dict(common_timings),
+                    dense_layer_indices=list(self.dense_layer_indices),
+                    moe_layer_indices=list(self.moe_layer_indices),
+                    dense_mlp_devices=dict(self.dense_mlp_devices),
+                    fused_moe_enabled=self.fused_moe_enabled,
+                    fused_moe_chunks=self.fused_moe_chunks,
+                    fallback_moe_chunks=self.fallback_moe_chunks,
+                    cpu_moe_layers=len(self.cpu_moe_layer_indices),
+                    cpu_moe_chunks=self.cpu_moe_chunks,
+                    cpu_experts_per_layer=self.requested_cpu_experts_per_layer,
+                    cpu_expert_chunks=self.cpu_expert_chunks,
+                    ecs=(
+                        self.ecs_controller.snapshot()
+                        if self.ecs_controller is not None
+                        else None
+                    ),
+                )
+            )
+        if self.ecs_controller is not None and self.ecs_profile_path is not None:
+            try:
+                self.ecs_controller.save_profile(self.ecs_profile_path)
+            except Exception:
+                pass
+        return results
 
     def close(self) -> None:
         if self._closed:

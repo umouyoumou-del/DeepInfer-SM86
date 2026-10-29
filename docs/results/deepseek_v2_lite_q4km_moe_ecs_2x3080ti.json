@@ -179,7 +179,9 @@
     "request_service_completed": true,
     "request_service_heartbeat_healthy": true,
     "supervised_restart_recovered": true,
-    "supervised_restart_heartbeat_healthy": true
+    "supervised_restart_heartbeat_healthy": true,
+    "fixed_batch_first_sequence_parity": true,
+    "fixed_batch_beats_single": true
   },
   "notes": [
     "The dual GPU pool runs one independent DeepSeek runtime per GPU and assigns requests by queue depth.",
@@ -187,7 +189,7 @@
     "The NCCL all-to-all smoke validates real ExpertPacket transport and hot-expert token sharding across both GPUs.",
     "The expert-sharded runtime splits routed expert chunks by ECS owner across GPU0/GPU1; the in-model activation exchange was subsequently moved to NCCL point-to-point between coordinator and remote expert worker.",
     "The asynchronous NCCL revision overlaps remote expert requests with local expert chunks: exact token parity, 4.90 tok/s decode, 2.02 s prefill, and ~39.6 MB peak GPU allocation on the remote rank.",
-    "A supervisor now monitors rank exit and heartbeat, restarts both ranks and retries the full request after a simulated rank1 crash. Fault-injected attempt 0 failed with worker_exit_42; attempt 1 recovered with exact output and healthy heartbeat. In-flight request/KV resume and continuous batching remain open."
+    "Fixed batch generation now steps two prompts together through the NCCL expert path: prefill 1.81 s, aggregate decode 6.32 tok/s (1.50x single GPU), heartbeat healthy, and the 5-2 sequence is token-identical. This is not continuous batching; both sequences share the same max length and finished rows are padded."
   ],
   "layer_pipeline": {
     "prompt": "只回答数字：5-2=?",
@@ -560,5 +562,57 @@
       "timeout_seconds": 5.0
     },
     "note": "The supervisor kills and restarts both ranks, reloads the model, and retries the full request; in-flight KV/cache resume is not implemented."
+  },
+  "fixed_batch_generation": {
+    "batch_size": 2,
+    "prefill_seconds": 1.8125460296869278,
+    "decode_seconds": 2.0580997988581657,
+    "aggregate_decode_tokens_per_second": 6.316506132118764,
+    "single_gpu_decode_tokens_per_second": 4.200091025417855,
+    "aggregate_speedup": 1.5038974379109684,
+    "remote_requests": 260,
+    "remote_bytes_sent": 44965888,
+    "remote_active_sends": 0,
+    "heartbeat": {
+      "path": "/root/autodl-tmp/results/nccl_batch_heartbeat",
+      "age_seconds": 0.13089919090270996,
+      "healthy": true,
+      "timeout_seconds": 5.0
+    },
+    "records": [
+      {
+        "prompt": "只回答数字：5-2=?",
+        "text": " 5-2=3",
+        "token_ids": [
+          207,
+          20,
+          12,
+          17,
+          28,
+          18,
+          100001
+        ],
+        "prompt_tokens": 17,
+        "completion_tokens": 7
+      },
+      {
+        "prompt": "只回答数字：2+3=?",
+        "text": " 2 + 3 = 5",
+        "token_ids": [
+          207,
+          17,
+          919,
+          207,
+          18,
+          403,
+          207,
+          20
+        ],
+        "prompt_tokens": 17,
+        "completion_tokens": 8
+      }
+    ],
+    "five_minus_two_token_parity": true,
+    "note": "Fixed-size batched generation (two sequences stepped together), not continuous batching. Aggregate decode throughput is 6.32 tok/s vs 4.20 single-GPU."
   }
 }

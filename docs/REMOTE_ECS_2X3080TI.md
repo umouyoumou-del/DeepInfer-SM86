@@ -268,6 +268,35 @@ Important limitation: the service provides concurrent **submission and
 queueing**, but the coordinator runtime still executes one request at a time.
 This is not continuous batching.
 
+### Fixed-batch generation
+
+`generate_batch()` now steps several sequences through the coordinator and
+NCCL expert path together.  This is fixed-size batch generation, not
+continuous batching: all rows share the same number of decode steps and
+finished rows remain as padded rows.
+
+Command:
+
+```bash
+PYTHONPATH=$PWD /root/autodl-tmp/ecs-venv/bin/torchrun   --standalone --nproc_per_node=2 scripts/bench_ecs_batch_generate.py   --batch-size 2 --max-new-tokens 8 --max-cache 128   --output /root/autodl-tmp/results/ecs_batch_generate.json
+```
+
+| Batch metric | Value |
+|---|---:|
+| Batch size | 2 |
+| Prefill | 1.81 s |
+| Decode wall | 2.06 s |
+| Aggregate decode | **6.32 tok/s** |
+| Single-GPU decode | 4.20 tok/s |
+| Aggregate speedup | 1.50× |
+| Remote requests | 260 |
+| Remote worker peak | 52.0 MiB |
+| Heartbeat | healthy |
+
+The `5-2` sequence is token-identical to the single request:
+`[207, 20, 12, 17, 28, 18, 100001]`; the second sequence produced
+`2 + 3 = 5`.  Both sequences ran through the same NCCL remote expert worker.
+
 ### Supervised restart
 
 `scripts/run_ecs_expert_parallel_supervised.py` launches the coordinator and
@@ -321,15 +350,15 @@ Still not validated:
 - a collective All-to-All as the in-model activation exchange (the async NCCL
   path uses point-to-point isend/irecv; the separate ExpertPacket all-to-all
   smoke did pass);
-- continuous/batched execution of concurrently submitted requests (the
-  request service currently drains them sequentially);
+- true continuous batching (the new batch generator is fixed-size and steps
+  all rows together; finished rows are padded);
 - in-flight request/KV resume after a restart (whole-request retry is
   implemented by the supervisor);
 - production heartbeat/worker restart for the dual-GPU pool.
 
-Next: implement continuous batching/parallel request execution, in-flight
-request resume, validate hybrid long-context throughput, and evaluate a
-collective all-to-all.  The hybrid path beats the 4.20 tok/s single-GPU
-decode baseline on the 8-token smoke (4.71 tok/s) and preserves exact token
-parity; the supervisor now recovers from a simulated rank-1 crash by
-whole-request retry.
+Next: implement true continuous batching (dynamic row admission/removal),
+in-flight request resume, hybrid long-context validation, and evaluate a
+collective all-to-all.  Fixed batch generation already reaches 6.32 aggregate
+tok/s (1.50x single GPU), the hybrid single-request path reaches 4.71 tok/s,
+and the supervisor recovers from a simulated rank-1 crash by whole-request
+retry.
