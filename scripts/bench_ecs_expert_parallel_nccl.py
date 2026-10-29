@@ -20,6 +20,7 @@ from transformers import AutoConfig
 from deepinfer.moe.deepseek_v2_runtime import DeepSeekV2LiteGGUFRuntime
 from deepinfer.moe.layout import split_layer_indices
 from deepinfer.moe.nccl_expert_transport import NCCLExpertClient, RemoteExpertWorker
+from deepinfer.moe.nccl_request_service import NCCLRequestService
 
 
 def _moe_layers(meta_dir: Path) -> tuple[int, ...]:
@@ -64,6 +65,18 @@ def main() -> int:
         help="NCCL process-group timeout used to detect a dead remote rank",
     )
     parser.add_argument(
+        "--concurrent",
+        type=int,
+        default=1,
+        help="submit this many requests through the concurrent service queue",
+    )
+    parser.add_argument(
+        "--heartbeat-file",
+        type=Path,
+        default=Path("/tmp/deepinfer_nccl_heartbeat"),
+        help="shared heartbeat file written by the remote expert rank",
+    )
+    parser.add_argument(
         "--prompt", default="只回答数字：5-2=?"
     )
     parser.add_argument("--output", type=Path, default=None)
@@ -94,14 +107,20 @@ def main() -> int:
                 parallel_read_workers=8,
             )
         else:
-            client = NCCLExpertClient(dst_rank=1, device=local_rank)
+            client = NCCLExpertClient(
+                dst_rank=1,
+                device=local_rank,
+                heartbeat_path=args.heartbeat_file,
+            )
 
         print(f"[rank{rank}] initialized; entering barrier", flush=True)
         dist.barrier()
         print(f"[rank{rank}] barrier passed", flush=True)
         if rank == 1:
             assert worker is not None
-            worker.serve_forever(src_rank=0)
+            worker.serve_forever(
+                src_rank=0, heartbeat_path=args.heartbeat_file
+            )
             dist.barrier()
             payload = {
                 "rank": rank,
@@ -136,29 +155,67 @@ def main() -> int:
         print(f"[rank0] runtime ready; starting generate", flush=True)
         prompts = [args.prompt]
         extra = ["只回答数字：2+3=?", "只回答数字：9-4=?"]
-        prompts.extend(extra[: max(0, int(args.requests) - 1)])
+        request_count = max(int(args.requests), int(args.concurrent))
+        prompts.extend(extra[: max(0, request_count - 1)])
         records = []
-        for prompt in prompts:
-            result = runtime.generate(
-                [{"role": "user", "content": prompt}],
-                max_new_tokens=args.max_new_tokens,
-                temperature=0.0,
+        service_status = None
+        if int(args.concurrent) > 1:
+            service = NCCLRequestService(
+                runtime,
+                device=local_rank,
+                max_queue_size=max(4, request_count),
             )
-            records.append(
-                {
-                    "prompt": prompt,
-                    "text": result.text,
-                    "token_ids": result.token_ids,
-                    "prompt_tokens": result.prompt_tokens,
-                    "completion_tokens": result.completion_tokens,
-                    "prefill_seconds": result.prefill_seconds,
-                    "decode_seconds": result.decode_seconds,
-                    "decode_tokens_per_second": result.decode_tokens_per_second,
-                    "peak_gpu_allocated_bytes": result.peak_gpu_allocated_bytes,
-                    "timings": result.timings,
-                    "ecs": result.ecs,
-                }
-            )
+            try:
+                futures = [
+                    service.submit(
+                        [{"role": "user", "content": prompt}],
+                        max_new_tokens=args.max_new_tokens,
+                        temperature=0.0,
+                    )
+                    for prompt in prompts
+                ]
+                results = [future.result(timeout=600) for future in futures]
+            finally:
+                service_status = service.status()
+                service.close()
+            for prompt, result in zip(prompts, results, strict=True):
+                records.append(
+                    {
+                        "prompt": prompt,
+                        "text": result.text,
+                        "token_ids": result.token_ids,
+                        "prompt_tokens": result.prompt_tokens,
+                        "completion_tokens": result.completion_tokens,
+                        "prefill_seconds": result.prefill_seconds,
+                        "decode_seconds": result.decode_seconds,
+                        "decode_tokens_per_second": result.decode_tokens_per_second,
+                        "peak_gpu_allocated_bytes": result.peak_gpu_allocated_bytes,
+                        "timings": result.timings,
+                        "ecs": result.ecs,
+                    }
+                )
+        else:
+            for prompt in prompts:
+                result = runtime.generate(
+                    [{"role": "user", "content": prompt}],
+                    max_new_tokens=args.max_new_tokens,
+                    temperature=0.0,
+                )
+                records.append(
+                    {
+                        "prompt": prompt,
+                        "text": result.text,
+                        "token_ids": result.token_ids,
+                        "prompt_tokens": result.prompt_tokens,
+                        "completion_tokens": result.completion_tokens,
+                        "prefill_seconds": result.prefill_seconds,
+                        "decode_seconds": result.decode_seconds,
+                        "decode_tokens_per_second": result.decode_tokens_per_second,
+                        "peak_gpu_allocated_bytes": result.peak_gpu_allocated_bytes,
+                        "timings": result.timings,
+                        "ecs": result.ecs,
+                    }
+                )
         print("[rank0] generate finished; stopping worker", flush=True)
         client.close()
         dist.barrier()
@@ -170,6 +227,8 @@ def main() -> int:
             "load_seconds": load_seconds,
             "remote_fraction": args.remote_fraction,
             "requests": len(records),
+            "concurrent": int(args.concurrent),
+            "service_status": service_status,
             "text": result["text"],
             "token_ids": result["token_ids"],
             "prompt_tokens": result["prompt_tokens"],

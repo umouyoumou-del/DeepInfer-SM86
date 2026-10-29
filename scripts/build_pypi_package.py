@@ -57,6 +57,7 @@ def main() -> int:
         "grouped_moe.py",
         "layout.py",
         "nccl_expert_transport.py",
+        "nccl_request_service.py",
         "ptr_grouped_moe.py",
         "paged_adapter.py",
         "paged_mla_kernel.py",

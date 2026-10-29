@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -63,12 +64,86 @@ class PendingRemoteChunk:
         return self.output
 
 
+class HeartbeatWriter:
+    """Write a monotonic-ish heartbeat file for a remote worker process."""
+
+    def __init__(self, path: str | Path, *, interval: float = 0.5) -> None:
+        self.path = Path(path)
+        self.interval = max(0.1, float(interval))
+        self._stop = threading.Event()
+        self._thread = threading.Thread(
+            target=self._run, name="ecs-heartbeat-writer", daemon=True
+        )
+
+    def start(self) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._write()
+        self._thread.start()
+
+    def _write(self) -> None:
+        temporary = self.path.with_suffix(self.path.suffix + ".tmp")
+        temporary.write_text(str(time.time()), encoding="ascii")
+        os.replace(temporary, self.path)
+
+    def _run(self) -> None:
+        while not self._stop.wait(self.interval):
+            try:
+                self._write()
+            except Exception:
+                pass
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self._thread.is_alive():
+            self._thread.join(timeout=2.0)
+
+
+class HeartbeatMonitor:
+    """Read a remote worker heartbeat without sharing GPU state."""
+
+    def __init__(self, path: str | Path, *, timeout: float = 5.0) -> None:
+        self.path = Path(path)
+        self.timeout = max(0.5, float(timeout))
+
+    def age(self) -> float | None:
+        try:
+            return max(0.0, time.time() - float(
+                self.path.read_text(encoding="ascii").strip()
+            ))
+        except Exception:
+            return None
+
+    def healthy(self) -> bool:
+        age = self.age()
+        return age is not None and age <= self.timeout
+
+    def status(self) -> dict[str, float | bool | None]:
+        age = self.age()
+        return {
+            "path": str(self.path),
+            "age_seconds": age,
+            "healthy": age is not None and age <= self.timeout,
+            "timeout_seconds": self.timeout,
+        }
+
+
 class NCCLExpertClient:
     """Coordinator-side blocking request/reply client."""
 
-    def __init__(self, *, dst_rank: int = 1, device: int = 0) -> None:
+    def __init__(
+        self,
+        *,
+        dst_rank: int = 1,
+        device: int = 0,
+        heartbeat_path: str | Path | None = None,
+    ) -> None:
         self.dst_rank = int(dst_rank)
         self.device = int(device)
+        self.heartbeat = (
+            HeartbeatMonitor(heartbeat_path)
+            if heartbeat_path is not None
+            else None
+        )
         self.requests = 0
         self.bytes_sent = 0
         self.bytes_received = 0
@@ -154,6 +229,9 @@ class NCCLExpertClient:
             "bytes_received": self.bytes_received,
             "latency_seconds": self.latency_seconds,
             "active_sends": self._active_sends,
+            "heartbeat": (
+                self.heartbeat.status() if self.heartbeat is not None else None
+            ),
         }
 
 
@@ -243,7 +321,26 @@ class RemoteExpertWorker:
             down_row_bytes=down_spec.row_bytes,
         )
 
-    def serve_forever(self, *, src_rank: int = 0) -> None:
+    def serve_forever(
+        self,
+        *,
+        src_rank: int = 0,
+        heartbeat_path: str | Path | None = None,
+    ) -> None:
+        writer = (
+            HeartbeatWriter(heartbeat_path)
+            if heartbeat_path is not None
+            else None
+        )
+        if writer is not None:
+            writer.start()
+        try:
+            self._serve_loop(src_rank=src_rank)
+        finally:
+            if writer is not None:
+                writer.stop()
+
+    def _serve_loop(self, *, src_rank: int = 0) -> None:
         device = self.device
         header = torch.empty(_HEADER_BYTES, dtype=torch.uint8, device=device)
         while True:
@@ -290,4 +387,9 @@ class RemoteExpertWorker:
         }
 
 
-__all__ = ["NCCLExpertClient", "RemoteExpertWorker"]
+__all__ = [
+    "HeartbeatMonitor",
+    "HeartbeatWriter",
+    "NCCLExpertClient",
+    "RemoteExpertWorker",
+]

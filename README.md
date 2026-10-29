@@ -332,7 +332,7 @@ MoE/MLA 执行层和 4 GB 显存下的可控 offload，不是与 llama.cpp 比�
 - `tests/moe/` 新增 GGUF 索引、截断拒绝、expert slice、Q4_K/Q5_0/Q8_0
   GPU 反量化、dense/MoE 层布局、CPU MLP fallback、per-expert fused 和
   grouped MoE kernel 对照测试；
-- 全套测试：**110 passed**；
+- 全套测试：**112 passed**；
 - 新增文章：
   `docs/ARTICLE_9_DEEPSEEK_V2_LITE_MOE_CPU_GPU_OFFLOAD.md`；
 - 结构化结果：
@@ -636,12 +636,15 @@ Hybrid 模式在 prefill 时按层批量提交 remote expert group，decode 时
 
 Expert ownership 仍以 50/50 最优：把 67% expert 放到 rank1 会使
 prefill 退化到 7.79 s、decode 2.74 tok/s，因为 rank1 还是单 executor。
-同一个 NCCL worker 连续服务 2 个请求时 `active_sends=0`，验证了请求队列
-可以排空；但还不是并发多请求调度。
+
+新增 `NCCLRequestService`：支持并发提交、队列深度/active/completed
+指标和 heartbeat 文件监控。2 个并发提交全部完成，queue depth=0、
+failed=0，heartbeat age 0.44 s。但 coordinator 仍然一次执行一个请求，
+所以这是服务层并发提交，不是 continuous batching。
 
 当前仍是 point-to-point request/reply，不是 collective all-to-all；
-并发多请求、active heartbeat/自动重启和 hybrid 长上下文吞吐仍待做。
-NCCL process group 已加可配置 timeout，能避免 remote rank 死亡时无限挂起。
+continuous batching、rank1 自动重启和 hybrid 长上下文吞吐仍待做。
+NCCL process group 已加可配置 timeout，remote rank 死亡不会无限挂起。
 双卡机没有 P2P/NVLink。
 
 复现与硬件细节：`docs/REMOTE_ECS_2X3080TI.md`  

@@ -175,7 +175,9 @@
     "long_context_token_parity": true,
     "nccl_hybrid_token_parity": true,
     "nccl_hybrid_beats_single_decode": true,
-    "multi_request_worker_drained": true
+    "multi_request_worker_drained": true,
+    "request_service_completed": true,
+    "request_service_heartbeat_healthy": true
   },
   "notes": [
     "The dual GPU pool runs one independent DeepSeek runtime per GPU and assigns requests by queue depth.",
@@ -183,7 +185,7 @@
     "The NCCL all-to-all smoke validates real ExpertPacket transport and hot-expert token sharding across both GPUs.",
     "The expert-sharded runtime splits routed expert chunks by ECS owner across GPU0/GPU1; the in-model activation exchange was subsequently moved to NCCL point-to-point between coordinator and remote expert worker.",
     "The asynchronous NCCL revision overlaps remote expert requests with local expert chunks: exact token parity, 4.90 tok/s decode, 2.02 s prefill, and ~39.6 MB peak GPU allocation on the remote rank.",
-    "Hybrid NCCL keeps 50/50 expert ownership (0.67 remote fraction regressed heavily). Two sequential requests drained the same remote worker with active_sends=0; concurrent multi-request scheduling and restart recovery remain open. A process-group timeout is now configurable for dead-remote detection."
+    "A bounded NCCLRequestService now accepts concurrent submissions and drains them through the single coordinator runtime, with queue metrics and a shared heartbeat file. Two concurrent submissions completed with exact outputs; heartbeat healthy at ~0.44 s age. True batched execution and automatic worker restart remain open."
   ],
   "layer_pipeline": {
     "prompt": "只回答数字：5-2=?",
@@ -489,5 +491,47 @@
       }
     ],
     "note": "sequential requests over the same NCCL expert worker; this validates worker lifetime and queue drain, not concurrent request batching."
+  },
+  "concurrent_request_service": {
+    "submitted_requests": 2,
+    "concurrent_submissions": 2,
+    "queue_depth_after": 0,
+    "active_after": 0,
+    "completed": 2,
+    "failed": 0,
+    "remote_requests": 304,
+    "remote_bytes_sent": 39632896,
+    "active_sends_after": 0,
+    "heartbeat": {
+      "path": "/root/autodl-tmp/results/nccl_heartbeat",
+      "age_seconds": 0.4423189163208008,
+      "healthy": true,
+      "timeout_seconds": 5.0
+    },
+    "records": [
+      {
+        "text": " 5-2",
+        "token_ids": [
+          207,
+          20,
+          12,
+          17
+        ],
+        "prefill_seconds": 1.8113168850541115,
+        "decode_tokens_per_second": 4.668181132528539
+      },
+      {
+        "text": " 2+3",
+        "token_ids": [
+          207,
+          17,
+          10,
+          18
+        ],
+        "prefill_seconds": 0.708411768078804,
+        "decode_tokens_per_second": 5.588554974193752
+      }
+    ],
+    "note": "The service queue accepts submissions concurrently, but the single coordinator runtime executes them sequentially; this is not batched transformer execution."
   }
 }

@@ -243,6 +243,32 @@ validation, not concurrent request batching.
 rank therefore produces a timeout instead of hanging forever, but automatic
 worker restart is not implemented.
 
+A bounded `NCCLRequestService` now accepts concurrent API submissions and
+drains them through the single coordinator runtime.  The remote worker writes
+a heartbeat file that the coordinator monitors.
+
+| Concurrent service metric | Value |
+|---|---:|
+| Submitted concurrently | 2 |
+| Completed / failed | 2 / 0 |
+| Queue depth after drain | 0 |
+| Active after drain | 0 |
+| Remote requests | 304 |
+| Heartbeat age | 0.44 s |
+| Heartbeat healthy | yes |
+
+Request-level outputs:
+
+| Request | Output | Prefill | Decode |
+|---|---|---:|---:|
+| `5-2?` | `5-2` (4 generated) | 1.81 s | 4.67 tok/s |
+| `2+3?` | `2+3` (4 generated) | 0.71 s | 5.59 tok/s |
+
+Important limitation: the service provides concurrent **submission and
+queueing**, but the coordinator runtime still executes one request at a time.
+This is not continuous batching.  The heartbeat detects a dead worker file
+writer but does not automatically restart rank 1.
+
 Long-context smoke (45 prompt tokens, 4 generated tokens):
 
 | Metric | Single GPU | Async NCCL expert |
@@ -274,12 +300,14 @@ Still not validated:
 - a collective All-to-All as the in-model activation exchange (the async NCCL
   path uses point-to-point isend/irecv; the separate ExpertPacket all-to-all
   smoke did pass);
-- concurrent (not sequential) multi-request expert scheduling;
-- active heartbeat plus automatic restart when the remote expert rank dies;
-  only the NCCL process-group timeout is implemented;
+- continuous/batched execution of concurrently submitted requests (the
+  request service currently drains them sequentially);
+- automatic restart when the remote expert rank dies (heartbeat and
+  process-group timeout are implemented, but recovery is not);
 - production heartbeat/worker restart for the dual-GPU pool.
 
-Next: add concurrent request queues, active heartbeat plus automatic rank
-restart, validate hybrid long-context throughput, and evaluate a collective
-all-to-all.  The hybrid path beats the 4.20 tok/s single-GPU decode baseline
-on the 8-token smoke (4.71 tok/s) and preserves exact token parity.
+Next: implement continuous batching/parallel request execution, rank-1
+automatic restart, validate hybrid long-context throughput, and evaluate a
+collective all-to-all.  The hybrid path beats the 4.20 tok/s single-GPU
+decode baseline on the 8-token smoke (4.71 tok/s) and preserves exact token
+parity.

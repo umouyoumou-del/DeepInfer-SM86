@@ -1046,7 +1046,7 @@ fused 之后 decode 的瓶颈更偏向 packed expert 读取和 H2D，而不是 G
   - 5 个质量 prompt 的 token IDs 完全一致；
   - 64-token 长故事生成 token IDs 完全一致；
   - `--no-fused-moe` 可随时回退到旧路径。
-- 全套测试：**110 passed**。
+- 全套测试：**112 passed**。
 
 ### 11.4 Grouped multi-expert kernel
 
@@ -1153,7 +1153,7 @@ opt-in 实验项保留，默认关闭。
 
 - double-buffer 路径与 grouped、per-expert、dequant+bmm 的 token IDs 一致；
 - 512 MB cache 路径 token IDs 也一致；
-- 全套测试：**110 passed**。
+- 全套测试：**112 passed**。
 
 ## 13. GPU packed cache + pointer-array grouped kernel
 
@@ -1196,7 +1196,7 @@ H2D 进来。
 
 - pointer-array gate/up 和 down 都有独立 GPU 单测；
 - GPU cache 路径与无 cache 路径 token IDs 完全一致；
-- 全套测试：**110 passed**。
+- 全套测试：**112 passed**。
 
 ## 14. 质量回归（mini suite）
 
@@ -1664,12 +1664,16 @@ Hybrid 模式在 prefill 时按层批量提交 remote expert group，decode 时
 但 per-chunk decode 4.28 tok/s，略低于单卡4.50 tok/s。
 
 Expert ownership 仍以 50/50 最优：67% remote expert 会使 prefill
-退化到7.79 s、decode2.74 tok/s。同一个 NCCL worker 连续服务2个请求时
-`active_sends=0`，验证了队列排空；但并发多请求调度尚未实现。NCCL
-process group 已加 timeout，remote rank 死亡不会无限挂起，但没有自动重启。
+退化到7.79 s、decode2.74 tok/s。
+
+新增 `NCCLRequestService`：支持并发提交、队列深度/active/completed
+指标和 heartbeat 文件监控。2个并发提交全部完成，queue depth=0、
+failed=0，heartbeat age 0.44 s。但 coordinator 仍一次执行一个请求，
+这是服务层并发提交，不是 continuous batching。
 
 当前仍是 point-to-point request/reply，不是 collective all-to-all；
-并发多请求、active heartbeat/自动重启和 hybrid 长上下文吞吐仍待做。
+continuous batching、rank1 自动重启和 hybrid 长上下文吞吐仍待做。
+NCCL process group 已加 timeout，remote rank 死亡不会无限挂起。
 该机没有 P2P/NVLink。
 
 结果文件：
