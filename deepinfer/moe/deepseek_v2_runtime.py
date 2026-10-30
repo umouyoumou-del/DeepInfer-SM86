@@ -261,7 +261,14 @@ class GGUFExpertStore:
         )
         self._pinned_buffers: dict[tuple[Any, ...], torch.Tensor] = {}
         self._pinned_copy_events: dict[tuple[Any, ...], torch.cuda.Event] = {}
-        self._pinned_slot_count = 2
+        # Staging depth.  Two slots is enough to overlap one copy with one
+        # compute, but the streaming path was measured at only ~54% of the
+        # available PCIe bandwidth (3.8 of ~7 GB/s), which suggests more
+        # outstanding reads would help.  Exposed as an env knob so it can be
+        # swept without a rebuild; 2 keeps the previous behaviour.
+        self._pinned_slot_count = int(
+            os.environ.get("DEEPINFER_STAGING_SLOTS", "2")
+        )
         self._pinned_slot = 0
         self._copy_streams_enabled = device.type == "cuda"
         self._copy_streams = (
@@ -276,7 +283,7 @@ class GGUFExpertStore:
         self._stage_local = threading.local()
         self._copy_streams_by_thread: dict[int, list[Any]] = {}
         self._stage_lock = threading.RLock()
-        self._prefetch_slot_count = 2
+        self._prefetch_slot_count = self._pinned_slot_count
         self._prefetch_slot = 0
         self._prefetch_buffers: dict[tuple[Any, ...], torch.Tensor] = {}
         self._prefetch_events: dict[tuple[Any, ...], torch.cuda.Event] = {}
