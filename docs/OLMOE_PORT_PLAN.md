@@ -130,3 +130,58 @@ chunk 大小（当前默认 8 专家/chunk）需要重新调参，否则每个 c
 
 建议顺序：先完成 A 拿到 llama.cpp 基线，再决定是否投入 B。
 如果 A 的结果显示带宽模型在 OLMoE 上明显不成立，B 的优先级应当降低。
+
+---
+
+## 7. 实测：GGUF 结构对比（2026-10-30 更新）
+
+两部分都已在真实文件上核对，结论比 §4 的估计乐观。
+
+### 专家张量布局：**完全兼容**
+
+| | DeepSeek-V2-Lite | OLMoE-1B-7B |
+|---|---|---|
+| `ffn_gate_exps.weight` | `(64, 1408, 2048)` Q4_K | `(64, 1024, 2048)` Q4_K |
+| `ffn_up_exps.weight` | `(64, 1408, 2048)` Q4_K | `(64, 1024, 2048)` Q4_K |
+| `ffn_down_exps.weight` | `(64, 2048, 1408)` Q8_0 | `(64, 2048, 1024)` **Q6_K** |
+| `ffn_gate_inp.weight` | `(64, 2048)` F32 | `(64, 2048)` F32 |
+
+**同一套命名、同一个 `[experts, out, in]` 轴顺序。**
+`GGUFIndex.expert_tensor(name, expert_index)` 是按 3-D 张量写的通用实现，
+所以 **OLMoE 的专家读取不需要改一行代码**——这消掉了原计划 §4 第 3 步（0.5 天）。
+
+### 三个真实缺口
+
+1. **`ffn_down_exps` 是 Q6_K**，而 fused MoE kernel 只支持 Q4_K/Q5_0/Q8_0
+   （`fused_moe.py:255` 会抛 `NotImplementedError`）。
+   → 要么给 fused kernel 加 Q6_K，要么 down 走 dequant+bmm 回退。
+   注意 DeepSeek 的 down 是 Q8_0（支持），所以这条路从没被触发过。
+
+2. **attention 是标准 GQA，而且带 QK-norm**
+   （`attn_q_norm.weight` / `attn_k_norm.weight` 各 2048 维）。
+   DeepSeek 走 MLA（`attn_kv_a_mqa` / `attn_kv_b`），签名完全不同。
+   → 需要接 `deepinfer/engine/paged_attention.py` 里已有的 GQA 内核，并补 QK-norm。
+
+3. **无共享专家**（DeepSeek 有 `ffn_*_shexp`）→ 对应分支要短路。
+
+### 修正后的工作量
+
+| 步骤 | 原估计 | 修正 |
+|---|---:|---:|
+| 专家张量定位与读取 | 0.5 天 | **0（已兼容）** |
+| Q6_K down 支持或回退 | — | **+0.5 天** |
+| GQA + QK-norm 适配 | 1–2 天 | 1.5–2 天 |
+| ModelSpec 抽象 | 1 天 | 1 天 |
+| 单请求 token 对齐验证 | 0.5 天 | 0.5 天 |
+| 连续批处理 + 前缀共享 | 0.5 天 | 0（复用） |
+| 双卡验证 | 1 天 | 1 天 |
+| **合计** | **4.5–5.5 天** | **4.5–5 天** |
+
+省下的时间不多，但**风险最大的一步（专家读取）已经被证伪为风险**。
+
+### 为什么这个移植值得做
+
+按 §8.2 的带宽模型，OLMoE 每 token 触达 0.73 GB，
+只有 DeepSeek 的 54%。在同一套流式栈上，理论上应该快 **1.85 倍**。
+而这正好可以检验"吞吐 ≈ 带宽 ÷ 每 token 字节"是否是跨架构规律——
+llama.cpp 侧已经验证（51.1 vs 24.5 tok/s），ECS 侧还没有。
