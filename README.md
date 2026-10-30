@@ -49,6 +49,23 @@ engine。当前重点是：
 
 测试环境：Windows、RTX 3050 Laptop 4 GB、Python 3.10.3、torch 2.5.1+cu121、CUDA 12.1、CuPy 14.2。
 
+### 已验证的环境组合
+
+| 维度 | 已验证 | 说明 |
+|---|---|---|
+| GPU 架构 | **SM86**（RTX 3050 Laptop 4 GB）、**SM89**（RTX 4080 SUPER 32 GB） | 两套全量测试均全绿 |
+| 操作系统 | Windows 11、Ubuntu 22.04 | 双卡 ECS 在 Linux 上验证 |
+| Python | 3.10、3.12 | |
+| PyTorch | 2.5.1+**cu121**、2.5.1+**cu124** | 两者均通过全量测试 |
+| CuPy | 14.2（cuda12x） | |
+
+所有 CUDA kernel 走 CuPy 的 NVRTC，编译选项统一为
+`--std=c++14 --use_fast_math`，**不含任何 `-arch=` 硬编码**，
+也没有 `__CUDA_ARCH__` 条件编译或 `get_device_capability()` 分支——
+目标架构由运行时设备自动决定。因此新增架构通常只需验证，不需要移植。
+
+未验证：SM80（A100）、SM90（Hopper）、非 NVIDIA 平台（README 的"跨厂商后端"仍为 ❌）。
+
 | 路径 | 量化 | 显存 | decode |
 |---|---|---:|---:|
 | Qwen2.5-3B 兼容层（NF4） | NF4 | 2.28 GiB reserved | 5.859 tokens/s |
@@ -1200,7 +1217,7 @@ lm_head           : 3-bit, group 128
 | GGUF 直接流式执行 | ⚠️ | DeepSeek-V2-Lite Q4_K_M 已直跑；dense 侧 `from_gguf()` 已可把 GGUF 装进现成模型（张量映射 + 去量化 + tied embedding），尚未接进 cfg→model 的工厂函数 |
 | activation quant / SmoothQuant | ❌ | 仅权重量化 W4A16/W3A16 |
 | tensor / pipeline parallel | ❌ | 单 GPU |
-| 跨厂商后端 | ❌ | 当前 kernel 绑定 NVIDIA SM86 |
+| 跨厂商后端 | ❌ | kernel 为 NVIDIA CUDA；**已验证 SM86 与 SM89**，无 arch 硬编码 |
 
 > “✅”只表示当前仓库有可运行的 dense/reference 实现或测试覆盖，不代表达到
 > vLLM/TensorRT-LLM 的生产完备度。
@@ -1773,7 +1790,9 @@ python scripts\export_sm86_kernels.py
 - FP8 KV 直接 cast，无 per-token scale；E4M3/E5M2 的误差和动态范围不同，
   不能把两者视为同一个精度档；
 - W4/W3 prefill 已切到 tiled GEMM；但当前是 CUDA core + FP32 累加，尚未做 Tensor Core / cp.async pipeline；
-- GPU harness 在 Python 3.10 下验证；Python 3.12 GPU package 验证未完成；
+- GPU harness 在 Python 3.10 与 3.12 下均已验证；torch 2.5.1+cu121 与 +cu124 均通过；
+  设备侧已在 SM86（RTX 3050 Laptop）与 SM89（RTX 4080 SUPER）上跑通全量测试，
+  但 SM80/SM90 及非 NVIDIA 平台未验证；
 - 3-bit MLP/lm_head 是有损量化，短输出可读不代表与 BF16 等价；
 - 4 GB 上整体 Q4 只能作为质量/兼容实验，速度约 8 tokens/s；
 - GPTQ / AWQ 走**离线转换**为 W4A16；DeepSeek-V2-Lite Q4_K_M GGUF 可直接流式执行；
