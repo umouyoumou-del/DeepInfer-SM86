@@ -76,3 +76,25 @@ python scripts/smoke_deepseek_v2_lite_moe.py ... --expert-cache-mb 512
 ```
 
 每点单次测量（n=1），但四个方向的量级差异足够大，结论不受噪声影响。
+
+### 5. 单卡 prefill/decode overlap
+
+之前的判断是：overlap 在双卡上被 NCCL 挡住，但**单卡不走 NCCL，所以应该可行**。
+实测否定了这个推论。
+
+```
+NO_OVERLAP   完成，peak GPU 2.36 GiB
+WITH_OVERLAP 进程崩溃，原生栈回溯（ntdll!RtlUserThreadStart）
+```
+
+**结论修正**：阻塞 overlap 的不是 NCCL，而是更底层的东西——
+后台线程 + 独立 CUDA stream 上跑 `runtime.forward_logits`，
+与主线程的 decode 共用同一个 runtime 实例。即使没有 NCCL，
+专家 staging、weight cache、timings 这些 runtime 级状态仍在两个线程间共享。
+
+per-thread staging 只隔离了**缓冲区**，没有隔离**整个 runtime 的调用**。
+
+这条现在和双卡一样是"未解决"，不能算"单卡可行"。
+
+（附注：这次日志用了 `tail -3` 截取，baseline 的 wall/aggregate 数字没留下来，
+只有 peak 显存。要复核需要重跑，这次不做。）
