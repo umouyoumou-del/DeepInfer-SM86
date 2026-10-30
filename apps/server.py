@@ -799,6 +799,12 @@ def main() -> int:
         action="store_true",
         help="swap cold paged-KV requests to CPU under GPU block pressure",
     )
+    parser.add_argument(
+        "--evict-policy",
+        choices=("offload", "drop"),
+        default="offload",
+        help="drop frees cold KV instead of staging it to the host",
+    )
     parser.add_argument("--max-cpu-offload-mb", type=int, default=2048)
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.80)
     parser.add_argument("--reserve-memory-mb", type=int, default=512)
@@ -864,6 +870,7 @@ def main() -> int:
             kv_cache_dtype=args.kv_cache_dtype,
             enable_prefill_decode_overlap=not args.no_prefill_decode_overlap,
             enable_cpu_offload=args.cpu_offload,
+        evict_policy=args.evict_policy,
             max_cpu_offload_mb=args.max_cpu_offload_mb,
             num_gpu_blocks=args.kv_blocks,
             prefix_cache_blocks=args.prefix_cache_blocks,

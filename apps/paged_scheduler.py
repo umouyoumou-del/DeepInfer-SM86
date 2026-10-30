@@ -109,6 +109,9 @@ class PagedScheduledRequest:
     last_active_time: float = field(default_factory=time.perf_counter)
     state_before_swap: RequestState | None = None
     offload_payload: CpuKVBlockPayload | None = None
+    # Set when the blocks were dropped rather than copied out.  The
+    # request then has no KV state and must be re-prefilled on resume.
+    dropped_kv: bool = False
     swap_count: int = 0
 
 
@@ -150,6 +153,7 @@ class PagedBatchScheduler:
         kv_cache_dtype: str = "fp16",
         enable_prefill_decode_overlap: bool = True,
         enable_cpu_offload: bool = False,
+        evict_policy: str = "offload",
         max_cpu_offload_mb: int = 2048,
         num_gpu_blocks: int | None = None,
         prefix_cache_blocks: int | None = None,
@@ -177,7 +181,12 @@ class PagedBatchScheduler:
         if not getattr(runtime, "supports_prefill_decode_overlap", True):
             enable_prefill_decode_overlap = False
         self.enable_prefill_decode_overlap = bool(enable_prefill_decode_overlap)
-        self.enable_cpu_offload = bool(enable_cpu_offload)
+        if evict_policy not in ("offload", "drop"):
+            raise ValueError("evict_policy must be 'offload' or 'drop'")
+        self.evict_policy = str(evict_policy)
+        self.enable_cpu_offload = bool(enable_cpu_offload) or (
+            self.evict_policy == "drop"
+        )
         self.max_cpu_offload_bytes = int(max_cpu_offload_mb) * 1024 * 1024
         self.cpu_offload_bytes = 0
         self.swapped: list[PagedScheduledRequest] = []
@@ -497,6 +506,34 @@ class PagedBatchScheduler:
         if used_blocks > len(request.block_ids):
             self.metrics.inc("kv_cpu_offload_failed_total")
             return 0
+        if self.evict_policy == "drop":
+            # Discard instead of copying.  A full FP16 block is 589824 bytes and
+            # costs ~1.46 ms to stage to the host; if the request is cold enough
+            # to evict, re-prefilling on resume is usually cheaper than paying
+            # that copy twice.  Only safe for greedy requests, where replaying
+            # the prefix reproduces the same tokens.
+            if float(request.temperature) > 0.0:
+                self.metrics.inc("kv_cpu_offload_rejected_total")
+                return 0
+            old_blocks = len(request.block_ids)
+            # The request leaves the running set entirely, so every block it
+            # holds goes back - the used prefix and any reserved tail.
+            dropped = self.manager.drop_blocks(list(request.block_ids))
+            if dropped == 0:
+                return 0
+            request.block_ids = []
+            request.offload_payload = None
+            request.dropped_kv = True
+            request.state_before_swap = old_state
+            request.state = RequestState.SWAPPED
+            request.shared_block_count = 0
+            self.metrics.inc("kv_blocks_dropped_total", dropped)
+            if request in self.running:
+                self.running.remove(request)
+            self.swapped.append(request)
+            self._refresh_gauges()
+            return old_blocks
+
         started = time.perf_counter()
         try:
             payload = self.manager.offload_blocks(
@@ -594,6 +631,26 @@ class PagedBatchScheduler:
             try:
                 blocks = self.manager.allocator.allocate(required_blocks)
                 payload = request.offload_payload
+                if request.dropped_kv and payload is None:
+                    # No KV was kept, so there is nothing to reload: restart the
+                    # prefill from the beginning.  Only reachable for greedy
+                    # requests, which _offload_request enforces.
+                    self.manager.allocator.free(blocks)
+                    request.block_ids = []
+                    request.dropped_kv = False
+                    request.prefill_done = 0
+                    request.cached_tokens = 0
+                    request.state = RequestState.PREFILL
+                    request.state_before_swap = None
+                    request.shared_block_count = 0
+                    request.last_active_time = time.perf_counter()
+                    self.swapped.pop(index)
+                    self.running.append(request)
+                    request.swap_count += 1
+                    self.metrics.inc("requests_resumed_total")
+                    self.metrics.inc("kv_recompute_restarts_total")
+                    self._refresh_gauges()
+                    return True
                 if used_blocks:
                     if payload is None:
                         raise RuntimeError("swapped request is missing CPU payload")

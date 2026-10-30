@@ -149,6 +149,12 @@ def main() -> int:
         action="store_true",
         help="disable dual-CUDA-stream prefill/decode overlap",
     )
+    parser.add_argument(
+        "--evict-policy",
+        choices=("offload", "drop"),
+        default="offload",
+        help="drop frees cold KV instead of staging it to the host",
+    )
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args()
     if not torch.cuda.is_available():
@@ -190,6 +196,7 @@ def main() -> int:
             kv_cache_dtype=args.kv_cache_dtype,
             enable_prefill_decode_overlap=not args.no_prefill_decode_overlap,
             enable_cpu_offload=args.cpu_offload,
+        evict_policy=args.evict_policy,
             max_cpu_offload_mb=args.max_cpu_offload_mb,
             num_gpu_blocks=args.kv_blocks,
         )
