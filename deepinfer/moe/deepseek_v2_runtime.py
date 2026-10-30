@@ -226,7 +226,8 @@ class GGUFExpertStore:
         self.max_gpu_spill_bytes = int(max_gpu_spill_mb) * _MIB
         self.parallel_read_workers = max(1, int(parallel_read_workers))
         self._cache_limit_bytes = max(0, int(expert_cache_mb)) * _MIB
-        self._layer_count = max(1, len(set(layer_indices)))
+        self.layer_indices = tuple(sorted({int(i) for i in layer_indices}))
+        self._layer_count = max(1, len(self.layer_indices))
         self._cache_limit_per_layer = self._cache_limit_bytes // self._layer_count
         self._packed_cache: dict[int, OrderedDict[tuple[int, str, int], torch.Tensor]] = {}
         self._packed_cache_bytes = 0
@@ -394,6 +395,67 @@ class GGUFExpertStore:
 
     def gpu_cache_configured(self) -> bool:
         return self._gpu_cache_per_layer > 0
+
+    def preload_gpu_experts(self, *, verbose: bool = False) -> int:
+        """Upload every routed expert of every MoE layer into VRAM, once.
+
+        The ordinary cache only stores an expert after its *second* access, so
+        a short generation leaves most of them uncached - measured peak stayed
+        at 4.3 GiB on a 32 GiB card even with a 20 GiB cache budget.  When the
+        card is large enough to hold the experts outright there is no reason to
+        wait for a second hit: load them up front and every lookup becomes a
+        no-copy view into a resident buffer.
+
+        Returns the number of expert entries now resident.
+        """
+
+        if not self.gpu_cache_enabled():
+            raise RuntimeError(
+                "preload_gpu_experts requires --gpu-expert-cache-mb > 0"
+            )
+        layers = list(getattr(self, "layer_indices", ()))
+        resident = 0
+        for layer_idx in layers:
+            spec = self._specs.get((layer_idx, "gate"))
+            if spec is None:
+                continue
+            ids = list(range(int(spec.expert_count)))
+            batch = self.load_packed_experts(layer_idx, ids)
+            batch.wait_for_gate_up()
+            batch.wait_for_down()
+            sizes = tuple(spec.bytes_per_expert for spec in batch.specs)
+            for position, expert_id in enumerate(ids):
+                views = tuple(
+                    batch.packed[projection][
+                        position * sizes[projection] :
+                        (position + 1) * sizes[projection]
+                    ].clone()
+                    for projection in range(3)
+                )
+                layer_cache = self._gpu_expert_cache.setdefault(
+                    layer_idx, OrderedDict()
+                )
+                old = layer_cache.pop(expert_id, None)
+                if old is not None:
+                    self._gpu_cache_bytes -= sum(t.numel() for t in old)
+                    self._gpu_cache_bytes_by_layer[layer_idx] -= sum(
+                        t.numel() for t in old
+                    )
+                layer_cache[expert_id] = views
+                size = sum(t.numel() for t in views)
+                self._gpu_cache_bytes += size
+                self._gpu_cache_bytes_by_layer[layer_idx] = (
+                    self._gpu_cache_bytes_by_layer.get(layer_idx, 0) + size
+                )
+                resident += 1
+            del batch
+            if verbose:
+                print(
+                    f"[pin-all] layer {layer_idx}: {len(ids)} experts resident, "
+                    f"{self._gpu_cache_bytes * 2 / 2**30:.2f} GiB total",
+                    flush=True,
+                )
+        return resident
 
     def gpu_cache_enabled(self) -> bool:
         return self._gpu_cache_active and self.gpu_cache_configured()

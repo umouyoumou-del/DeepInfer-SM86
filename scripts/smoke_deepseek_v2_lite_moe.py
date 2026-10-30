@@ -101,6 +101,11 @@ def _parse_args() -> argparse.Namespace:
         help="GPU packed-expert LRU cache size in MiB; 0 disables it",
     )
     parser.add_argument(
+        "--pin-all-experts",
+        action="store_true",
+        help="preload every routed expert into VRAM at startup",
+    )
+    parser.add_argument(
         "--ecs",
         action="store_true",
         help="enable ECS heat/LRU/tier control plane",
@@ -262,6 +267,9 @@ def main() -> int:
         lm_head_device=args.lm_head_device,
         verbose=not args.quiet,
     )
+    if getattr(args, "pin_all_experts", False):
+        pinned = runtime.expert_store.preload_gpu_experts(verbose=True)
+        print(f"[pin-all] {pinned} expert entries resident", flush=True)
     if args.disable_down_copy_overlap:
         runtime._overlap_down_copy = False
     load_seconds = time.perf_counter() - load_started
