@@ -683,3 +683,48 @@ auto pin-all skipped: experts need 9086.0 MiB, only 733.9 MiB of 1048.5 MiB free
 
 而如果没有跑 3050 的回归验证，这个 bug 会随默认开启推到所有小显存用户身上，
 而大显存上的 8.4 倍会让它看起来完全正常。
+
+---
+
+## 17. 修复后的最终状态与新的成本分布
+
+### 两台机器都验证过
+
+| 机器 | decode | 峰值显存 | 极差 |
+|---|---:|---:|---:|
+| RTX 3050 4 GB | 2.542 tok/s | 2277.6 MiB | — |
+| **RTX 4080 SUPER 32 GB** | **20.92 tok/s（47.8 ms/token）** | — | **0.4%** |
+
+3050 与改动前（2.45 / 2253.7 MiB）一致，确认回归修复无副作用。
+
+**极差 0.4%** 意味着此后 5% 量级的改动都能用单次中位数判定。
+
+### 当前的成本分布（profiler，含采样开销，只看比例）
+
+实际 GPU 时间约 **34 ms/token**（0.41 s / 12 token），
+而墙钟 47.8 ms → **GPU 利用率约 71%**（此前默认路径只有 29.8%）。
+
+| 项 | 每 12 token | 占 CUDA |
+|---|---:|---:|
+| `dp_ptr_grouped_gate_up_gemm`（MoE） | 48.8 ms | 12% |
+| `dp_ptr_grouped_down_gemm`（MoE） | 26.0 ms | 6% |
+| `aten::matmul` / `linear` / `mm`（attention + shared expert） | 约 135 ms | **33%** |
+| 其余（elementwise、norm 等） | 约 200 ms | 49% |
+
+调用次数：`344 / 12 = 28.7` 次/token ≈ 27 层 + 1，说明**每层每 token 只发一次
+gate_up**——prefill 缓存生效后，指针路径已经在用，没有多余的 staging 调用。
+
+### 结论：优化重心已经转移
+
+- **MoE grouped kernel 只剩 18%**——之前所有围绕专家搬运的优化已经做完；
+- **attention + shared expert 的 matmul 占 33%**，成为最大的单项；
+- **GPU 仍空闲 29%**（约 14 ms/token），这是 launch/同步的残余。
+
+因此下一步按收益排序：
+
+1. **吃掉 29% 的空闲**（CUDA Graph，或减少 2,994 次 launch）——上限约 1.4×；
+2. **attention 路径**（MLA 的实现效率）——33% 的份额，但需要单独 profile；
+3. MoE kernel 本身（18%）——优先级最低。
+
+**注意：本轮 profiler 的 255 ms/token 不能与基准的 47.8 ms 直接比较**，
+profiler 会给 25 万个 op 加采样开销。比例可信，绝对值不可信。
