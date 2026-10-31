@@ -405,3 +405,55 @@ pin-all 之后专家权重已经常驻，这些拷贝是**别的东西**——
 3. 用 `bench_decode_repeats.py` 复测（5 次中位数），确认 ≥30% 的变化才可信。
 
 **这一项是目前唯一还没被证伪、且量级与 launch 开销相当的方向。**
+
+---
+
+## 11. 更正：shared expert 的猜测不成立
+
+§10 推测那 ~500 MB/token 的 H2D 来自 shared expert 权重被重复上传。
+**这个推测是错的。**
+
+运行日志里已经写明了落位：
+
+```
+loaded: GPU free 29698.6 MiB, shared=cuda, lm_head=cuda, fused_moe=True
+```
+
+`_load_weights` 在加载阶段就把 shared expert 放到了 CUDA
+（`_choose_optional_device(..., required_mib=1150)` 通过），
+所以它们**本来就在显存里**，每 token 不会被重新上传。
+
+因此 12.4 MB × 21 次/token 的来源**仍未定位**。
+
+### 已知的排除项
+
+| 候选 | 状态 |
+|---|---|
+| 专家权重（`ffn_*_exps`） | 已排除——pin-all 驻留 1664 个 |
+| shared expert（`ffn_*_shexp`） | **已排除——日志显示 shared=cuda** |
+| lm_head | 已排除——日志显示 lm_head=cuda |
+| attention 权重 | 尚未核对；单层约 7.7 MB，与 12.4 MB 不符 |
+| KV cache 写入 | 量级不符（54 KB/token） |
+
+### 下一步只剩机械核对
+
+不要再猜。可行做法：
+
+1. 用 `with_stack=True` 抓 `_to_copy` 的 **Python 调用栈**，直接看到是哪个函数；
+2. 或给 `GGUFIndex` 的 tensor 读取加一次性日志，看重放期间谁还在读文件。
+
+**这是唯一能终结猜测的手段。** 今天已经有五次归因被后续测量推翻
+（缓存、驻留、94%、分配、shared expert），共同点都是**没有直接观测就下结论**。
+
+### 今天的结论沉淀
+
+```
+optimization_order.md 的核心教训：
+
+1. 先确认测量本身可信（预热、重复、分母、工具是否静默失败）
+2. 再确认归因有直接观测支撑，而不是从总量倒推
+3. 最后才改代码
+```
+
+违反第 1 条，得到的是噪声；
+违反第 2 条，得到的是错误方向——而错误方向今天出现了五次。
