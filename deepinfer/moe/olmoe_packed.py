@@ -16,14 +16,19 @@ from __future__ import annotations
 import numpy as np
 import torch
 
+from deepinfer.moe.olmoe_router import route_topk
+from deepinfer.moe.packed_gemv import decode_gemv_supported, down_gemv_combine, gate_up_gemv
 from deepinfer.moe.ptr_grouped_moe import (
     fused_down_gemm_ptr_grouped,
     fused_gate_up_gemm_ptr_grouped,
 )
-from deepinfer.moe.olmoe_router import route_topk
 
 Q4_K_ROW_BYTES_PER_256 = 144
 Q6_K_ROW_BYTES_PER_256 = 210
+
+# Use the warp-per-row kernels (packed_gemv) where they cover the formats; the
+# pointer-grouped kernels remain the fallback.  A switch so benchmarks can A/B.
+USE_WARP_GEMV = True
 
 
 def row_bytes(elements: int, qtype: str) -> int:
@@ -71,7 +76,7 @@ def moe_forward_packed(
     gate_k: int,
     down_k: int,
 ) -> torch.Tensor:
-    """Weights stay packed; one pointer-grouped kernel per projection."""
+    """Weights stay packed; one kernel per projection."""
 
     if hidden.shape[0] != 1:
         raise ValueError("packed path currently supports single-token decode only")
@@ -79,12 +84,31 @@ def moe_forward_packed(
     ids = expert_ids[0]
     device = hidden.device
 
-    x_all = hidden.to(torch.float16).repeat(top_k, 1).unsqueeze(1)  # [top_k, 1, k]
-    counts = torch.ones(top_k, dtype=torch.int32, device=device)
-
     gate_storage, gate_ptrs, gate_qtype = packed["gate"]
     up_storage, up_ptrs, up_qtype = packed["up"]
     down_storage, down_ptrs, down_qtype = packed["down"]
+
+    if (
+        USE_WARP_GEMV
+        and decode_gemv_supported(gate_qtype, up_qtype, k_size=gate_k)
+        and decode_gemv_supported(down_qtype, k_size=down_k, top_k=top_k)
+    ):
+        # warp-per-row kernels: they index the full pointer tables with the
+        # routed ids and fold the routing-weighted sum into the down projection
+        activation = gate_up_gemv(
+            hidden.to(torch.float16).reshape(-1), ids, gate_ptrs, up_ptrs,
+            out_features=gate_out, k_size=gate_k, gate_qtype=gate_qtype, up_qtype=up_qtype,
+            gate_row_bytes=row_bytes(gate_k, gate_qtype),
+            up_row_bytes=row_bytes(gate_k, up_qtype),
+        )
+        combined = down_gemv_combine(
+            activation, ids, weights[0], down_ptrs, out_features=down_out, k_size=down_k,
+            down_qtype=down_qtype, down_row_bytes=row_bytes(down_k, down_qtype),
+        )
+        return combined.view(1, down_out).to(hidden.dtype)
+
+    x_all = hidden.to(torch.float16).repeat(top_k, 1).unsqueeze(1)  # [top_k, 1, k]
+    counts = torch.ones(top_k, dtype=torch.int32, device=device)
 
     activation = fused_gate_up_gemm_ptr_grouped(
         x_all,

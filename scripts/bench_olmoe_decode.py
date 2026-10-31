@@ -17,7 +17,8 @@ say *why* a step costs what it does:
 step ~= host >> gpu means the step is bound by host-side dispatch, not by the
 device, and no change to kernels or bytes will move it.  ``--top-k`` changes
 only device work and ``--host-delay-ms`` only host work, so sweeping each shows
-which side a configuration is bound by.
+which side a configuration is bound by.  ``--mode graph`` replays the step from
+a CUDA graph (deepinfer.moe.olmoe_graph), which takes the host out of the loop.
 
 Prefill runs one token at a time through the decode path.  The packed kernels
 handle a single token, and a batched prefill would need fp16 experts at about
@@ -294,6 +295,30 @@ def profile_host(step, prompt_ids, *, new_tokens: int, top: int = 12) -> None:
         print(f"    {cumulative:7.3f}  calls/step {calls:6.1f}  {where}")
 
 
+class GraphStep:
+    """The same step replayed from a captured CUDA graph (olmoe_graph)."""
+
+    def __init__(self, weights, stack, spec, *, layers: int, top_k: int, max_len: int):
+        from deepinfer.moe.olmoe_graph import OLMoEGraphDecoder
+
+        self.decoder = OLMoEGraphDecoder(
+            weights, stack[:layers], num_heads=spec.head_count, eps=spec.rms_eps,
+            rope_base=spec.rope_base, top_k=top_k, max_len=max_len,
+        )
+        self.decoder.capture()
+        self._last = None
+
+    def new_cache(self):
+        self.decoder.reset()
+
+    def __call__(self, token, cache):
+        # the decoder's output buffer is already its next input, so a token we
+        # handed out last time needs no copy; clone because the buffer is reused
+        out = self.decoder.step(None if token is self._last else token)
+        self._last = out.clone()
+        return self._last
+
+
 def cpu_probe_ms() -> float:
     """Fixed pure-Python work with no GPU involvement.
 
@@ -345,6 +370,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repeats", type=int, default=5)
     parser.add_argument("--host-delay-ms", type=float, nargs="+", default=[0.0],
                         help="host-only spin per layer; several values sweep")
+    parser.add_argument("--mode", nargs="+", choices=("eager", "graph"), default=["eager"],
+                        help="eager PyTorch decode, or the step replayed from a CUDA graph")
+    parser.add_argument("--graph-max-len", type=int, default=256,
+                        help="static KV cache length of the graph path")
+    parser.add_argument("--expert-kernel", nargs="+", choices=("gemv", "grouped"),
+                        default=["gemv"],
+                        help="warp-per-row GEMV (packed_gemv) or the pointer-grouped kernels; "
+                             "several values run back to back per configuration")
     parser.add_argument("--sync-debug", action="store_true",
                         help="list host synchronisations in one decode step")
     parser.add_argument("--profile-host", action="store_true",
@@ -385,9 +418,23 @@ def main(argv: list[str] | None = None) -> int:
     print("environment:", json.dumps(environment, ensure_ascii=False), flush=True)
     records = []
     delay_values = sorted(set(args.host_delay_ms))
+    modes = list(dict.fromkeys(args.mode))
+    if "graph" in modes and any(delay_values):
+        parser.error("--host-delay-ms only applies to eager mode")
+    from deepinfer.moe import olmoe_packed
+
+    kernels = list(dict.fromkeys(args.expert_kernel))
     for layers in layer_values:
-        for top_k, delay in itertools.product(topk_values, delay_values):
-            step = ForwardStep(weights, stack, spec, layers=layers, top_k=top_k)
+        for top_k, delay, mode, kernel in itertools.product(topk_values, delay_values, modes,
+                                                            kernels):
+            step = None  # release the previous configuration's graph first
+            # read at every eager call and baked in at graph capture
+            olmoe_packed.USE_WARP_GEMV = kernel == "gemv"
+            if mode == "graph":
+                step = GraphStep(weights, stack, spec, layers=layers, top_k=top_k,
+                                 max_len=args.graph_max_len)
+            else:
+                step = ForwardStep(weights, stack, spec, layers=layers, top_k=top_k)
             install_host_delay(delay)
             run_once(step, args.prompt_ids, new_tokens=4, measure_gpu=False,
                      sleep_cycles=0)  # compile kernels, fill allocator
@@ -427,6 +474,8 @@ def main(argv: list[str] | None = None) -> int:
             record = {
                 "layers": layers,
                 "top_k": top_k,
+                "mode": mode,
+                "expert_kernel": kernel,
                 "host_delay_ms": delay,
                 "step_ms": summarise(steps),
                 "repeat_step_ms": steps,
@@ -447,8 +496,10 @@ def main(argv: list[str] | None = None) -> int:
                         else "gpu    n/a")
             sync_text = "" if syncs is None else f"  syncs {len(syncs)} {sorted(set(syncs))}"
             delay_text = f" +{delay:.2f}ms/layer" if len(delay_values) > 1 or delay else ""
+            mode_text = f" {mode:5s}" if len(modes) > 1 or mode != "eager" else ""
+            kernel_text = f" {kernel:7s}" if len(kernels) > 1 else ""
             print(
-                f"L={layers:2d} top_k={top_k}{delay_text}"
+                f"L={layers:2d} top_k={top_k}{mode_text}{kernel_text}{delay_text}"
                 f"  step {record['step_ms']['median']:6.2f} ms"
                 f"  host {record['host_ms']['median']:6.2f}  {gpu_text}"
                 f"  {record['tokens_per_second']:6.2f} tok/s"
@@ -462,6 +513,28 @@ def main(argv: list[str] | None = None) -> int:
                 print("  text:", repr(detokenize(index, [first, *ids])), flush=True)
             if args.profile_host:
                 profile_host(step, args.prompt_ids, new_tokens=args.max_new_tokens)
+
+    # a faster variant must decode the same tokens as the one it replaces
+    def compare(record, field: str, baseline: str, label: str) -> None:
+        keys = ("layers", "top_k", "mode", "expert_kernel", "host_delay_ms")
+        twin = next((r for r in records if r[field] == baseline and all(
+            r[k] == record[k] for k in keys if k != field)), None)
+        if twin is None:
+            return
+        ours = [record["first_token_id"], *record["generated_ids"]]
+        theirs = [twin["first_token_id"], *twin["generated_ids"]]
+        split = next((i for i, (a, b) in enumerate(zip(ours, theirs)) if a != b), None)
+        record[f"tokens_match_{baseline}"] = split is None
+        print(f"L={record['layers']:2d} top_k={record['top_k']} {label}: tokens "
+              + ("identical" if split is None else f"diverge at token {split}")
+              + f", {twin['step_ms']['median'] / record['step_ms']['median']:.2f}x faster",
+              flush=True)
+
+    for record in records:
+        if record["mode"] == "graph":
+            compare(record, "mode", "eager", f"graph vs eager ({record['expert_kernel']})")
+        if record["expert_kernel"] == "gemv":
+            compare(record, "expert_kernel", "grouped", f"gemv vs grouped ({record['mode']})")
 
     if args.output:
         Path(args.output).write_text(json.dumps(
