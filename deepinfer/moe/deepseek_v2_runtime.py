@@ -594,14 +594,27 @@ class GGUFExpertStore:
         resolved = tuple(entry for entry in entries if entry is not None)
         if len(resolved) != len(ids):
             raise RuntimeError("internal error: expert entry was not resolved")
-        pointers = tuple(
-            torch.tensor(
+        # Reuse one buffer per (layer, projection) instead of allocating three
+        # small tensors every decode step.  The kernels only read the first
+        # len(resolved) entries, so a view is enough.
+        if not hasattr(self, "_ptr_buffers"):
+            self._ptr_buffers = {}
+        pointers_list: list[torch.Tensor] = []
+        for projection in range(3):
+            key = (layer_idx, projection)
+            buffer = self._ptr_buffers.get(key)
+            if buffer is None or buffer.numel() < len(resolved):
+                buffer = torch.empty(
+                    max(len(resolved), 8), dtype=torch.int64, device=self.device
+                )
+                self._ptr_buffers[key] = buffer
+            buffer[: len(resolved)] = torch.tensor(
                 [entry[projection].data_ptr() for entry in resolved],
                 dtype=torch.int64,
                 device=self.device,
             )
-            for projection in range(3)
-        )
+            pointers_list.append(buffer[: len(resolved)])
+        pointers = tuple(pointers_list)
         specs = tuple(
             self._specs[(layer_idx, projection)]
             for projection in ("gate", "up", "down")
