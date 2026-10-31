@@ -77,17 +77,24 @@ def moe_forward_batched(
     tokens = hidden.shape[0]
     hidden_f32 = hidden.float()
 
-    # gather first, then widen: only top_k slices are ever converted, so this
-    # costs a few MB rather than a full copy of the expert stack
-    gate = expert_gate[expert_ids].float()   # [tokens, top_k, inter, hidden]
-    up = expert_up[expert_ids].float()
-    down = expert_down[expert_ids].float()
-    x = hidden_f32.unsqueeze(1).expand(tokens, top_k, hidden.shape[1])
+    # Keep the matmuls in the weights' own dtype.  Widening to fp32 first
+    # doubles the gathered traffic and gives up tensor cores; fp16 bmm still
+    # accumulates in fp32 internally.
+    compute = expert_gate.dtype
+    gate = expert_gate[expert_ids]           # [tokens, top_k, inter, hidden]
+    up = expert_up[expert_ids]
+    down = expert_down[expert_ids]
+    x = hidden.to(compute).unsqueeze(1).expand(tokens, top_k, hidden.shape[1])
+    flat_x = x.reshape(-1, x.shape[2]).unsqueeze(-1)
 
-    gate_out = torch.bmm(gate.reshape(-1, gate.shape[2], gate.shape[3]), x.reshape(-1, x.shape[2]).unsqueeze(-1)).reshape(tokens, top_k, gate.shape[2])
-    up_out = torch.bmm(up.reshape(-1, up.shape[2], up.shape[3]), x.reshape(-1, x.shape[2]).unsqueeze(-1)).reshape(tokens, top_k, up.shape[2])
+    gate_out = torch.bmm(
+        gate.reshape(-1, gate.shape[2], gate.shape[3]), flat_x
+    ).reshape(tokens, top_k, gate.shape[2])
+    up_out = torch.bmm(
+        up.reshape(-1, up.shape[2], up.shape[3]), flat_x
+    ).reshape(tokens, top_k, up.shape[2])
     if activation == "silu":
-        act = gate_out * torch.sigmoid(gate_out)
+        act = torch.nn.functional.silu(gate_out)
     else:
         act = torch.nn.functional.gelu(gate_out)
     combined = act * up_out
@@ -95,7 +102,8 @@ def moe_forward_batched(
         down.reshape(-1, down.shape[2], down.shape[3]),
         combined.reshape(-1, combined.shape[2]).unsqueeze(-1),
     ).reshape(tokens, top_k, hidden.shape[1])
-    return (down_out * weights.unsqueeze(-1)).sum(dim=1).to(hidden.dtype)
+    result = (down_out * weights.to(compute).unsqueeze(-1)).sum(dim=1)
+    return result.to(hidden.dtype)
 
 
 def reference_moe_forward(
