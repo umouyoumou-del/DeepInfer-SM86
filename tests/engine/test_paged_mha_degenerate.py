@@ -63,35 +63,43 @@ def _reference(query, cache) -> torch.Tensor:
     not torch.cuda.is_available() or not native_paged_gqa_decode_available(),
     reason="native paged GQA kernel unavailable",
 )
-def test_mha_shapes_are_accepted() -> None:
-    cache = _build()
-    query = torch.randn(BATCH, HEADS, 1, HEAD_DIM, dtype=torch.float16, device="cuda")
-    out = native_paged_gqa_decode(
-        query, cache, scale=HEAD_DIM**-0.5, sliding_window=None, softcap=None
+def test_mha_written_through_update_matches_reference() -> None:
+    """Build the cache through the real write path, not by hand-filling pools."""
+
+    torch.manual_seed(11)
+    total = PAST + 1
+    block_table = torch.arange(BLOCKS, dtype=torch.long, device="cuda").unsqueeze(0)
+    key_pool = torch.zeros(
+        BLOCKS, HEADS, BLOCK, HEAD_DIM, dtype=torch.float16, device="cuda"
     )
-    assert out is not None, "kernel refused MHA shapes (16 heads, 16 kv heads)"
-    assert out.shape == query.shape
+    value_pool = torch.zeros_like(key_pool)
+    # everything the kernel can reach is written with known values
+    keys = torch.randn(BATCH, HEADS, total, HEAD_DIM, dtype=torch.float16, device="cuda")
+    values = torch.randn_like(keys)
 
+    cache = PagedLayerKVCache(
+        key_pool=key_pool,
+        value_pool=value_pool,
+        block_table=block_table,
+        seq_lens=torch.tensor([PAST], dtype=torch.long, device="cuda"),
+        block_size=BLOCK,
+        max_length=total,
+        layer_index=0,
+        new_tokens=1,
+    )
+    cache.update(keys, values, torch.arange(total, device="cuda").unsqueeze(0))
 
-@pytest.mark.xfail(
-    reason=(
-        "Harness fixture is probably wrong, not the kernel. Verified so far: "
-        "key_pool layout is [blocks, kv_heads, block, head_dim]; the kernel "
-        "computes kv_group = num_heads/num_kv_heads = 1 and kv_head = head, so "
-        "its MHA indexing is correct in principle; and it attends "
-        "seq_lens + new_tokens positions, with max_length (not the pool "
-        "capacity) driving the thread count. Output still differs from SDPA by "
-        "2.56, so a fixture derived from a known-good caller is needed before "
-        "the port can claim the kernel is reusable unchanged."
-    ),
-    strict=True,
-)
-def test_mha_matches_reference() -> None:
-    cache = _build(seed=3)
     query = torch.randn(BATCH, HEADS, 1, HEAD_DIM, dtype=torch.float16, device="cuda")
     got = native_paged_gqa_decode(
         query, cache, scale=HEAD_DIM**-0.5, sliding_window=None, softcap=None
     )
     assert got is not None
-    expected = _reference(query, cache)
-    assert torch.allclose(got.float(), expected.float(), atol=2e-2, rtol=2e-2)
+
+    reference = torch.nn.functional.scaled_dot_product_attention(
+        query.transpose(1, 2).float(),
+        keys.transpose(1, 2).float(),
+        values.transpose(1, 2).float(),
+    ).transpose(1, 2)
+    assert torch.allclose(got.float(), reference, atol=2e-2, rtol=2e-2), (
+        got.float() - reference
+    ).abs().max()
