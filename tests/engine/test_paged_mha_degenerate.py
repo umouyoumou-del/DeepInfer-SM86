@@ -75,11 +75,14 @@ def test_mha_shapes_are_accepted() -> None:
 
 @pytest.mark.xfail(
     reason=(
-        "Kernel accepts MHA shapes but does not match an SDPA reference built "
-        "from the same pools (max abs diff 2.56 with seq_lens and seq_lens+1). "
-        "Either the pool layout or the new_tokens/write semantics differ from "
-        "what this reference assumes.  Until that is resolved the port plan "
-        "cannot claim the GQA kernel is reusable for OLMoE unchanged."
+        "Harness fixture is probably wrong, not the kernel. Verified so far: "
+        "key_pool layout is [blocks, kv_heads, block, head_dim]; the kernel "
+        "computes kv_group = num_heads/num_kv_heads = 1 and kv_head = head, so "
+        "its MHA indexing is correct in principle; and it attends "
+        "seq_lens + new_tokens positions, with max_length (not the pool "
+        "capacity) driving the thread count. Output still differs from SDPA by "
+        "2.56, so a fixture derived from a known-good caller is needed before "
+        "the port can claim the kernel is reusable unchanged."
     ),
     strict=True,
 )
