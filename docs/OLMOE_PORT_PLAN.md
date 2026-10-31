@@ -777,3 +777,33 @@ curl -s "https://hf-mirror.com/api/models/mav23/OLMoE-1B-7B-0924-GGUF" | head -c
 
 **第 3 步通过 = 移植完成**，同时能拿到 OLMoE 在 ECS 栈上的真实吞吐，
 用来验证 `0.73 GB/token` 是否带来约 2 倍于 DeepSeek 的速度。
+
+---
+
+## 20. 模型来源已解决
+
+§19 记录的三条途径里，最后一条走通了：
+
+```
+https://hf-mirror.com/bartowski/OLMoE-1B-7B-0924-Instruct-GGUF/resolve/main/
+  OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf
+→ HTTP 200, 4,213,513,024 bytes
+```
+
+关键教训：**hf-mirror 的 API 需要认证（401），但直连文件路径不需要。**
+之前 404 是因为仓库名猜错——`bartowski` 是实际可用的那个，
+`mav23` / `tensorblock` / `lmstudio-community` 的路由都不通。
+
+**正确顺序是先用搜索引擎确认仓库真实存在，再拼直连 URL**，
+而不是从候选名字里逐个试。
+
+### 自动化
+
+远端已启动下载 + 完成后自动执行：
+
+1. 校验大小与 GGUF 魔数
+2. `spec_from_gguf` 读元数据（层数、专家数、是否 MHA、有无共享专家）
+3. **对全部 16 层逐一 `validate_layer`**——张量缺失或形状不符立即报出
+
+这一步通过，就说明真实 checkpoint 与 §15 的假设完全一致，
+剩下的只有前向数值对齐。
