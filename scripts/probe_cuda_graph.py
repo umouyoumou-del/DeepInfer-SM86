@@ -52,20 +52,30 @@ def main(argv: list[str] | None = None) -> int:
     x = torch.randn((E, 1, K), dtype=torch.float16, device="cuda")
     counts = torch.ones(E, dtype=torch.int32, device="cuda")
 
+    import cupy as cp
+
+    def _on_torch_stream(fn):
+        # The runtime wraps every CuPy launch in ExternalStream(current torch
+        # stream); without this the kernels land on CuPy's null stream and
+        # torch.cuda.graph() records an empty graph.
+        stream = torch.cuda.current_stream()
+        with cp.cuda.ExternalStream(stream.cuda_stream):
+            return fn()
+
     def gate_up() -> torch.Tensor:
-        return fused_gate_up_gemm_ptr_grouped(
+        return _on_torch_stream(lambda: fused_gate_up_gemm_ptr_grouped(
             x, gptr, uptr, counts, n_experts=E, max_count=1,
             out_features=N, k_size=K, gate_qtype="Q4_K", up_qtype="Q4_K",
             gate_row_bytes=gate_row, up_row_bytes=gate_row,
-        )
+        ))
 
     hidden = gate_up().detach()
 
     def down_proj() -> torch.Tensor:
-        return fused_down_gemm_ptr_grouped(
+        return _on_torch_stream(lambda: fused_down_gemm_ptr_grouped(
             hidden, dptr, counts, n_experts=E, max_count=1,
             out_features=V, k_size=N, down_qtype="Q8_0", down_row_bytes=down_row,
-        )
+        ))
 
     eager_gu = _time(gate_up, args.repeats)
     eager_dn = _time(down_proj, args.repeats)

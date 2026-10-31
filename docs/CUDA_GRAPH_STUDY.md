@@ -233,50 +233,67 @@ pin-all 稳态 67.0 ms/token。§6 测得的 launch + 同步开销是
 
 ---
 
-## 8. 探针实验：捕获成功了吗？
+## 8. 探针实验：空的图，以及修好之后的真实数字
 
 `scripts/probe_cuda_graph.py` 捕获单个固定形状的 fused expert chunk
-（6 专家，max_count=1，gate/up Q4_K + down Q8_0），对比 eager 与 graph replay：
+（6 专家，max_count=1，gate/up Q4_K + down Q8_0），对比 eager 与 graph replay。
+
+### 第一次：捕获到空图（结果作废）
 
 ```
-eager   gate_up 193.3 us   down 119.1 us   sum 312.4 us
-graph   gate_up+down replayed together:    29.5 us
-per-chunk speedup: 10.59x
+eager 312.4 us   graph 29.5 us   "10.59x"
 ```
 
-**这个 10.6 倍不能用。** 运行时 PyTorch 给出了警告：
+PyTorch 警告 `The CUDA Graph is empty`。原因是探针**直接调用**
+`fused_*_ptr_grouped`，而 kernel 是 `cp.RawKernel`，不指定 stream 时
+落在 **CuPy 的 null stream** 上；`torch.cuda.graph()` 只记录 torch stream 上的操作。
+29.5 µs 是 replay 空图的开销。
 
-```
-UserWarning: The CUDA Graph is empty. This usually means that the graph was
-attempted to be captured on wrong device or stream.
-```
+**运行时本身是对的**——它用 `cp.cuda.ExternalStream(stream.cuda_stream)`
+把 kernel 绑到 torch stream，只有探针漏了这层。
 
-**捕获到的是空图**，29.5 µs 只是 replay 一个空图的开销，不是真实执行时间。
+### 第二次：补上 stream 绑定
 
-### 原因
-
-我们的 kernel 由 **CuPy** 通过 `cp.cuda.ExternalStream` 启动，
-而 `torch.cuda.graph()` 只捕获 PyTorch 自己的 stream 上的操作。
-传入了 CuPy 的 stream 句柄，但 CuPy 的 kernel launch 仍走它自己的
-launch 路径，因此**没有被记录进图**。
-
-### 但 eager 的数字本身很有信息量
-
-```
-eager 312.4 us  vs  内存上限 38.5 us（28.3 MB @ 736 GB/s）
+```python
+with cp.cuda.ExternalStream(torch.cuda.current_stream().cuda_stream):
+    fused_gate_up_gemm_ptr_grouped(...)
 ```
 
-**约 87% 的 eager 时间是 launch 与同步开销**，与 §6 的
-"每 token 3,239 次 launch"完全一致。也就是说：
+```
+eager   gate_up 213.4 us   down 140.0 us   sum 353.4 us
+graph   gate_up+down replayed together:   198.4 us
+per-chunk speedup: 1.78x
+x27 layers: 9.5 -> 5.4 ms/token
+```
 
-- **诊断成立**：开销主导，值得消除；
-- **手段未验证**：需要用 CuPy 自己的 graph 设施
-  （`cupy.cuda.Stream` + `cupyx.graph` / stream capture），
-  而不是 `torch.cuda.graph`。
+**1.78 倍，无警告，是真图。**
 
-### 下一步（未做）
+### 但这个 1.78 倍换算到端到端只有约 6%
 
-1. 改用 CuPy 侧的 graph capture，确认生成的图非空；
-2. 用 `torch.cuda.graph` 与 CuPy graph 混合时，必须让所有 kernel
-   跑在**同一个被捕获的 stream** 上，否则图的边界会断开；
-3. 只有在**非空图**上复现出明显加速，才值得去做 27 层的完整捕获。
+```
+MoE chunk 每 token   9.5 ms（eager） → 5.4 ms（graph）   省 4.1 ms
+pin-all 稳态每 token 79.7 ms（中位数）
+```
+
+省 4.1 / 79.7 ≈ **5%**。
+
+原因是 §6 的 3,239 次 launch 里，**大部分不在 MoE chunk 内**——
+attention、elementwise、`_to_copy` 都在别处。只对 MoE 做 Graph 收益有限。
+
+### 端到端若能全捕获
+
+§6 测得 launch 15.6 ms + 同步 8.1 ms = **24 ms/token**（占 79.7 的 30%）。
+若全部消除：79.7 → 约 56 ms/token，即 **1.4 倍**。
+
+这与 §7 修正后的估计（1.2–1.5×）一致。
+
+### 结论
+
+| 层 | eager | graph | 倍数 | 端到端贡献 |
+|---|---:|---:|---:|---:|
+| 单个 expert chunk | 353 µs | 198 µs | **1.78×** | ~5% |
+| 端到端（若全捕获） | 79.7 ms | ~56 ms | 1.4× | 30% |
+
+**Graph 可做，但天花板是 1.4 倍，不是数量级。**
+真正想要数量级，必须先解决 §6 里那 3,239 次 launch 的**来源**——
+把逐层 Python 编排整体下沉，而不是给现有编排套一层图。
