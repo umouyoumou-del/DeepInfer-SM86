@@ -483,3 +483,54 @@ tests/moe   91 passed
 
 所有**可独立验证的数学与格式模块**都已就绪，剩下的是把它们组装成一个
 runtime 并做端到端 token 对齐。
+
+---
+
+## 14. 移植进度：ModelSpec 已完成
+
+新增 `deepinfer/moe/olmoe_spec.py`：
+
+```python
+spec = spec_from_gguf(GGUFIndex(path))
+# block_count=16  head_count=head_count_kv=16  head_dim=128
+# expert_count=64 expert_used_count=8  is_multi_head=True  kv_group_size=1
+# has_shared_experts=False      moe_layer_indices=(0..15)
+```
+
+设计意图：**把结构事实从元数据读出来，而不是从张量名推断**——
+这正是 §9 错误的直接补救。
+
+### 自动校验的假设
+
+| 检查 | 作用 |
+|---|---|
+| `general.architecture == "olmoe"` | 防止误喂 DeepSeek 的 GGUF |
+| `hidden % head_count == 0` | head_dim 必须整除 |
+| `head_count % head_count_kv == 0` | 保证 `kv_group_size` 有意义 |
+| 必需字段存在 | 缺字段立即报错，而不是默认成 0 之后静默出错 |
+| **扫描 `_shexp` 张量** | 若存在共享专家则 `has_shared_experts=True`——**用事实覆盖假设** |
+| 扫描 `ffn_gate_exps` | 得出真正的 MoE 层列表（不假定每层都是 MoE） |
+
+### 验证（6 个测试）
+
+前 5 个用合成元数据覆盖正常路径与四种错误路径；
+第 6 个在真实 GGUF 存在时运行，断言
+`is_multi_head`、`has_shared_experts is False`、`head_dim == 128` 等**事实**。
+
+```
+tests/moe   97 passed
+全量        195 passed
+```
+
+### 进度
+
+| 项 | 状态 |
+|---|---|
+| Q6_K dequant / 专家读取 / QK-norm / Router / MHA 内核 / MoE 块 | ✅ 全部验证 |
+| **ModelSpec** | ✅ **验证** |
+| 组装 runtime | 未开始（1–1.5 天） |
+| token 对齐 | 未开始（0.5 天） |
+| **剩余** | **1.5–2 天** |
+
+到这一步，OLMoE 需要的**每一个独立组件**都已存在且被独立测试覆盖。
+剩下的工作是把它们串起来——一件需要连续时间的事。
