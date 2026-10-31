@@ -737,3 +737,43 @@ fp32 下 28 GB，超出本机 16 GB 内存。要对齐 token，需要：
 
 后者更直接，且能顺带测出 OLMoE 在 ECS 栈上的真实吞吐——
 这正是移植的最初目的（验证 0.73 GB/token 是否带来约 2 倍于 DeepSeek 的速度）。
+
+---
+
+## 19. 当前阻塞点与下一位接手者的最短路径
+
+移植的**代码部分已完成**（§16–§18）：整层与整模型与 transformers 逐元素一致，
+真实 GGUF 权重可读、可反量化、可前向。
+
+剩下的是**端到端 token 对齐**，卡在"把 3.92 GB 的 OLMoE GGUF 放到一台
+有 32 GB 显存的机器上"。尝试记录：
+
+| 途径 | 结果 |
+|---|---|
+| ModelScope `lmstudio-community` / `second-state` / `Oliverhzk` | 仓库不存在（404） |
+| `hf-mirror.com` + `mav23/OLMoE-1B-7B-0924-GGUF` | 镜像可达（返回 404 而非超时），但文件名未猜对 |
+| 直接从本机上传 3.92 GB | 可行但慢（约 1 小时），未做 |
+
+### 最短路径（建议）
+
+**从本机上传**，不要再猜远端仓库名：
+
+```powershell
+# 本地 F: 盘可用，先把模型打成可分片上传的包
+# 远端用 tar 从 stdin 解包（本项目已验证该方式可行）
+```
+
+或用 `hf-mirror.com` 但**先列出仓库文件**再下载：
+
+```bash
+curl -s "https://hf-mirror.com/api/models/mav23/OLMoE-1B-7B-0924-GGUF" | head -c 2000
+```
+
+### 拿到模型之后的三步
+
+1. 以 fp16 逐层加载（16 层 × 约 800 MB ≈ 13 GB，32 GB 卡够）；
+2. 用 `olmoe_model.forward()` 生成 greedy token；
+3. 与 `llama.cpp`（`ollama run`）对同一 prompt 的输出逐 token 比对。
+
+**第 3 步通过 = 移植完成**，同时能拿到 OLMoE 在 ECS 栈上的真实吞吐，
+用来验证 `0.73 GB/token` 是否带来约 2 倍于 DeepSeek 的速度。
