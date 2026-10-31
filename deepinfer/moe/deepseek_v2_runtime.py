@@ -215,6 +215,7 @@ class GGUFExpertStore:
         parallel_read_workers: int = 8,
         expert_cache_mb: int = 0,
         gpu_expert_cache_mb: int = 0,
+        pin_all_experts: bool = False,
         predictive_cache_mb: int = 256,
         ecs: Any = None,
     ) -> None:
@@ -1339,6 +1340,7 @@ class DeepSeekV2LiteGGUFRuntime:
         ecs_profile: str | Path | None = None,
         expert_cache_mb: int = 0,
         gpu_expert_cache_mb: int = 0,
+        pin_all_experts: bool = False,
         fused_moe: bool = True,
         shared_experts_device: str = "auto",
         dense_mlp_device: str = "auto",
@@ -1547,6 +1549,7 @@ class DeepSeekV2LiteGGUFRuntime:
             if self.ecs_controller is not None
             else int(expert_cache_mb)
         )
+        self.pin_all_experts = bool(pin_all_experts)
         effective_gpu_expert_cache_mb = (
             max(int(gpu_expert_cache_mb), int(ecs_l1_mb))
             if self.ecs_controller is not None
@@ -3076,7 +3079,12 @@ class DeepSeekV2LiteGGUFRuntime:
             # working set.  Free the previous request's cache first, keep
             # prefill on the contiguous path, then start decode with a clean
             # GPU packed cache.
-            expert_store.clear_gpu_cache()
+            if not self.pin_all_experts:
+                # pin-all keeps the resident experts across requests; prefill
+                # never reads this cache (it runs with the cache deactivated
+                # and takes the staged path), so leaving it in place is safe -
+                # the only cost is VRAM headroom during prefill.
+                expert_store.clear_gpu_cache()
             expert_store.set_gpu_cache_active(False)
         torch.cuda.reset_peak_memory_stats()
         cache = DynamicCache()
@@ -3101,7 +3109,8 @@ class DeepSeekV2LiteGGUFRuntime:
         )
         prefill_seconds = time.perf_counter() - prefill_start
         if expert_store is not None and expert_store.gpu_cache_configured():
-            expert_store.clear_gpu_cache()
+            if not self.pin_all_experts:
+                expert_store.clear_gpu_cache()
             expert_store.set_gpu_cache_active(True)
         generated = [next_token]
         total_tokens = prompt_tokens + 1

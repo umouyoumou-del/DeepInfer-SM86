@@ -261,6 +261,7 @@ def main() -> int:
         ),
         expert_cache_mb=args.expert_cache_mb,
         gpu_expert_cache_mb=args.gpu_expert_cache_mb,
+        pin_all_experts=bool(getattr(args, "pin_all_experts", False)),
         fused_moe=not args.no_fused_moe,
         shared_experts_device=args.shared_experts_device,
         dense_mlp_device=args.dense_mlp_device,
