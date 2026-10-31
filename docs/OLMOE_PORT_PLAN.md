@@ -643,3 +643,49 @@ transformers 的 layer 由 model body 外部传入 mask，不传就是双向注�
 | 组装完整 runtime（嵌入 + 16 层 + LM head） | 未开始（0.5–1 天） |
 | token 对齐 | 未开始（0.5 天） |
 | **剩余** | **1–1.5 天** |
+
+---
+
+## 17. 完整模型组装已通过 transformers 对照
+
+新增 `deepinfer/moe/olmoe_model.py`：
+
+```python
+logits = forward(input_ids, weights, layer_weights,
+                 num_heads=16, eps=1e-5, rope_base=10000.0, top_k=8,
+                 tie_word_embeddings=False)
+```
+
+嵌入 → 16 层 → final norm → LM head，含 causal mask。
+
+### 验证
+
+与 `transformers.OlmoeForCausalLM` 整体对照（2 层小配置 + 随机权重，`atol=1e-4`）：
+
+| 测试 | 结果 |
+|---|---|
+| 共享词嵌入（`tie_word_embeddings=True`） | PASSED |
+| 独立 LM head（`tie_word_embeddings=False`，即真实 OLMoE 的配置） | PASSED |
+| 层数为 0 时报错 | PASSED |
+
+```
+全量 206 passed
+```
+
+**两种词嵌入配置都对**，这一点重要：OLMoE-1B-7B 的 GGUF 里有独立的
+`output.weight`（§15 已确认），所以实际走的是 `tie=False` 分支；
+但把两种都测过，避免将来换 checkpoint 时踩坑。
+
+### 进度
+
+| 项 | 状态 |
+|---|---|
+| Q6_K / 专家读取 / Router / MHA / MoE 块 / ModelSpec / 权重校验 / QK-norm | ✅ |
+| 整层组装 | ✅ 与 transformers 一致 |
+| **完整模型组装** | ✅ **与 transformers 一致（两种词嵌入配置）** |
+| 接 GGUF 真实权重跑通 | 未开始（0.5 天） |
+| token 对齐验证 | 未开始（0.5 天） |
+| **剩余** | **1 天** |
+
+前面所有组件都是"与独立实现比对"，这一步是**第一次端到端整体比对**——
+输入 token id、输出 logits，中间 16 层全部参与。它通过意味着整个组装链没有接错。
