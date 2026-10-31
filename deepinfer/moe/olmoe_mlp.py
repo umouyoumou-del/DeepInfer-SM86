@@ -53,6 +53,51 @@ def moe_forward(
     return output.to(hidden.dtype)
 
 
+def moe_forward_batched(
+    hidden: torch.Tensor,
+    gate_weight: torch.Tensor,
+    expert_gate: torch.Tensor,
+    expert_up: torch.Tensor,
+    expert_down: torch.Tensor,
+    *,
+    top_k: int,
+    activation: str = "silu",
+) -> torch.Tensor:
+    """Same maths as ``moe_forward`` but with no per-expert Python loop.
+
+    Gathers the selected experts into one batch and uses ``bmm``, so a token
+    costs a fixed handful of kernel launches instead of ``top_k`` matmul triples.
+    Must agree with ``moe_forward``; a test pins that.
+    """
+
+    if activation not in ("silu", "gelu"):
+        raise ValueError(f"unsupported activation {activation!r}")
+
+    expert_ids, weights = route_topk(hidden, gate_weight, top_k=top_k)
+    tokens = hidden.shape[0]
+    hidden_f32 = hidden.float()
+
+    # gather first, then widen: only top_k slices are ever converted, so this
+    # costs a few MB rather than a full copy of the expert stack
+    gate = expert_gate[expert_ids].float()   # [tokens, top_k, inter, hidden]
+    up = expert_up[expert_ids].float()
+    down = expert_down[expert_ids].float()
+    x = hidden_f32.unsqueeze(1).expand(tokens, top_k, hidden.shape[1])
+
+    gate_out = torch.bmm(gate.reshape(-1, gate.shape[2], gate.shape[3]), x.reshape(-1, x.shape[2]).unsqueeze(-1)).reshape(tokens, top_k, gate.shape[2])
+    up_out = torch.bmm(up.reshape(-1, up.shape[2], up.shape[3]), x.reshape(-1, x.shape[2]).unsqueeze(-1)).reshape(tokens, top_k, up.shape[2])
+    if activation == "silu":
+        act = gate_out * torch.sigmoid(gate_out)
+    else:
+        act = torch.nn.functional.gelu(gate_out)
+    combined = act * up_out
+    down_out = torch.bmm(
+        down.reshape(-1, down.shape[2], down.shape[3]),
+        combined.reshape(-1, combined.shape[2]).unsqueeze(-1),
+    ).reshape(tokens, top_k, hidden.shape[1])
+    return (down_out * weights.unsqueeze(-1)).sum(dim=1).to(hidden.dtype)
+
+
 def reference_moe_forward(
     hidden: torch.Tensor,
     gate_weight: torch.Tensor,

@@ -85,3 +85,16 @@ def test_rejects_bad_inputs() -> None:
             hidden, gate_weight, expert_gate, expert_up, expert_down[:-1],
             top_k=TOP_K,
         )
+
+def test_batched_matches_loop() -> None:
+    from deepinfer.moe.olmoe_mlp import moe_forward_batched
+
+    gate_weight, expert_gate, expert_up, expert_down = _weights(seed=9)
+    hidden = torch.randn(6, HIDDEN)
+    looped = moe_forward(
+        hidden, gate_weight, expert_gate, expert_up, expert_down, top_k=TOP_K
+    )
+    batched = moe_forward_batched(
+        hidden, gate_weight, expert_gate, expert_up, expert_down, top_k=TOP_K
+    )
+    assert torch.allclose(looped, batched, atol=2e-4), (looped - batched).abs().max()

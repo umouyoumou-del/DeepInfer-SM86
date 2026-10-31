@@ -850,7 +850,9 @@ OLMoE 更慢，因为这条路径是**逐层 Python 循环 + 每个专家单独 
 | 问题 | 原因 | 修法 |
 |---|---|---|
 | `ModuleNotFoundError: olmoe_spec` | 远端仓库是旧版，新模块没上传 | 重新打包上传 `deepinfer/ scripts/ tests/` |
-| `nohup: failed to run /root/gen.sh` | **脚本 CRLF 换行**，`#!/bin/bash` 使 shebang 失效 | `sed -i 's/$//'` 或 `bash script.sh` |
+| `nohup: failed to run /root/gen.sh` | **脚本 CRLF 换行**，`#!/bin/bash
+` 使 shebang 失效 | `sed -i 's/
+$//'` 或 `bash script.sh` |
 
 第二个尤其值得记：**文件存在但报 "No such file or directory"** 时，
 几乎总是 shebang 或换行符问题，不是路径问题。
@@ -867,3 +869,58 @@ OLMoE 更慢，因为这条路径是**逐层 Python 循环 + 每个专家单独 
 
 **移植本身已完成**：OLMoE 能在本项目栈上加载并正确生成。
 剩下的两项都是后续工作，不再是移植的组成部分。
+
+---
+
+## 22. 性能 profile：瓶颈不是 Python 执行层
+
+有人（用户）提出"Python 执行层太慢，应转 C++ 直接操控显存里的专家"。
+按今天反复得到的教训，**先 profile 再决定**。结果与直觉不同。
+
+### 测量（4080 SUPER，真实 checkpoint，单次 forward）
+
+```
+wall = 154 ms      cpu = 96 ms      cuda = 253 ms（跨流累计）
+总 op 数 = 9,176（约 574 op/层）
+```
+
+### 时间去向
+
+| 项 | 每 forward | 次数 | 说明 |
+|---|---:|---:|---|
+| **`cudaStreamSynchronize`** | **66.8 ms** | **16** | **每层一次，单次 4.2 ms** |
+| `aten::copy_`（CUDA） | 37.0 ms | 484 | dtype 转换 |
+| `aten::_to_copy` | 36.9 ms | 436 | `.float()` / `.to()` |
+| `aten::index`（CUDA） | 24.5 ms | 48 | **gather 选中的专家** |
+| `cudaLaunchKernel`（CPU） | 7.0 ms | 1,549 | **Python 编排的全部开销** |
+
+### 关键结论
+
+1. **Python 只占 7 ms / 154 ms（4.5%）**。把执行层改写成 C++ 最多省这么多，
+   **不会带来数量级提升**——反而要付出整个 runtime 重写的代价。
+2. **最大单项是每层一次的 CUDA 同步，67 ms**（43%）。这是某处 `.item()`
+   或等价的显式同步，与语言无关，C++ 里同样会同步。
+3. **gather + dtype 转换合计 61 ms**（40%），根因是**把 fp16 专家 gather 出来再转 fp32**，
+   这一步既复制又加宽。
+
+### 正确的优化顺序（与"C++ 重写"无关）
+
+| 优先级 | 手段 | 预计 |
+|---|---|---|
+| 1 | 找出并消除每层的同步点 | 最多省 67 ms（43%） |
+| 2 | 用**打包量化权重 + 指针数组 kernel** 取代 gather+转换 | 省约 61 ms（40%） |
+| 3 | 才轮到减少 Python 编排（7 ms） | ≤5% |
+
+第 2 项正是 DeepSeek 运行时已有的
+`fused_gate_up_gemm_ptr_grouped` / `fused_down_gemm_ptr_grouped`——
+它们直接接受**每个专家的指针**，不复制权重。
+OLMoE 的 Q4_K / Q6_K 已经被 §8 的 kernel 支持覆盖，
+所以这条路是通的，只是还没接。
+
+### 教训（第七次同类）
+
+**"用 C++ 重写会更快"是一个假设，不是结论。**
+154 ms 里 Python 只占 7 ms——如果按这个假设动手，
+会花数周重写、然后发现只快 4%。
+
+**先 profile，再决定改什么语言。**

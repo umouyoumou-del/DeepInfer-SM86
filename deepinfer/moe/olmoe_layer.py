@@ -11,7 +11,7 @@ import math
 
 import torch
 
-from deepinfer.moe.olmoe_mlp import moe_forward
+from deepinfer.moe.olmoe_mlp import moe_forward_batched
 
 
 def rms_norm(hidden: torch.Tensor, weight: torch.Tensor, eps: float) -> torch.Tensor:
@@ -95,7 +95,7 @@ def decoder_layer_forward(
     residual = hidden
     normed = rms_norm(hidden, weights["ffn_norm"], eps)
     flat = normed.reshape(batch * tokens, hidden_size)
-    experts = moe_forward(
+    experts = moe_forward_batched(
         flat,
         weights["router"].t(),
         weights["expert_gate"],
