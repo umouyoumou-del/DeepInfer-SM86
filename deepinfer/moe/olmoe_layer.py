@@ -74,14 +74,26 @@ def decoder_layer_forward(
     rope_base: float,
     top_k: int,
     attention_mask: torch.Tensor | None = None,
+    timings: dict[str, float] | None = None,
 ) -> torch.Tensor:
     """One OLMoE layer: attn(norm) + MLP(norm), each with a residual."""
 
     batch, tokens, hidden_size = hidden.shape
     head_dim = hidden_size // num_heads
 
+    marks: list[tuple[str, torch.cuda.Event]] = []
+
+    def _stamp(name: str) -> None:
+        if timings is None:
+            return
+        event = torch.cuda.Event(enable_timing=True)
+        event.record()
+        marks.append((name, event))
+
+    _stamp("start")
     residual = hidden
     normed = rms_norm(hidden, weights["attn_norm"], eps)
+    _stamp("attn_norm")
     query = normed @ weights["q_proj"].t()
     key = normed @ weights["k_proj"].t()
     value = (normed @ weights["v_proj"].t()).view(batch, tokens, num_heads, head_dim)
@@ -108,11 +120,14 @@ def decoder_layer_forward(
     query = apply_rope(query, cos, sin)
     key = apply_rope(key, cos, sin)
 
+    _stamp("qkv_qknorm_rope")
     context = torch.nn.functional.scaled_dot_product_attention(
         query, key, value, attn_mask=attention_mask, is_causal=attention_mask is None
     )
+    _stamp("attention")
     context = context.transpose(1, 2).reshape(batch, tokens, hidden_size)
     hidden = residual + context @ weights["o_proj"].t()
+    _stamp("o_proj")
 
     residual = hidden
     normed = rms_norm(hidden, weights["ffn_norm"], eps)
@@ -140,4 +155,13 @@ def decoder_layer_forward(
             weights["expert_down"],
             top_k=top_k,
         ).reshape(batch, tokens, hidden_size)
-    return residual + experts
+    _stamp("moe")
+    out = residual + experts
+    if timings is not None and marks:
+        # elapsed_time needs both events completed, so sync first
+        torch.cuda.synchronize()
+        for index in range(1, len(marks)):
+            name = marks[index][0]
+            elapsed = marks[index - 1][1].elapsed_time(marks[index][1])
+            timings[name] = timings.get(name, 0.0) + elapsed
+    return out

@@ -1309,3 +1309,62 @@ kernel launch（CPU）                                8.7 ms
 
 **下一轮第一件事：用 CUDA event 给每个阶段单独计时，代替 profiler 累加。**
 在那之前不应再改代码——今天已经九次因为归因不可靠而走错方向。
+
+---
+
+## 30. CUDA event 计时：profiler 把 decode 高估了 4.7 倍
+
+按 §29 的建议，改成**每个阶段一对 CUDA event**，
+先 `synchronize()` 再取 `elapsed_time`（顺序反了会报 "device not ready"）。
+
+### 结果（16 层 × 单 token decode，打包权重）
+
+```
+decode wall = 19.7 ms/token          ← 50.8 tok/s
+  moe              8.78 ms   44.5%
+  qkv_qknorm_rope  6.97 ms   35.3%
+  attn_norm        1.76 ms    8.9%
+  o_proj           0.91 ms    4.6%
+  attention        0.67 ms    3.4%
+  (sum of stages) 19.09 ms
+```
+
+**19.7 ms/token，而 profiler 报的是 92.5 ms/token。**
+
+### 两个结论
+
+**1. profiler 的数字不能用来看绝对值。**
+它给 7,752 个 op 加采样开销，把 19.7 ms 放大到 92.5 ms（4.7 倍）。
+**比例可以参考，绝对值完全不可信。**
+
+这解释了 §29 里"8 元素指针 gather 要 0.6 ms"的荒谬数字——那不是 op 慢，
+是 profiler 把采样与队列排空的时间摊到了每个 op 上。
+
+**2. 同时驻留两套权重代价极大。**
+本节的 19.7 ms 是在**只加载打包权重（4.2 GB）**时测的；
+端到端生成脚本同时加载 fp16（13 GB）+ 打包（4.2 GB）= 18 GB 时，
+decode 是 103 ms/token。**差 5.2 倍。**
+
+所以 §28 "packed 接到全模型没有提升"的真实原因是
+**两套权重同时驻留把显存挤满了**，而不是 packed 路径无效。
+
+### 现在的真实成本结构
+
+| 阶段 | ms/token | 占比 |
+|---|---:|---:|
+| MoE（打包指针 kernel） | 8.78 | 44.5% |
+| QKV + QK-norm + RoPE | 6.97 | 35.3% |
+| attn_norm | 1.76 | 8.9% |
+| o_proj | 0.91 | 4.6% |
+| attention | 0.67 | 3.4% |
+
+**MoE 现在是最大项（44.5%）**，而 QKV 那 35.3% 也值得注意——
+三个 2048×2048 的投影在 fp16 下每 token 要读 25 MB，
+按 736 GB/s 应该 0.03 ms，实际 6.97 ms，**离带宽上限 200 倍**。
+
+### 遗留问题
+
+把生成脚本改成"只加载打包权重"后报 `KeyError: 'expert_gate'`——
+说明该路径下 `use_packed` 判成了 False，**需要一次调试**。
+19.7 ms 这个数字来自直接调用 `decoder_layer_forward` 的计时循环，
+不经过那条有问题的分支判断，所以数字本身可信。
