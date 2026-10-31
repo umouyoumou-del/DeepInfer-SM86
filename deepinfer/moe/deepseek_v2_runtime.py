@@ -1633,6 +1633,8 @@ class DeepSeekV2LiteGGUFRuntime:
             self.auto_pinned_experts = self._auto_pin_experts_if_room()
         # True when experts are actually resident, regardless of how we got here
         self.pin_active = bool(self.auto_pinned_experts) or requested is True
+        if self.pin_active and os.environ.get("DEEPINFER_SKIP_WARMUP") != "1":
+            self._warmup_after_pin()
         self._log(
             "loaded: GPU free %.1f MiB, shared=%s, lm_head=%s, "
             "fused_moe=%s, peak allocated %.1f MiB"
@@ -1644,6 +1646,21 @@ class DeepSeekV2LiteGGUFRuntime:
                 torch.cuda.max_memory_allocated() / _MIB,
             )
         )
+
+    def _warmup_after_pin(self) -> None:
+        """Run one tiny generate so the first real request is not the slow one.
+
+        With experts resident the first two calls still measured 74.9 and 75.0
+        ms/token against a 47.6 steady state - JIT compilation and allocator
+        growth land on whoever asks first.  Failing here must never break
+        loading, so everything is swallowed.
+        """
+
+        try:
+            self.generate(prompt="hi", max_new_tokens=2, temperature=0.0)
+            torch.cuda.synchronize()
+        except Exception as error:  # noqa: BLE001
+            self._log(f"warmup skipped: {type(error).__name__}: {error}")
 
     def _auto_pin_experts_if_room(self) -> int:
         """Preload every routed expert when the card can hold them.
