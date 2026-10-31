@@ -12,6 +12,7 @@ import math
 import torch
 
 from deepinfer.moe.olmoe_mlp import moe_forward_batched
+from deepinfer.moe.olmoe_packed import moe_forward_packed
 
 
 def rms_norm(hidden: torch.Tensor, weight: torch.Tensor, eps: float) -> torch.Tensor:
@@ -116,12 +117,27 @@ def decoder_layer_forward(
     residual = hidden
     normed = rms_norm(hidden, weights["ffn_norm"], eps)
     flat = normed.reshape(batch * tokens, hidden_size)
-    experts = moe_forward_batched(
-        flat,
-        weights["router"].t(),
-        weights["expert_gate"],
-        weights["expert_up"],
-        weights["expert_down"],
-        top_k=top_k,
-    ).reshape(batch, tokens, hidden_size)
+    use_packed = "packed" in weights and flat.shape[0] == 1
+    if use_packed:
+        # packed branch: no gather, no dtype conversion - the kernels read the
+        # Q4_K/Q6_K bytes directly through per-expert pointers
+        experts = moe_forward_packed(
+            flat,
+            weights["router"].t(),
+            weights["packed"],
+            top_k=top_k,
+            gate_out=weights["packed_gate_out"],
+            down_out=hidden_size,
+            gate_k=hidden_size,
+            down_k=weights["packed_gate_out"],
+        ).reshape(batch, tokens, hidden_size)
+    else:
+        experts = moe_forward_batched(
+            flat,
+            weights["router"].t(),
+            weights["expert_gate"],
+            weights["expert_up"],
+            weights["expert_down"],
+            top_k=top_k,
+        ).reshape(batch, tokens, hidden_size)
     return residual + experts

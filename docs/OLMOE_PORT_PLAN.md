@@ -1189,3 +1189,64 @@ x16 layers:    packed 5 ms/token  fp16 9 ms/token
 3. 端到端复测。
 
 这一步没有做——单层已验证，全模型接线还需要一轮完整时间。
+
+---
+
+## 28. 打包路径接进全模型：端到端没有变化，且我 profile 错了阶段
+
+### 结果
+
+```
+prompt "The capital of France is"
+text   " Paris.
+
+The currency of France is Euro.
+"      ← 输出不变
+decode 103 ms/token (9.71 tok/s)                          ← 之前 104 ms
+peak VRAM 18.0 GiB                                        ← 同时加载 fp16 与打包两套
+```
+
+**单层测得 packed 比 fp16 快 1.77 倍，但端到端没变。**
+
+### 原因：profile 的是 prefill，优化的是 decode
+
+§27 的 profile 用的是 `forward(ids, ...)`，其中 `ids` 是**完整 prompt（多 token）**
+——那是 **prefill**，不是单 token 的 decode 步骤。
+
+所以 `aten::index` 那 24.4 ms **主要来自 prefill 的 gather**，
+而 packed 路径只作用于 `flat.shape[0] == 1` 的 decode 步骤。
+
+`101 ms`（prefill）与 `104 ms/token`（decode）数值接近纯属巧合，
+我把它们当成同一个量了。
+
+### 这是今天第九次同类错误
+
+| # | 错误 | 性质 |
+|---|---|---|
+| 1 | 专家缓存无效 | 实验条件不成立 |
+| 2 | 驻留无提升 | 单次未预热 |
+| 3 | 94% 主机开销 | 分母漏项 |
+| 4 | 分配是瓶颈 | 噪声内 |
+| 5 | shared expert 重复上传 | 未核对日志 |
+| 6 | 每 token 743 MB | 归一化对象不随分母变 |
+| 7 | 33% attention | profiler 条目互相包含 |
+| 8 | 同步占 43% | 与 GPU 工作重叠 |
+| 9 | **packed 能提升端到端** | **profile 了错误的阶段（prefill vs decode）** |
+
+**共同点始终相同：把"看起来是那个量"当成"确实是那个量"，而没有用一次
+能区分的实验去验证。**
+
+### 打包路径仍然是有价值的
+
+- 单层数值完全一致（maxdiff 0.00000）；
+- MoE 部分快 1.77 倍；
+- 它读 0.73 GB/token 而不是 1.61 GB——**真正的收益要在 prefill 上也用打包路径时才体现**，
+  因为 prefill 才是 gather 密集的阶段。
+
+### 下一步
+
+1. **给 prefill 也接打包路径**（需要支持多 token 的 `max_count > 1` 情形）；
+2. 或者：**重新 profile decode 步骤**（`max_new_tokens=1` 循环），
+   拿到真正的 decode 分解再决定优化什么。
+
+第 2 步更便宜，且是今天反复证明有效的顺序——**先测对阶段，再动手。**

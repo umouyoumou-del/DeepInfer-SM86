@@ -33,11 +33,18 @@ def row_bytes(elements: int, qtype: str) -> int:
     return elements // 256 * per_block
 
 
-def load_packed_experts(index, name: str, *, experts: int, out_features: int, qtype: str):
-    """Copy every expert's packed slab to the device and build the pointer array."""
+def load_packed_experts(index, name: str, *, experts: int, out_features: int):
+    """Copy every expert's packed slab to the device and build the pointer array.
 
+    The quantisation type is read from the tensor itself: bartowski's OLMoE
+    mixes types per layer (layer 0 keeps down in Q6_K, layer 2 in Q4_K), so
+    hard-coding one is wrong.
+    """
+
+    info = index.tensor(name)
+    qtype = info.qtype.name
     raw = np.asarray(index.read_raw(name))
-    k_size = int(index.tensor(name).dims[0])
+    k_size = int(info.dims[0])
     stride = out_features * row_bytes(k_size, qtype)
     if raw.size != stride * experts:
         raise ValueError(
@@ -50,7 +57,7 @@ def load_packed_experts(index, name: str, *, experts: int, out_features: int, qt
         dtype=torch.int64,
         device=device,
     )
-    return storage, pointers
+    return storage, pointers, qtype
 
 
 def moe_forward_packed(
@@ -75,9 +82,9 @@ def moe_forward_packed(
     x_all = hidden.to(torch.float16).repeat(top_k, 1).unsqueeze(1)  # [top_k, 1, k]
     counts = torch.ones(top_k, dtype=torch.int32, device=device)
 
-    gate_storage, gate_ptrs = packed["gate"]
-    up_storage, up_ptrs = packed["up"]
-    down_storage, down_ptrs = packed["down"]
+    gate_storage, gate_ptrs, gate_qtype = packed["gate"]
+    up_storage, up_ptrs, up_qtype = packed["up"]
+    down_storage, down_ptrs, down_qtype = packed["down"]
 
     activation = fused_gate_up_gemm_ptr_grouped(
         x_all,
@@ -88,10 +95,10 @@ def moe_forward_packed(
         max_count=1,
         out_features=gate_out,
         k_size=gate_k,
-        gate_qtype="Q4_K",
-        up_qtype="Q4_K",
-        gate_row_bytes=row_bytes(gate_k, "Q4_K"),
-        up_row_bytes=row_bytes(gate_k, "Q4_K"),
+        gate_qtype=gate_qtype,
+        up_qtype=up_qtype,
+        gate_row_bytes=row_bytes(gate_k, gate_qtype),
+        up_row_bytes=row_bytes(gate_k, up_qtype),
     )
     expert_out = fused_down_gemm_ptr_grouped(
         activation,
@@ -101,8 +108,8 @@ def moe_forward_packed(
         max_count=1,
         out_features=down_out,
         k_size=down_k,
-        down_qtype="Q6_K",
-        down_row_bytes=row_bytes(down_k, "Q6_K"),
+        down_qtype=down_qtype,
+        down_row_bytes=row_bytes(down_k, down_qtype),
     )
     flat = expert_out.reshape(top_k, down_out)
     return (flat * weights[0].unsqueeze(-1)).sum(dim=0, keepdim=True).to(hidden.dtype)
