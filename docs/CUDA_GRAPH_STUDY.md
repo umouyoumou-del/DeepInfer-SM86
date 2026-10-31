@@ -648,3 +648,38 @@ JIT 编译与显存分配器增长的成本落在了第一个提问的人身上�
 | 加载后预热 | deepseek_v2_runtime | 首请求 −35%，噪声 1.1% |
 | `bench_decode_repeats.py` | scripts | 中位数基准 |
 | `probe_cuda_graph.py` | scripts | Graph 可行性探针 |
+
+---
+
+## 16. 一个真实回归：自动探测在 4 GiB 卡上把速度砍了 3 倍
+
+§14 的自动探测原始写法把"配置缓存预算"放在了容量检查**之前**：
+
+```python
+store._gpu_cache_limit_bytes = required   # 9086 MiB
+store.set_gpu_cache_active(True)          # ← 此时还没检查放不放得下
+if required > free * 0.7:
+    return 0                              # 已经迟了
+```
+
+在 4 GiB 的 3050 上后果是：**缓存被激活并配了 9 GB 预算**，
+于是每步都在显存里反复挤进挤出。
+
+| 指标 | 改动前 | 回归 | 修复后 |
+|---|---:|---:|---:|
+| decode | 2.45 tok/s | **0.824 tok/s** | **2.542 tok/s** |
+| 峰值显存 | 2253.7 MiB | **4329.5 MiB** | **2277.6 MiB** |
+
+修复：把容量检查移到配置之前，并在跳过时打印原因：
+
+```
+auto pin-all skipped: experts need 9086.0 MiB, only 733.9 MiB of 1048.5 MiB free fits
+```
+
+### 教训
+
+**"探测"和"生效"必须分离。** 探测阶段的任何副作用都会在最坏的情况下生效——
+这里正是如此：判定为"放不下"，但配置已经写进去了。
+
+而如果没有跑 3050 的回归验证，这个 bug 会随默认开启推到所有小显存用户身上，
+而大显存上的 8.4 倍会让它看起来完全正常。

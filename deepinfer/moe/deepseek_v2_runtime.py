@@ -1686,18 +1686,21 @@ class DeepSeekV2LiteGGUFRuntime:
         if required <= 0:
             return 0
         free = int(torch.cuda.mem_get_info()[0])
+        if required > int(free * 0.7):
+            # Check BEFORE touching the cache: configuring a budget that cannot
+            # fit leaves the store thrashing on a small card.  On a 4 GiB GPU
+            # this cost 3x throughput and pushed peak VRAM to the limit.
+            self._log(
+                "auto pin-all skipped: experts need %.1f MiB, only %.1f MiB of %.1f MiB free fits"
+                % (required / _MIB, free * 0.7 / _MIB, free / _MIB)
+            )
+            return 0
         if not store.gpu_cache_configured():  # type: ignore[union-attr]
             # Auto mode: give the store exactly enough budget to hold them all.
             store._gpu_cache_limit_bytes = required  # type: ignore[union-attr]
             layers = max(1, len(getattr(store, "layer_indices", ()) or ()))
             store._gpu_cache_per_layer = required // layers  # type: ignore[union-attr]
             store.set_gpu_cache_active(True)  # type: ignore[union-attr]
-        if required > int(free * 0.7):
-            self._log(
-                "auto pin-all skipped: experts need %.1f MiB, only %.1f MiB of %.1f MiB free fits"
-                % (required / _MIB, free * 0.7 / _MIB, free / _MIB)
-            )
-            return 0
         try:
             pinned = store.preload_gpu_experts()  # type: ignore[union-attr]
         except Exception as error:  # noqa: BLE001
