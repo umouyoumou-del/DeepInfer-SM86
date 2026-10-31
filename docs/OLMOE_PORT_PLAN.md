@@ -185,3 +185,42 @@ chunk 大小（当前默认 8 专家/chunk）需要重新调参，否则每个 c
 只有 DeepSeek 的 54%。在同一套流式栈上，理论上应该快 **1.85 倍**。
 而这正好可以检验"吞吐 ≈ 带宽 ÷ 每 token 字节"是否是跨架构规律——
 llama.cpp 侧已经验证（51.1 vs 24.5 tok/s），ECS 侧还没有。
+
+---
+
+## 8. 移植进度（2026-10-31）
+
+### 已完成：Q6_K 支持
+
+`fused_moe` 原本只支持 `Q4_K / Q5_0 / Q8_0`，OLMoE 的 `ffn_down_exps` 是 **Q6_K**。
+
+已加入 `dp_q6_k_value`（`_QTYPE_CODES["Q6_K"] = 3`），按 llama.cpp 的
+`block_q6_K` 布局实现：
+
+```
+ql[128] | qh[64] | int8 scales[16] | fp16 d   =>  210 bytes / 256 元素
+```
+
+`half = k >> 7`，`quarter = (k & 127) >> 5`，四条通路分别取
+`(ql[l] & 0xF) | (qh[l] >> 0 & 3) << 4` 等，再乘 `sc[(l>>4) + quarter*2]` 与 `d`。
+
+验证：`tests/moe/test_q6_k_dequant.py` 用**独立的纯 Python 参考实现**
+逐元素比对随机块，`rtol=1e-3`，通过。
+
+```
+tests/moe    77 passed
+全量         173 passed
+```
+
+### 剩余工作
+
+| 项 | 状态 | 估计 |
+|---|---|---|
+| Q6_K dequant | ✅ 完成并验证 | — |
+| GQA + QK-norm 适配 | 未开始 | 1.5–2 天 |
+| 无共享专家的分支短路 | 未开始 | 0.5 天 |
+| ModelSpec 抽象 | 未开始 | 1 天 |
+| token 对齐验证 | 未开始 | 0.5 天 |
+| 双卡验证 | 未开始 | 1 天 |
+
+**专家读取层已确认零改动可用**（见 `OPTIMIZATION_GENERALITY.md`）。

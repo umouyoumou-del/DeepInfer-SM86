@@ -22,7 +22,7 @@ except Exception:  # pragma: no cover - CPU-only hosts
     cp = None
 
 
-_QTYPE_CODES = {"Q4_K": 0, "Q5_0": 1, "Q8_0": 2}
+_QTYPE_CODES = {"Q4_K": 0, "Q5_0": 1, "Q8_0": 2, "Q6_K": 3}
 _KERNELS: dict[str, Any] = {}
 
 _FUSED_MOE_SOURCE = r"""
@@ -90,6 +90,36 @@ __device__ __forceinline__ float dp_q8_0_value(
     return d * (float)q;
 }
 
+__device__ __forceinline__ float dp_q6_k_value(
+    const unsigned char* row,
+    int k)
+{
+    // block_q6_K: ql[128] | qh[64] | int8 scales[16] | fp16 d  => 210 bytes
+    const unsigned char* block = row + (size_t)(k >> 8) * 210;
+    const int kk = k & 255;
+    const int half = kk >> 7;
+    const unsigned char* ql = block + half * 64;
+    const unsigned char* qh = block + 128 + half * 32;
+    const signed char* sc =
+        reinterpret_cast<const signed char*>(block + 192) + half * 8;
+    const float d = __half2float(*reinterpret_cast<const __half*>(block + 208));
+    const int r = kk & 127;
+    const int l = r & 31;
+    const int quarter = r >> 5;
+    int q;
+    if (quarter == 0) {
+        q = (ql[l] & 0xF) | (((qh[l] >> 0) & 3) << 4);
+    } else if (quarter == 1) {
+        q = (ql[l + 32] & 0xF) | (((qh[l] >> 2) & 3) << 4);
+    } else if (quarter == 2) {
+        q = (ql[l] >> 4) | (((qh[l] >> 4) & 3) << 4);
+    } else {
+        q = (ql[l + 32] >> 4) | (((qh[l] >> 6) & 3) << 4);
+    }
+    const int s = sc[(l >> 4) + quarter * 2];
+    return d * (float)s * (float)(q - 32);
+}
+
 __device__ __forceinline__ float dp_weight_value(
     const unsigned char* row,
     int k,
@@ -97,6 +127,7 @@ __device__ __forceinline__ float dp_weight_value(
 {
     if (qtype == 0) return dp_q4_k_value(row, k);
     if (qtype == 1) return dp_q5_0_value(row, k);
+    if (qtype == 3) return dp_q6_k_value(row, k);
     return dp_q8_0_value(row, k);
 }
 
