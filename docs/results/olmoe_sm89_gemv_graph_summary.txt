@@ -1,0 +1,8 @@
+L=16 top_k=8 eager gemv     step  29.19 ms  host  28.95  gpu   4.44   34.26 tok/s  1.239 GB/token (dense 0.752 + experts 0.488)  cpu-probe 23.3-44.0 ms
+L=16 top_k=8 eager grouped  step  16.63 ms  host  16.33  gpu   7.18   60.12 tok/s  1.239 GB/token (dense 0.752 + experts 0.488)  cpu-probe 21.5-23.3 ms
+L=16 top_k=8 graph gemv     step   4.04 ms  host   0.03  gpu   4.02  247.58 tok/s  1.239 GB/token (dense 0.752 + experts 0.488)  cpu-probe 21.4-23.5 ms
+L=16 top_k=8 graph grouped  step   6.63 ms  host   0.03  gpu   6.60  150.82 tok/s  1.239 GB/token (dense 0.752 + experts 0.488)  cpu-probe 21.4-23.3 ms
+L=16 top_k=8 gemv vs grouped (eager): tokens identical, 0.57x faster
+L=16 top_k=8 graph vs eager (gemv): tokens identical, 7.23x faster
+L=16 top_k=8 gemv vs grouped (graph): tokens identical, 1.64x faster
+L=16 top_k=8 graph vs eager (grouped): tokens identical, 2.51x faster
