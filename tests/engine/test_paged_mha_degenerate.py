@@ -59,6 +59,20 @@ def _reference(query, cache) -> torch.Tensor:
     return out.transpose(1, 2).to(torch.float16)
 
 
+@pytest.mark.xfail(
+    reason=(
+        "Two independent fixtures disagree with SDPA by 2.4-2.6: one that "
+        "hand-fills the pools and one that writes every reachable slot through "
+        "PagedLayerKVCache.update. Verified: key_pool layout is "
+        "[blocks, kv_heads, block, head_dim], the kernel computes "
+        "kv_group = num_heads/num_kv_heads = 1 with kv_head = head, and it "
+        "attends seq_lens + new_tokens positions with max_length driving the "
+        "thread count. Either the kernel's contract differs in a way not yet "
+        "understood, or MHA (kv_heads == heads) is not actually supported. Do "
+        "not claim the GQA kernel is reusable for OLMoE until one is settled."
+    ),
+    strict=True,
+)
 @pytest.mark.skipif(
     not torch.cuda.is_available() or not native_paged_gqa_decode_available(),
     reason="native paged GQA kernel unavailable",
