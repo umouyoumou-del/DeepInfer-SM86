@@ -385,80 +385,52 @@ tests/moe   86 passed
 
 ---
 
-## 12. "复用 paged GQA 内核"这个假设**未通过验证**
+## 12. "复用 paged GQA 内核"：先被怀疑，最终证实成立
 
 §9 曾据此把 MHA 适配估为 0.5–1 天，理由是"`head_count_kv == head_count` 时
 现有 GQA 内核退化为 MHA，可直接复用"。
 
-`tests/engine/test_paged_mha_degenerate.py` 对这一假设做了两项检查：
+### 排查过程（三次）
 
-| 检查 | 结果 |
-|---|---|
-| 16 个 query 头 / 16 个 KV 头的形状是否被接受 | ✅ **通过**，`native_paged_gqa_decode` 返回非 None，形状正确 |
-| 数值是否与 SDPA 参考实现一致 | ❌ **不通过**，最大绝对误差 2.56 |
+**第一次：手搓 pool。** 形状被接受，但数值与 SDPA 差 2.56。
 
-已经排除了"序列长度差一"这一可能：分别按 `seq_lens`（10）与 `seq_lens + 1`（11）
-构造参考实现，**两者误差相同**，说明差异不是多/少一个 token 造成的。
+**第二次：改用 `PagedLayerKVCache.update()` 写入。** 仍差 2.44。
+此时怀疑"内核契约未理解"或"MHA 不被支持"。
 
-### 未定位的原因
+**关键实验：同一夹具跑 GQA（kv_heads=4 < heads=16）。**
 
-可能是：
+```
+GQA  heads=16 kv=4   maxdiff=2.456
+MHA  heads=16 kv=16  maxdiff=2.437
+```
 
-1. `key_pool` 的物理布局与本测试的假设不同
-   （数据类注释写的是 `[num_blocks, num_kv_heads, block_size, head_dim]`，
-   但内核可能按别的顺序解释）；
-2. `new_tokens=1` 的语义是"本步 token 已写入槽位，注意长度为 seq_lens+1"，
-   而测试里该槽位是随机值——但按 11 构造参考仍不一致，所以不完全是这个；
-3. 内核做了与参考不同的 softmax 缩放或 mask 处理。
+**两者一样失败** → 问题在夹具，不在 MHA 路径。
 
-测试已标记为 `xfail(strict=True)` 并写明原因，避免留下红灯或错误的绿灯。
+**第三次：照 `scripts/validate_sm86_kernels.py` 的真实构造方式重写。**
+用 `PagedKVCacheManager` + `write_tokens` + `make_views(max_length=PAST+1, new_tokens=1)`
++ `views[0].update(...)`，参考值取自 `views[0].materialize()`：
+
+```
+test_gqa_baseline_matches    PASSED   (heads=8, kv=2)
+test_mha_matches_reference   PASSED   (heads=8, kv=8)
+```
+
+**MHA 复用成立。** 之前两次失败是因为自己拼缓存，没有走 manager 的
+`block_table` / `max_length` / `new_tokens` 约定。
+
+### 教训
+
+第三次排查里唯一的"决定性实验"是**用 GQA 做对照**——它把"内核坏了"
+和"夹具坏了"区分开了。前两次都在猜原因，而对照组一次就定位。
+
+> **怀疑某个路径有问题时,先在同一夹具下跑一条已知正常的路径。**
+> 如果它也失败,问题就在夹具,不在路径。
+
+这与今天其他几次错误同源:先有假设,再找证据;
+而正确顺序是先设计能区分两种可能的实验。
 
 ### 对排期的影响
 
-MHA 适配从 **0.5–1 天** 上调回 **1–1.5 天**——需要先弄清内核的布局约定，
-而不是直接接线。这与 §9"按命名推断架构"是同一类错误的另一面：
-**"可以直接复用"也是一个需要验证的假设。**
+MHA 适配回到 **0.5–1 天**，剩余总量 **2–2.5 天**（§11 的数字维持不变）。
 
-修正后的剩余工作量：**2.5–3 天**。
-
-### 追加排查（同日）
-
-进一步核对内核源码后，**问题更可能在测试夹具而非内核**：
-
-| 已核实 | 结论 |
-|---|---|
-| `key_pool` 布局 | `[num_blocks, num_kv_heads, block_size, head_dim]`，与测试一致 |
-| 内核的 MHA 索引 | `kv_group = num_heads / num_kv_heads = 16/16 = 1`，`kv_head = head` —— **逻辑正确** |
-| 注意位置数 | `valid_lengths = seq_lens + new_tokens`，即 11 而非 10 |
-| `max_length` 语义 | 驱动线程数，是**注意位置数**，不是池容量（首版测试传了 64，等于注意 64 个位置） |
-
-已修正 `max_length` 与参考长度，仍有 2.56 的差异，因此夹具还有别的问题。
-下一步应**从已知可用的调用方构造夹具**（`PagedKVCacheManager.build_layer_cache` 的
-真实输出），而不是手搓一个。
-
-结论不变：MHA 复用该内核**尚未证实**，排期按 1–1.5 天计。
-
-### 第二次排查：真实写入路径同样不一致
-
-按上一节的建议，用 `PagedLayerKVCache.update()` 把内核可能触及的**每一个槽位**
-都写入已知值（而不是手搓 pool），再与 SDPA 比对：
-
-```
-max abs diff = 2.44
-```
-
-**两种夹具（手搓池 / 真实写入路径）都差 2.4–2.6。**
-
-这把可能性收窄为两种：
-
-1. 内核的调用契约还有未理解之处（例如 `seq_lens` 是否已含当前 token、
-   `max_length` 与有效长度的关系、或 scale 的处理位置）；
-2. **MHA（`kv_heads == heads`）实际上并不被这条路支持**，
-   尽管形状检查会放行。
-
-在弄清其中哪一种之前，**不能声称该内核可直接复用于 OLMoE**。
-
-`tests/engine/test_paged_mha_degenerate.py` 保留为 `xfail(strict=True)`，
-并把上述两种可能写进原因。当前测试状态：**183 passed, 1 xfailed**。
-
-排期维持 **1–1.5 天**，且不再下调。
+测试现状：**184 passed**（含 GQA 基线 + MHA 各一例）。
