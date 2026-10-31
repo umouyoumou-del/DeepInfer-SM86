@@ -353,3 +353,55 @@ pin-all 之后专家权重已经常驻，这些拷贝是**别的东西**——
 2. 再决定是否投入 CUDA Graph（天花板 1.4×）；
 3. 想要数量级，只能走算子融合或把整个 forward 写成少数几个大 kernel——
    那是与"在 DeepInfer 之上做扩展"不同的工程量级。
+
+---
+
+## 10. 那 896 次 copy 是谁：pin-all 挡不住的 ~500 MB/token
+
+用 `record_shapes=True` 按输入形状分组（pin-all，4 token）：
+
+| 操作 | 次数 | 每 token | CUDA | 形状（字节） |
+|---|---:|---:|---:|---|
+| **Memcpy HtoD (Pinned→Device)** | 174 | **44** | **180.8 ms** | — |
+| `_to_copy` + `copy_` | 84 | 21 | 84.0 ms | **12,976,128 = 12.4 MB** |
+| `_to_copy` + `copy_` | 19 | 5 | 36.0 ms | **24,510,464 = 23.4 MB** |
+| `_to_copy` + `copy_` | 23 | 6 | 28.4 ms | **15,859,712 = 15.1 MB** |
+| `_to_copy` + `copy_` | 12 | 3 | 10.5 ms | 11,354,112 = 10.8 MB |
+
+### 算术
+
+```
+每 token 拷贝量 ≈ 21x12.4 + 5x23.4 + 6x15.1 + 3x10.8 ≈ 500 MB
+每 token 拷贝耗时 ≈ 37 ms（4 次运行共 148 ms）
+→ 有效带宽 ≈ 500 MB / 37 ms ≈ 13.5 GB/s
+```
+
+**13.5 GB/s 是 PCIe 的速度，不是 D2D 的速度（后者应在 TB/s 级）。**
+配合 174 次 `Memcpy HtoD (Pinned→Device)`，结论明确：
+
+> **即使专家已全部驻留显存，每 token 仍有约 500 MB 的权重在从主机重新拷进显存。**
+
+### 候选对象
+
+单个 MoE 层的 **shared expert**（`ffn_gate_shexp` / `up` / `down`，各 2816×2048 Q6_K）
+合计约 12–14 MB，与观测到的 12.4 MB / 15.1 MB 尺寸吻合；
+每 token 约 21 次也接近 26 个 MoE 层的数量级。
+
+也就是说：**shared expert 的权重没有被缓存到显存，而是每次 forward 重新 H2D 一次。**
+
+### 为什么这比 CUDA Graph 更值得做
+
+| 手段 | 收益 | 成本 |
+|---|---|---|
+| CUDA Graph 全捕获 | 约 24 ms/token（1.4×） | 4.5 天 |
+| **消除这 ~500 MB/token 的重复 H2D** | **约 37 ms/token，且可能更多**（移除后 PCIe 不再参与稳态） | 取决于定位，预计 0.5–1 天 |
+
+而且两者的收益可以叠加。
+
+### 下一步（未做）
+
+1. 在 `_embed_tokens` / `shared_experts` 路径上确认哪些权重是 mmap 直读而非常驻；
+2. 把 shared expert（及 attention）权重在 load 时一次性 `to(device)` 并保留；
+3. 用 `bench_decode_repeats.py` 复测（5 次中位数），确认 ≥30% 的变化才可信。
+
+**这一项是目前唯一还没被证伪、且量级与 launch 开销相当的方向。**
