@@ -924,3 +924,51 @@ OLMoE 的 Q4_K / Q6_K 已经被 §8 的 kernel 支持覆盖，
 会花数周重写、然后发现只快 4%。
 
 **先 profile，再决定改什么语言。**
+
+---
+
+## 23. 消除同步：只快了 5%，不是 43%
+
+§22 的 profile 指出每层一次同步占 43%。定位方式：`torch.cuda.set_sync_debug_mode("warn")`，
+它直接指出行号：
+
+```
+deepinfer/moe/olmoe_layer.py:31
+inverse = 1.0 / torch.pow(torch.tensor(base, device=device), exponent)
+```
+
+`torch.tensor(base, device=...)` 从 Python float 造 GPU 标量 → H2D 拷贝 → 同步。
+而 `build_rope` **每层调用一次** → 16 次同步。
+
+### 两次修改
+
+| 改动 | 结果 |
+|---|---|
+| 第一次：把角度计算搬到 CPU（`positions.cpu()`） | **更慢**（240 ms）——只是把同步从 H2D 换成了 D2H |
+| 第二次：**缓存 RoPE 表**，按 (tokens, head_dim, base, device, dtype) | 223 → **212 ms/token** |
+
+### 诚实的结果：5%，不是 43%
+
+```
+基线（逐专家循环）      253 ms/token   3.95 tok/s
+向量化（bmm 批量）      223 ms/token   4.48 tok/s
++ 缓存 RoPE 表          212 ms/token   4.72 tok/s
+```
+
+**profile 里的 43% 没有转化成 43% 的墙钟收益。**
+原因：那些同步与 GPU 工作**是重叠的**——CPU 在等同步时，GPU 队列里还有活可干。
+所以"某操作占 X% 时间"不等于"消掉它能省 X% 墙钟"。
+
+**这是今天第八次同类教训，而且这次是我自己的 profile 数字被误读了。**
+正确表述应该是："同步占 CPU 时间 43%，但它与 GPU 工作重叠，因此墙钟收益取决于
+CPU 是否真的是关键路径。"
+
+### 剩下的最大一项
+
+§22 的 profile 里 `aten::copy_` + `_to_copy` 合计 74 ms、`aten::index` 24.5 ms。
+根因是**把 fp16 专家 gather 出来再转 fp32**。
+
+正解是用 **打包量化权重 + 指针数组 kernel**（`fused_*_ptr_grouped`），
+权重不复制、不转换。OLMoE 的 Q4_K/Q6_K 已被 §8 的 kernel 支持覆盖。
+
+这一步还没做。
