@@ -230,3 +230,53 @@ pin-all 稳态 67.0 ms/token。§6 测得的 launch + 同步开销是
 
 所以 Graph 的合理预期是 **67 → 约 45–55 ms/token，即 1.2–1.5 倍**，
 而不是更早估计的 2–3 倍——**因为 pin-all 已经吃掉了拷贝与相当一部分空档。**
+
+---
+
+## 8. 探针实验：捕获成功了吗？
+
+`scripts/probe_cuda_graph.py` 捕获单个固定形状的 fused expert chunk
+（6 专家，max_count=1，gate/up Q4_K + down Q8_0），对比 eager 与 graph replay：
+
+```
+eager   gate_up 193.3 us   down 119.1 us   sum 312.4 us
+graph   gate_up+down replayed together:    29.5 us
+per-chunk speedup: 10.59x
+```
+
+**这个 10.6 倍不能用。** 运行时 PyTorch 给出了警告：
+
+```
+UserWarning: The CUDA Graph is empty. This usually means that the graph was
+attempted to be captured on wrong device or stream.
+```
+
+**捕获到的是空图**，29.5 µs 只是 replay 一个空图的开销，不是真实执行时间。
+
+### 原因
+
+我们的 kernel 由 **CuPy** 通过 `cp.cuda.ExternalStream` 启动，
+而 `torch.cuda.graph()` 只捕获 PyTorch 自己的 stream 上的操作。
+传入了 CuPy 的 stream 句柄，但 CuPy 的 kernel launch 仍走它自己的
+launch 路径，因此**没有被记录进图**。
+
+### 但 eager 的数字本身很有信息量
+
+```
+eager 312.4 us  vs  内存上限 38.5 us（28.3 MB @ 736 GB/s）
+```
+
+**约 87% 的 eager 时间是 launch 与同步开销**，与 §6 的
+"每 token 3,239 次 launch"完全一致。也就是说：
+
+- **诊断成立**：开销主导，值得消除；
+- **手段未验证**：需要用 CuPy 自己的 graph 设施
+  （`cupy.cuda.Stream` + `cupyx.graph` / stream capture），
+  而不是 `torch.cuda.graph`。
+
+### 下一步（未做）
+
+1. 改用 CuPy 侧的 graph capture，确认生成的图非空；
+2. 用 `torch.cuda.graph` 与 CuPy graph 混合时，必须让所有 kernel
+   跑在**同一个被捕获的 stream** 上，否则图的边界会断开；
+3. 只有在**非空图**上复现出明显加速，才值得去做 27 层的完整捕获。
