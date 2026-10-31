@@ -434,3 +434,52 @@ test_mha_matches_reference   PASSED   (heads=8, kv=8)
 MHA 适配回到 **0.5–1 天**，剩余总量 **2–2.5 天**（§11 的数字维持不变）。
 
 测试现状：**184 passed**（含 GQA 基线 + MHA 各一例）。
+
+---
+
+## 13. 移植进度：MoE 块（含"无共享专家"）已完成
+
+新增 `deepinfer/moe/olmoe_mlp.py`：
+
+```python
+moe_forward(hidden, gate_weight, expert_gate, expert_up, expert_down,
+            top_k=8, activation="silu")
+```
+
+与 DeepSeek 的结构差异就这一点：**OLMoE 没有 shared expert，
+输出只是被选中专家的加权和**。
+
+### 验证（`tests/moe/test_olmoe_mlp.py`，5 个测试）
+
+| 测试 | 内容 |
+|---|---|
+| 与独立公式比对 | 参考实现用 `sorted()` 选专家、按专家主序散射累加，与 `topk` 路径完全不同 |
+| SiLU / GELU 两种激活 | 参数化 |
+| **无共享专家** | 把专家权重全置零，输出必须**严格为零**——若存在隐藏的 shared-expert 项，这条会失败 |
+| top_k=1 退化 | 必须等于单个专家的 SwiGLU 乘以它的路由权重 |
+| 非法输入 | 未知激活、专家数不一致 → `ValueError` |
+
+第二条是专门针对"OLMoE 没有共享专家"这个结构差异写的：
+**它把"多出一条恒等通路"这种错误变成可检测的。**
+
+```
+tests/moe   91 passed
+全量        189 passed
+```
+
+### 进度
+
+| 项 | 状态 |
+|---|---|
+| Q6_K dequant | ✅ 验证 |
+| 专家读取 | ✅ 验证 |
+| 逐头 QK-norm | ✅ 验证 |
+| Router | ✅ 验证 |
+| MHA 复用 paged 内核 | ✅ 验证 |
+| **MoE 块（无共享专家）** | ✅ **验证** |
+| 组装 OLMoE runtime + ModelSpec | 未开始（1–1.5 天） |
+| token 对齐验证 | 未开始（0.5 天） |
+| **剩余** | **1.5–2 天** |
+
+所有**可独立验证的数学与格式模块**都已就绪，剩下的是把它们组装成一个
+runtime 并做端到端 token 对齐。
