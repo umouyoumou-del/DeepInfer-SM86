@@ -224,3 +224,55 @@ tests/moe    77 passed
 | 双卡验证 | 未开始 | 1 天 |
 
 **专家读取层已确认零改动可用**（见 `OPTIMIZATION_GENERALITY.md`）。
+
+---
+
+## 9. 架构事实核对（2026-10-31，读 GGUF 元数据）
+
+此前 §7 按张量命名推断"OLMoE 是 GQA + QK-norm"。**核对元数据后，GQA 是错的。**
+
+```
+olmoe.attention.head_count      = 16
+olmoe.attention.head_count_kv   = 16      <-- 与 head_count 相等
+olmoe.embedding_length          = 2048      => head_dim = 128
+olmoe.block_count               = 16
+olmoe.expert_count              = 64
+olmoe.expert_used_count         = 8
+olmoe.context_length            = 4096
+olmoe.rope.freq_base            = 10000.0
+olmoe.attention.layer_norm_rms_epsilon = 1e-5
+```
+
+`head_count_kv == head_count` 意味着 **OLMoE 是标准 MHA（多头注意力），不是分组查询注意力**。
+
+### 这对移植的影响：比原估更简单
+
+| 原判断 | 实际 | 影响 |
+|---|---|---|
+| GQA + QK-norm | **MHA + QK-norm** | `paged_attention.py` 的 GQA 内核在 `num_kv_heads == num_heads` 时退化为 MHA，**可直接复用** |
+| 需要 KV 头映射 | 不需要 | 少一处易错逻辑 |
+
+QK-norm 仍然要做：`attn_q_norm.weight` / `attn_k_norm.weight` 各 2048 维，
+即 **16 头 × 128 维，逐头在 head_dim 上做 RMSNorm**（eps = 1e-5），
+作用在 RoPE 之后、注意力之前。
+
+### 修正后的工作量
+
+| 项 | 状态 | 估计 |
+|---|---|---|
+| Q6_K dequant | ✅ 已实现并验证 | — |
+| 专家读取 | ✅ 零改动可用 | — |
+| **MHA 适配（复用 paged GQA 内核）** | 未开始 | **0.5–1 天**（原估 1.5–2） |
+| **逐头 QK-norm** | 未开始 | **0.5 天** |
+| 无共享专家分支短路 | 未开始 | 0.5 天 |
+| Router（`ffn_gate_inp` F32 → softmax → top-8） | 未开始 | 0.5 天 |
+| ModelSpec 抽象 + token 对齐 | 未开始 | 1 天 |
+| **合计** | | **3–3.5 天**（原估 4.5–5） |
+
+省下的一天来自"不用做 GQA 映射"。
+
+### 教训
+
+**按张量命名推断架构会出错。** `attn_q` / `attn_kv_b`（DeepSeek MLA）
+与 `attn_q` / `attn_k`（标准 MHA）看起来相似，但语义完全不同。
+元数据里有明确答案，应该先读它再排期。
