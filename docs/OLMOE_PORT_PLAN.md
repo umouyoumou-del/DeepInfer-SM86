@@ -326,3 +326,59 @@ tests/moe   81 passed
 三个"格式/数学"类模块（Q6_K、专家读取、QK-norm）全部完成并有测试覆盖，
 剩下的都是**接线工作**——把 MA 注意力、router、无共享专家这三条路径接进
 一个 OLMoE 专用 runtime。
+
+---
+
+## 11. 移植进度：Router 已完成
+
+新增 `deepinfer/moe/olmoe_router.py`：
+
+```python
+route_topk(hidden, gate_weight, top_k=8) -> (expert_ids, weights)
+```
+
+与 DeepSeek 的差异：
+
+| | DeepSeek-V2 | **OLMoE** |
+|---|---|---|
+| 门控 | sigmoid + 分组限制 | **softmax（全部 64 专家）** |
+| 分组 | 有（`n_group` / `topk_group`） | **无** |
+| 权重归一化 | 有 | **不做**（top-8 之和 < 1 是正确行为） |
+
+最后一条最容易搞错：**OLMoE 的 top-8 权重是原始 softmax 概率，不重新归一化。**
+
+### 验证
+
+`tests/moe/test_olmoe_router.py`，5 个测试：
+
+| 测试 | 内容 |
+|---|---|
+| 与朴素参考实现比对 | 逐 token 循环 + 手写 exp/log 求和 |
+| **不重归一化** | 均匀 logits 下 top-8 之和应为 `8/64 = 0.125`；若重归一化会得 1.0 |
+| 选择有序且不重复 | 权重递减、每行 8 个不同专家 |
+| `top_k == 专家数` | 退化为完整 softmax，和为 1 |
+| 形状校验 | 门控转置或非 2-D 输入抛 `ValueError` |
+
+> 第一版"不重归一化"测试用的是随机 logits，随机下 top-8 之和本就可能 >0.999，
+> **测不出区别**；改为均匀 logits 后才具备判别力。
+
+```
+tests/moe   86 passed
+全量        182 passed
+```
+
+### 进度更新
+
+| 项 | 状态 | 估计 |
+|---|---|---|
+| Q6_K dequant | ✅ 完成并验证 | — |
+| 专家读取 | ✅ 零改动可用 | — |
+| 逐头 QK-norm | ✅ 完成并验证 | — |
+| **Router** | ✅ **完成并验证** | — |
+| MHA 适配（复用 paged GQA 内核） | 未开始 | 0.5–1 天 |
+| 无共享专家短路 | 未开始 | 0.5 天 |
+| ModelSpec + token 对齐 | 未开始 | 1 天 |
+| **剩余合计** | | **2–2.5 天** |
+
+**四个独立可验证的模块全部完成**，剩下一件真正的架构工作（MHA 接进 runtime）
+加两件接线工作。
