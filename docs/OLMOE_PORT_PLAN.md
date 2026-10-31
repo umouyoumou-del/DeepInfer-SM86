@@ -534,3 +534,59 @@ tests/moe   97 passed
 
 到这一步，OLMoE 需要的**每一个独立组件**都已存在且被独立测试覆盖。
 剩下的工作是把它们串起来——一件需要连续时间的事。
+
+---
+
+## 15. 移植进度：权重命名与形状校验已完成
+
+新增 `deepinfer/moe/olmoe_weights.py`：
+
+```python
+tensors = layer_tensors(spec, 0)
+# attn_q / attn_k / attn_v / attn_output  -> [hidden, hidden]
+# attn_norm / ffn_norm / attn_q_norm / attn_k_norm -> [hidden]
+# ffn_gate_inp -> [experts, hidden]
+# ffn_gate_exps / ffn_up_exps -> [experts, inter, hidden]
+# ffn_down_exps -> [experts, hidden, inter]
+
+report = validate_layer(index, spec, 0)   # 逐项校验，不匹配立即报错
+```
+
+### 真实 checkpoint 的两个新发现
+
+| 张量 | 量化类型 | 说明 |
+|---|---|---|
+| `blk.0.attn_v.weight` | **Q6_K** | 又一处 Q6_K——§8 新增的 kernel 支持正好用得上 |
+| 无 `blk.*.ffn_*_shexp` | — | 确认无共享专家 |
+
+### 校验覆盖
+
+| 检查 | 作用 |
+|---|---|
+| 所有期望张量存在 | 缺一个立刻报错，而不是在 forward 中途炸 |
+| attention 形状 `[hidden, hidden]` | 与 spec 的 hidden 交叉验证 |
+| norm 形状 `[hidden]` | |
+| expert 张量为 3-D 且首维 = 专家数 | |
+| gate/up 的末维 = hidden | |
+| **down 的中间维 = gate/up 的中间维** | 最容易接错的一处 |
+| 层号范围 | |
+
+### 验证（6 个测试）
+
+4 个合成场景覆盖正常与三种错误路径（缺张量、attention 形状错、down 中间维不一致），
+2 个对**真实 GGUF 的第 0 层与第 15 层**做完整校验。
+
+```
+tests/moe  103 passed
+全量       201 passed
+```
+
+### 进度
+
+| 项 | 状态 |
+|---|---|
+| Q6_K / 专家读取 / QK-norm / Router / MHA / MoE 块 / ModelSpec | ✅ |
+| **权重命名与形状校验** | ✅ **验证** |
+| 组装 runtime 前向 | 未开始（1–1.5 天） |
+| token 对齐 | 未开始（0.5 天） |
+| **剩余** | **1.5–2 天** |
