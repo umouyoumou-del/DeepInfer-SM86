@@ -1142,3 +1142,50 @@ down:             qtype "Q6_K", down_row_bytes = 840, out_features = 2048, k_siz
 
 预计打包路径可将 OLMoE 从 104 ms/token 推近 DeepSeek 的水平
 （1.61 → 0.73 GB/token，且 op 数大幅下降）。
+
+---
+
+## 27. 打包权重指针路径：数值一致，MoE 快 1.77 倍
+
+`deepinfer/moe/olmoe_packed.py` 已实现并实测（真实 checkpoint，第 0 层）：
+
+```
+packed load 0.05s, gate bytes 75497472     ← 打包砖块上传显存
+packed vs fp16: maxdiff = 0.00000           ← 与 fp16 参考逐元素一致
+MoE per layer: packed 0.31 ms   fp16 0.54 ms   speedup 1.77x
+x16 layers:    packed 5 ms/token  fp16 9 ms/token
+```
+
+**数值完全一致**——说明 Q4_K/Q6_K 直接在打包字节上做 GEMV 与先反量化成 fp16
+再算，结果相同（差 0 而非"在容差内"）。
+
+### 实现要点
+
+| 步骤 | 做法 |
+|---|---|
+| 取打包字节 | `read_raw(name)` 返回 mmap 视图，按 `raw[e*out*rb : (e+1)*out*rb]` 零拷贝切 |
+| 上传 | 一次性 `torch.from_numpy(...).to("cuda")`，0.05 s |
+| 指针 | `storage.data_ptr() + e*stride`，组成 int64 数组 |
+| decode 形状 | 单 token 时 top-8 = 8 专家各 1 token → `n_experts=8, max_count=1, counts=[1]*8` |
+| gate/up | `Q4_K`, `row_bytes = 1152` |
+| down | `Q6_K`, `row_bytes = 840` |
+
+`fused_gate_up_gemm_ptr_grouped` 返回的**已经是 SwiGLU 后的激活**
+（直接喂给 `fused_down_gemm_ptr_grouped`），所以加权求和由本模块自己做，
+不依赖 DeepSeek 那边的 scatter 约定。
+
+### 收益与预期
+
+每层 MoE 从 0.54 → 0.31 ms。按 16 层算，MoE 部分 9 → 5 ms/token。
+但端到端目前是 104 ms/token，**MoE 只占一小部分**——
+说明剩下的时间在 attention、norm 和逐层 Python 编排上。
+
+### 尚未接线
+
+`olmoe_layer.py` 仍走 fp16 路径。要吃到这 1.77 倍，需要：
+
+1. 启动时为 16 层加载全部打包砖块（16 × 261 MB ≈ 4.2 GB 显存，32 GB 卡够）；
+2. `decoder_layer_forward` 增加 packed 分支；
+3. 端到端复测。
+
+这一步没有做——单层已验证，全模型接线还需要一轮完整时间。
