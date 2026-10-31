@@ -128,3 +128,64 @@ Graph 只能消掉**空档**，不能消掉 CPU op 时间（路由与采样仍�
 
 做完这两项再复测 profile，如果 GPU 利用率仍低于 50%，再投入 3–6 的 Graph 工作。
 **在没测过 1、2 的收益之前就做 Graph，等于又一次不分解就归因。**
+
+---
+
+## 6. 逐项 profile：那 109 ms 到底是什么
+
+`torch.profiler` 逐项排序（pin-all，12 token）：
+
+```
+wall=2.58s  215.0 ms/token   cpu=0.901s   cuda=1.147s
+```
+
+### CPU 侧（self time）
+
+| 操作 | 总时长 | 调用次数 | 每 token |
+|---|---:|---:|---:|
+| **cudaLaunchKernel** | 186.8 ms | **38,865** | 15.6 ms |
+| **cudaStreamSynchronize** | 97.7 ms | **3,039** | 8.1 ms |
+| aten::mul | 51.0 ms | 6,608 | 4.3 ms |
+| aten::mm | 49.3 ms | 2,591 | 4.1 ms |
+| aten::copy_ | 48.3 ms | 11,147 | 4.0 ms |
+| aten::empty | 38.5 ms | 11,183 | 3.2 ms |
+
+### CUDA 侧
+
+| 操作 | 总时长 | 调用次数 | 每 token |
+|---|---:|---:|---:|
+| aten::_to_copy | 193.7 ms | 7,369 | 16.1 ms |
+| **Memcpy HtoD (Pinned→Device)** | 184.1 ms | **仅 174** | **15.3 ms** |
+| dp_ptr_grouped_gate_up_gemm | 39.0 ms | 286 | 3.2 ms |
+
+**总 op 数 271,152 / 12 token = 每 token 22,596 个操作。**
+
+### 三个真问题
+
+**1. 每 token 3,239 次 kernel launch、253 次同步。**
+
+这是 Python 逐层编排的直接后果。launch 的 CPU 开销 15.6 ms/token、
+同步 8.1 ms/token，合计约 24 ms/token——**CUDA Graph 正好针对这一项**。
+
+**2. H2D 拷贝在 pin-all 下依然存在（15.3 ms/token）。**
+
+只有 174 次调用（每 token 约 14.5 次），单次约 1 MB。说明**仍有约 14 MB/token
+的 pinned→device 拷贝没有被驻留覆盖**。来源未定位：可能是 shared expert、
+attention 权重转换，或 `_to_copy` 引起的 dtype 转换。**这是下一步该查的。**
+
+**3. `aten::empty` 11,183 次 / 12 token ≈ 932 次/token。**
+
+张量分配次数极高，但上一轮实测"预分配指针 buffer"并没有收益，
+说明分配本身便宜，**贵的是 launch 与同步**。
+
+### 修正后的优先级
+
+| 手段 | 针对 | 量级 |
+|---|---|---|
+| **CUDA Graph** | 3,239 launch + 253 sync | 约 24 ms/token 的 CPU 开销 + 空档 |
+| 定位并消除残留 H2D | 15.3 ms/token | 15.3 ms/token |
+| 减少 `_to_copy`（7,369 次） | 16.1 ms/token CUDA | 未量化 |
+
+注意：本次 wall 为 215 ms/token，而前两次测量分别是 318 与 353 ms/token——
+**同机波动接近 65%**，所以任何小于 30% 的改动都无法用单次测量判定。
+后续实验必须多次重复取中位数。
