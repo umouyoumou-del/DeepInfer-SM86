@@ -3093,12 +3093,15 @@ class DeepSeekV2LiteGGUFRuntime:
             # prefill on the contiguous path, then start decode with a clean
             # GPU packed cache.
             if not self.pin_all_experts:
-                # pin-all keeps the resident experts across requests; prefill
-                # never reads this cache (it runs with the cache deactivated
-                # and takes the staged path), so leaving it in place is safe -
-                # the only cost is VRAM headroom during prefill.
+                # Default path: drop the previous request's cache and keep
+                # prefill on the staged contiguous path, as before.
                 expert_store.clear_gpu_cache()
-            expert_store.set_gpu_cache_active(False)
+                expert_store.set_gpu_cache_active(False)
+            # Under pin-all every expert is already resident, so prefill can
+            # use the pointer path too.  Keeping the cache active removes the
+            # ~2.2 GB of host-to-device staging that prefill otherwise pays
+            # once per request (measured: constant 2230.4 MB regardless of
+            # generation length).
         torch.cuda.reset_peak_memory_stats()
         cache = DynamicCache()
         attention_mask = torch.ones((1, prompt_tokens), dtype=torch.long, device=self.device)
