@@ -1250,3 +1250,62 @@ peak VRAM 18.0 GiB                                        ← 同时加载 fp16 
    拿到真正的 decode 分解再决定优化什么。
 
 第 2 步更便宜，且是今天反复证明有效的顺序——**先测对阶段，再动手。**
+
+---
+
+## 29. 真正的 decode profile（这一份才是对的）
+
+前几次 profile 都拿完整 prompt 跑，那是 prefill。这次**只 profile 单 token 的
+decode 步骤**（prefill 一次、预热三次、再 profile 十次）：
+
+```
+DECODE wall = 92.5 ms   ops = 7,752
+```
+
+| CUDA 项 | 每步 | 次数 |
+|---|---:|---:|
+| **`aten::index`** | **29.08 ms** | **48** |
+| `aten::bmm` | 14.78 ms | 48 |
+| cutlass wmma tensorop | 11.26 ms | 97 |
+| cutlass tensorop | 4.73 ms | 16 |
+| `aten::matmul` / `mm` | 1.34 ms | 81 |
+
+| CPU 项 | 每步 | 次数 |
+|---|---:|---:|
+| `cudaDeviceSynchronize` | 14.66 ms | — |
+| `cudaLaunchKernel` | 8.71 ms | 1,229 |
+
+### 关键：packed 分支确实生效了
+
+已确认远端 `olmoe_layer.py` 有 `use_packed` 与 `moe_forward_packed`（第 15/120/121 行）。
+所以那 48 次 `aten::index` **不再是权重 gather**，
+而是 `gate_ptrs[ids]` / `up_ptrs[ids]` / `down_ptrs[ids]` 的**8 元素指针 gather**
+——每层 3 次 × 16 层 = 48 次。
+
+**对 8 个 int64 元素做索引却报 0.6 ms/次，这个数字不合理。**
+合理的解释是：profiler 把**等待前序工作的队列排空时间**归到了这些 op 头上。
+也就是说这 29 ms 是"GPU 在等"，不是"这个 op 在算"。
+
+要区分这两种情况，需要给每个 op 单独打 CUDA event 计时，
+而不是依赖 `key_averages()` 的累计时长。
+
+### 当前 decode 成本结构（可信部分）
+
+```
+cutlass tensor 类 kernel（注意力 + bmm 的实际计算）  约 16 ms
+bmm 调度                                           14.8 ms
+kernel launch（CPU）                                8.7 ms
+总墙钟                                             92.5 ms
+```
+
+**剩余约 50 ms 仍无法归因**，需要更细的 event 级计时。
+
+### 诚实结论
+
+- OLMoE 从 3.95 提升到 9.71 tok/s（2.46 倍），全部来自**已完成的真实改动**
+  （向量化、缓存 RoPE、去掉 fp32 加宽）；
+- 打包指针路径在**单层**快 1.77 倍且数值完全一致，但**端到端未体现**；
+- 剩下的瓶颈**还没有被可信地定位**——目前手上这份 profile 有归因歧义。
+
+**下一轮第一件事：用 CUDA event 给每个阶段单独计时，代替 profiler 累加。**
+在那之前不应再改代码——今天已经九次因为归因不可靠而走错方向。
