@@ -297,3 +297,59 @@ attention、elementwise、`_to_copy` 都在别处。只对 MoE 做 Graph 收益�
 **Graph 可做，但天花板是 1.4 倍，不是数量级。**
 真正想要数量级，必须先解决 §6 里那 3,239 次 launch 的**来源**——
 把逐层 Python 编排整体下沉，而不是给现有编排套一层图。
+
+---
+
+## 9. 3,239 次 launch 的来源（按调用次数排序）
+
+pin-all，6 token，总计 **130,661 个 op = 每 token 21,777 个**：
+
+| 操作 | 次数 | 每 token | CPU | CUDA |
+|---|---:|---:|---:|---:|
+| **cudaLaunchKernel** | 17,967 | **2,994** | 156.5 ms | — |
+| aten::as_strided | 11,581 | 1,930 | 9.6 ms | — |
+| aten::copy_ | 5,375 | 896 | 42.1 ms | 187.7 ms |
+| aten::empty | 5,321 | 887 | 30.7 ms | — |
+| aten::slice | 5,302 | 884 | 8.9 ms | — |
+| aten::to | 5,055 | 842 | 6.8 ms | 185.3 ms |
+| aten::view | 4,716 | 786 | 4.9 ms | — |
+| aten::_to_copy | 3,511 | 585 | 15.8 ms | 185.3 ms |
+| aten::mul | 2,888 | 481 | 38.0 ms | 3.5 ms |
+
+### 结论：这是**未融合的 eager PyTorch**
+
+27 层 / token，却要发起约 **2,994 次 kernel launch**——平均**每层 111 次**。
+
+原因很清楚：代码用的是逐算子的 eager PyTorch，
+没有把 elementwise 与 reduce 融合成少数几个 kernel。
+`as_strided`/`slice`/`view`/`reshape` 这类视图操作本身不发 kernel，
+但每个真正计算的算子都发一个。
+
+按每次 launch 约 8 µs 计：
+
+```
+2,994 x 8 us = 24 ms/token     （中位数 79.7 ms 的 30%）
+```
+
+与 §6 实测的 "launch 15.6 + sync 8.1 = 24 ms" 完全吻合。
+
+### 这决定了优化的真实上限
+
+| 手段 | 能消掉的 | 端到端 |
+|---|---|---:|
+| CUDA Graph 全捕获 | 2,994 次 launch 的开销（约 24 ms） | 79.7 → ~56 ms（**1.4×**） |
+| 手工融合 elementwise | 算子数量本身 | 需要重写计算 kernel |
+| 把逐层循环下沉到 C++/CUDA | Python 侧 op 调度 | 与上一条同量级 |
+
+**注意 `aten::copy_` 仍有 896 次/token、187.7 ms CUDA 时间。**
+pin-all 之后专家权重已经常驻，这些拷贝是**别的东西**——
+候选：shared expert、attention 的 KV 写入、`_to_copy` 的 dtype 转换。
+**这一项尚未定位，但它在 CUDA 侧占比很大，可能比 launch 更值得查。**
+
+### 建议的下一步顺序
+
+1. **先查清 896 次 copy / 187.7 ms 是什么**——它比 launch 开销更值钱，
+   而且可能是一个简单的冗余（比如每步重复转换同一批权重）；
+2. 再决定是否投入 CUDA Graph（天花板 1.4×）；
+3. 想要数量级，只能走算子融合或把整个 forward 写成少数几个大 kernel——
+   那是与"在 DeepInfer 之上做扩展"不同的工程量级。
