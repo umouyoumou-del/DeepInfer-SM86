@@ -276,3 +276,53 @@ QK-norm 仍然要做：`attn_q_norm.weight` / `attn_k_norm.weight` 各 2048 维�
 **按张量命名推断架构会出错。** `attn_q` / `attn_kv_b`（DeepSeek MLA）
 与 `attn_q` / `attn_k`（标准 MHA）看起来相似，但语义完全不同。
 元数据里有明确答案，应该先读它再排期。
+
+---
+
+## 10. 移植进度：QK-norm 已完成
+
+新增 `deepinfer/moe/olmoe_attention.py`：
+
+```python
+per_head_rms_norm(tensor, weight, num_heads=16, head_dim=128, eps=1e-5)
+```
+
+OLMoE 的 `attn_q_norm` / `attn_k_norm` 是 **2048 维 = 16 头 × 128**，
+所以**每个头有自己独立的 128 个缩放值**（而不是所有头共享一个向量）——
+这一点与 Qwen3 那种 `(head_dim,)` 的写法不同，容易搞错。
+
+实现：reshape 成 `[..., heads, head_dim]`，在 `head_dim` 上求 RMS，
+再乘以 `weight.reshape(heads, head_dim)`，最后按原 dtype 还原。
+
+### 验证
+
+`tests/moe/test_olmoe_attention.py`，4 个测试：
+
+| 测试 | 内容 |
+|---|---|
+| 与朴素参考实现逐元素比对 | 双循环版本，`atol=1e-5` |
+| 各头独立归一化 | 两个方差不同的头，归一化后 RMS 都等于 1 |
+| 宽度校验 | 权重宽度或头数不匹配时抛 `ValueError` |
+| dtype 保持 | fp16 进、fp16 出 |
+
+```
+tests/moe   81 passed
+全量        177 passed
+```
+
+### 进度更新
+
+| 项 | 状态 | 估计 |
+|---|---|---|
+| Q6_K dequant | ✅ 完成并验证 | — |
+| 专家读取 | ✅ 零改动可用 | — |
+| **逐头 QK-norm** | ✅ **完成并验证** | — |
+| MHA 适配（复用 paged GQA 内核） | 未开始 | 0.5–1 天 |
+| 无共享专家短路 | 未开始 | 0.5 天 |
+| Router（F32 → softmax → top-8） | 未开始 | 0.5 天 |
+| ModelSpec + token 对齐 | 未开始 | 1 天 |
+| **剩余合计** | | **2.5–3 天** |
+
+三个"格式/数学"类模块（Q6_K、专家读取、QK-norm）全部完成并有测试覆盖，
+剩下的都是**接线工作**——把 MA 注意力、router、无共享专家这三条路径接进
+一个 OLMoE 专用 runtime。
