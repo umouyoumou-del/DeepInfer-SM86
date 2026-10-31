@@ -807,3 +807,63 @@ https://hf-mirror.com/bartowski/OLMoE-1B-7B-0924-Instruct-GGUF/resolve/main/
 
 这一步通过，就说明真实 checkpoint 与 §15 的假设完全一致，
 剩下的只有前向数值对齐。
+
+---
+
+## 21. 里程碑：OLMoE 端到端跑通
+
+真实 checkpoint（OLMoE-1B-7B-0924-Instruct Q4_K_M，4.21 GB）
+在 RTX 4080 SUPER 上完整加载并生成：
+
+```
+spec: 16 layers, 64 experts top 8 | MHA: True | shared: False | head_dim: 128
+validated 16/16 layers
+
+prompt: "The capital of France is"
+generated ids: [7785, 15, 187, 187, 510, 14731, 273, 6181, 310, 14029, 15, 187]
+text: " Paris.
+
+The currency of France is Euro.
+"
+decode 253 ms/token (3.95 tok/s)
+```
+
+**输出语义正确**（先是 Paris，然后自发续写货币问题），
+说明归一化、RoPE、QK-norm、路由、专家加权整条链路数值上是对的。
+
+### 这条数字本身也有意义
+
+| 栈 | 每 token 激活字节 | 实测 |
+|---|---:|---:|
+| DeepSeek-V2-Lite（ECS，MLA + 优化后） | 1.35 GB | 20.92 tok/s |
+| **OLMoE（本移植，float16 全驻留 + 逐层 Python 循环）** | **0.73 GB** | **3.95 tok/s** |
+
+OLMoE 更慢，因为这条路径是**逐层 Python 循环 + 每个专家单独 matmul**，
+完全没有 DeepSeek 运行时那套优化（pin-all、指针数组、fused kernel）。
+
+**这正是移植的价值**：现在有了第二个架构的可跑基线，
+把 DeepSeek 侧那套优化应用上去，就能检验
+"带宽模型是否跨架构成立"这个悬而未决的问题。
+
+### 过程中修掉的两个环境问题
+
+| 问题 | 原因 | 修法 |
+|---|---|---|
+| `ModuleNotFoundError: olmoe_spec` | 远端仓库是旧版，新模块没上传 | 重新打包上传 `deepinfer/ scripts/ tests/` |
+| `nohup: failed to run /root/gen.sh` | **脚本 CRLF 换行**，`#!/bin/bash` 使 shebang 失效 | `sed -i 's/$//'` 或 `bash script.sh` |
+
+第二个尤其值得记：**文件存在但报 "No such file or directory"** 时，
+几乎总是 shebang 或换行符问题，不是路径问题。
+
+### 移植完成度
+
+| 项 | 状态 |
+|---|---|
+| 全部组件 + 整层 + 整模型（对照 transformers） | ✅ |
+| 真实 GGUF 16 层全部校验 | ✅ |
+| **端到端生成（真实权重、语义正确）** | ✅ |
+| 与 llama.cpp 逐 token 对齐 | 未做（需要同 prompt 的 llama.cpp 输出） |
+| 把 ECS 优化应用到 OLMoE | 未开始 |
+
+**移植本身已完成**：OLMoE 能在本项目栈上加载并正确生成。
+剩下的两项都是后续工作，不再是移植的组成部分。
