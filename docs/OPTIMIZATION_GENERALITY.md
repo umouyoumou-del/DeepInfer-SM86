@@ -98,3 +98,45 @@ DeepSeek-Coder-V2-Lite 只需下载约 9.8 GB，**无需改一行代码**即可�
 > ~~这些优化在任意 MoE 模型上都能带来 8.5 倍。~~
 
 后者需要 OLMoE 移植完成后实测，或至少在同架构的另一个 checkpoint 上复现。
+
+---
+
+## 5. 实测：DeepSeek-Coder-V2-Lite，零代码改动
+
+在同一台 RTX 4080 SUPER（32 GB）上，用**完全相同**的代码与命令，
+只把模型与 meta 目录换成 DeepSeek-Coder-V2-Lite-Instruct（Q4_K_M，10.36 GB）：
+
+```bash
+python scripts/bench_decode_repeats.py   --model .../DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf   --meta-dir .../meta_coder --repeats 5 --max-new-tokens 12 --warmup 2
+```
+
+| 模型 | 逐次 ms/token | 中位数 | 稳态 |
+|---|---|---:|---:|
+| DeepSeek-V2-Lite-Chat | 47.8 / 47.6 / 47.8 / 47.8 / 47.8 | 47.8 | **47.7** |
+| **DeepSeek-Coder-V2-Lite** | 90.2 / 89.8 / 76.1 / 47.1 / 46.8 | 76.1 | **47.0** |
+
+**稳态几乎相同（47.7 vs 47.0 ms/token，即 20.9 vs 21.3 tok/s）。**
+
+### 中位数差异是预热，不是吞吐
+
+Coder 的前三次仍在 90 / 90 / 76 ms，第 4 次才落到 47.1。
+原因是它刚下载完，**页缓存是冷的**——首次读取 10.36 GB 走了真实磁盘 I/O。
+两个模型的**热态吞吐一致**，说明自动 pin-all 对二者生效方式相同。
+
+> 这也再次说明基准里 `--warmup` 次数应当按模型大小调整；
+> 对刚下载的模型，2 次预热不足。
+
+### 这证明了什么
+
+- 自动 pin-all 的探测（`required ≤ free × 0.7`）在 10.36 GB 的模型上同样触发；
+- prefill 走常驻缓存的改动对两个 checkpoint 都生效；
+- 预热机制对二者都有效（都收敛到约 47 ms/token）；
+- **一行代码未改。**
+
+结合 §2 的 OLMoE 存储层验证，可以确认：
+
+> 这套优化不依赖 DeepSeek-V2-Lite 这一个 checkpoint 的权重细节。
+
+仍需注意：Coder-V2-Lite 与 V2-Lite **同架构**（MLA），
+所以这是"同架构不同 checkpoint"的验证，**不是跨架构验证**。
+跨架构要等 OLMoE 移植完成（见 `OLMOE_PORT_PLAN.md`，剩余 2–2.5 天）。
