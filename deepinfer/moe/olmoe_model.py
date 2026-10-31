@@ -26,6 +26,7 @@ def forward(
     rope_base: float,
     top_k: int,
     tie_word_embeddings: bool = False,
+    cache=None,
 ) -> torch.Tensor:
     """Return logits ``[batch, tokens, vocab]``."""
 
@@ -33,7 +34,7 @@ def forward(
         raise ValueError("at least one decoder layer is required")
     hidden = torch.nn.functional.embedding(input_ids, weights["embed_tokens"])
     mask = causal_mask(hidden.shape[1], device=hidden.device, dtype=hidden.dtype)
-    for layer in layer_weights:
+    for index, layer in enumerate(layer_weights):
         hidden = decoder_layer_forward(
             hidden,
             layer,
@@ -41,7 +42,9 @@ def forward(
             eps=eps,
             rope_base=rope_base,
             top_k=top_k,
-            attention_mask=mask,
+            attention_mask=None if cache is not None else mask,
+            cache=cache,
+            layer_index=index,
         )
     hidden = rms_norm(hidden, weights["final_norm"], eps)
     if tie_word_embeddings:

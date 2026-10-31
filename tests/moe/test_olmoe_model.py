@@ -107,3 +107,44 @@ def test_requires_at_least_one_layer() -> None:
             rope_base=10000.0,
             top_k=TOP_K,
         )
+
+def test_kv_cache_matches_uncached_generation() -> None:
+    """Cached decoding must produce identical logits to recomputing the prefix."""
+
+    from deepinfer.moe.olmoe_layer import OLMoEKVKache
+
+    torch.manual_seed(13)
+    config = _config(False)
+    model = OlmoeForCausalLM(config).to(torch.float32)
+    model.eval()
+    weights, layers = _weights(model, False)
+
+    prompt = torch.randint(0, VOCAB, (1, 4))
+    # uncached: feed the whole sequence each time
+    full = prompt
+    uncached = []
+    for _ in range(3):
+        logits = forward(
+            full, weights, layers, num_heads=HEADS, eps=config.rms_norm_eps,
+            rope_base=config.rope_theta, top_k=TOP_K,
+        )
+        uncached.append(logits[0, -1])
+        full = torch.cat([full, logits[0, -1].argmax(-1).view(1, 1)], dim=1)
+
+    # cached: prefill then one token per step
+    cache = OLMoEKVKache()
+    logits = forward(
+        prompt, weights, layers, num_heads=HEADS, eps=config.rms_norm_eps,
+        rope_base=config.rope_theta, top_k=TOP_K, cache=cache,
+    )
+    cached = [logits[0, -1]]
+    for _ in range(2):
+        nxt = cached[-1].argmax(-1).view(1, 1)
+        logits = forward(
+            nxt, weights, layers, num_heads=HEADS, eps=config.rms_norm_eps,
+            rope_base=config.rope_theta, top_k=TOP_K, cache=cache,
+        )
+        cached.append(logits[0, -1])
+
+    for step, (a, b) in enumerate(zip(uncached, cached)):
+        assert torch.allclose(a, b, atol=1e-3), (step, (a - b).abs().max())

@@ -37,7 +37,8 @@ def build_rope(
     """
 
     tokens = int(positions.numel())
-    key = (tokens, head_dim, float(base), str(device), str(dtype))
+    start = int(positions.flatten()[0]) if tokens else 0
+    key = (start, tokens, head_dim, float(base), str(device), str(dtype))
     cached = _ROPE_CACHE.get(key)
     if cached is not None:
         return cached
@@ -45,7 +46,7 @@ def build_rope(
     half = head_dim // 2
     exponents = torch.arange(half, dtype=torch.float32) * (2.0 / head_dim)
     inverse = torch.pow(float(base), -exponents)
-    indices = torch.arange(tokens, dtype=torch.float32).unsqueeze(1)
+    indices = torch.arange(start, start + tokens, dtype=torch.float32).unsqueeze(1)
     angles = indices * inverse.unsqueeze(0)
     tables = (
         torch.cos(angles).to(device=device, dtype=dtype),
@@ -75,6 +76,8 @@ def decoder_layer_forward(
     top_k: int,
     attention_mask: torch.Tensor | None = None,
     timings: dict[str, float] | None = None,
+    cache: "OLMoEKVKache | None" = None,
+    layer_index: int = 0,
 ) -> torch.Tensor:
     """One OLMoE layer: attn(norm) + MLP(norm), each with a residual."""
 
@@ -113,17 +116,33 @@ def decoder_layer_forward(
     key = key.transpose(1, 2)
     value = value.transpose(1, 2)
 
+    # absolute positions: with a cache the new token continues from where the
+    # prefix ended, otherwise every decode step would rotate as position 0
+    offset = 0 if cache is None else cache.length(layer_index)
     cos, sin = build_rope(
-        torch.arange(tokens, device=hidden.device), head_dim, rope_base,
-        device=hidden.device, dtype=hidden.dtype,
+        torch.arange(offset, offset + tokens, device=hidden.device), head_dim,
+        rope_base, device=hidden.device, dtype=hidden.dtype,
     )
     query = apply_rope(query, cos, sin)
     key = apply_rope(key, cos, sin)
 
     _stamp("qkv_qknorm_rope")
-    context = torch.nn.functional.scaled_dot_product_attention(
-        query, key, value, attn_mask=attention_mask, is_causal=attention_mask is None
-    )
+    if cache is not None:
+        key_all, value_all = cache.append(layer_index, key, value)
+        if key_all.shape[2] == query.shape[2]:
+            # whole sequence in one go (prefill): ordinary causal attention
+            context = torch.nn.functional.scaled_dot_product_attention(
+                query, key_all, value_all, is_causal=True
+            )
+        else:
+            # decode: one new query token against the cached prefix, no mask
+            context = torch.nn.functional.scaled_dot_product_attention(
+                query, key_all, value_all
+            )
+    else:
+        context = torch.nn.functional.scaled_dot_product_attention(
+            query, key, value, attn_mask=attention_mask, is_causal=attention_mask is None
+        )
     _stamp("attention")
     context = context.transpose(1, 2).reshape(batch, tokens, hidden_size)
     hidden = residual + context @ weights["o_proj"].t()
@@ -165,3 +184,38 @@ def decoder_layer_forward(
             elapsed = marks[index - 1][1].elapsed_time(marks[index][1])
             timings[name] = timings.get(name, 0.0) + elapsed
     return out
+
+
+class OLMoEKVKache:
+    """Per-layer key/value cache so decode does not recompute the prefix.
+
+    Without this, every generated token reprocessed the entire sequence: step 1
+    saw 6 tokens, step 12 saw 17, which is why end-to-end throughput degraded
+    with length while the single-token cost stayed at 19.7 ms.
+    """
+
+    def __init__(self) -> None:
+        self._keys: dict[int, torch.Tensor] = {}
+        self._values: dict[int, torch.Tensor] = {}
+
+    def append(
+        self, layer_index: int, key: torch.Tensor, value: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        cached_key = self._keys.get(layer_index)
+        if cached_key is None:
+            self._keys[layer_index] = key
+            self._values[layer_index] = value
+            return key, value
+        keys = torch.cat([cached_key, key], dim=2)
+        values = torch.cat([self._values[layer_index], value], dim=2)
+        self._keys[layer_index] = keys
+        self._values[layer_index] = values
+        return keys, values
+
+    def length(self, layer_index: int = 0) -> int:
+        cached = self._keys.get(layer_index)
+        return 0 if cached is None else int(cached.shape[2])
+
+    def reset(self) -> None:
+        self._keys.clear()
+        self._values.clear()
