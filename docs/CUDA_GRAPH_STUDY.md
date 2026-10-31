@@ -704,27 +704,37 @@ auto pin-all skipped: experts need 9086.0 MiB, only 733.9 MiB of 1048.5 MiB free
 实际 GPU 时间约 **34 ms/token**（0.41 s / 12 token），
 而墙钟 47.8 ms → **GPU 利用率约 71%**（此前默认路径只有 29.8%）。
 
+> **注意：`aten::matmul` / `aten::linear` / `aten::mm` 是相互包含的**
+> （linear 内部调 mm，matmul 再分派到它们）。**不能相加**——
+> 本节初稿把三者相加得到 135 ms / 33%，那是重复计数，已更正如下。
+
+按不重叠的口径：
+
 | 项 | 每 12 token | 占 CUDA |
 |---|---:|---:|
-| `dp_ptr_grouped_gate_up_gemm`（MoE） | 48.8 ms | 12% |
-| `dp_ptr_grouped_down_gemm`（MoE） | 26.0 ms | 6% |
-| `aten::matmul` / `linear` / `mm`（attention + shared expert） | 约 135 ms | **33%** |
-| 其余（elementwise、norm 等） | 约 200 ms | 49% |
+| MoE `gate_up` + `down` grouped | 74.8 ms | **18%** |
+| matmul 家族（三者取其一，约） | 约 46 ms | 11% |
+| 其余（elementwise、norm、reduce 等） | 约 289 ms | **71%** |
 
-调用次数：`344 / 12 = 28.7` 次/token ≈ 27 层 + 1，说明**每层每 token 只发一次
-gate_up**——prefill 缓存生效后，指针路径已经在用，没有多余的 staging 调用。
+调用次数 `344 / 12 = 28.7` 次/token ≈ 27 层 + 1，确认每层每 token 只发一次
+`gate_up`，指针路径已经在用，没有多余 staging。
 
 ### 结论：优化重心已经转移
 
-- **MoE grouped kernel 只剩 18%**——之前所有围绕专家搬运的优化已经做完；
-- **attention + shared expert 的 matmul 占 33%**，成为最大的单项；
-- **GPU 仍空闲 29%**（约 14 ms/token），这是 launch/同步的残余。
+- **MoE grouped kernel 占 18%**——之前所有围绕专家搬运的优化已经做完；
+- **matmul 家族约 11%**，不是最大的单项；
+- **"其余"占 71%**——这是大量小算子（elementwise、norm、reduce）的集合，
+  正是 §9 里 2,994 次 launch 的来源；
+- **GPU 仍空闲 29%**（约 14 ms/token），是 launch/同步的残余。
 
 因此下一步按收益排序：
 
-1. **吃掉 29% 的空闲**（CUDA Graph，或减少 2,994 次 launch）——上限约 1.4×；
-2. **attention 路径**（MLA 的实现效率）——33% 的份额，但需要单独 profile；
-3. MoE kernel 本身（18%）——优先级最低。
+1. **减少小算子数量与 launch 开销**——"其余 71%" 与 29% 空闲合起来是绝大多数时间，
+   CUDA Graph 或算子融合都指向这里，上限约 1.4×；
+2. MoE kernel 本身（18%）；
+3. attention matmul（11%）。
+
+**初稿把优先级排在 attention 上是错的**，原因就是那个重复计数。
 
 **注意：本轮 profiler 的 255 ms/token 不能与基准的 47.8 ms 直接比较**，
 profiler 会给 25 万个 op 加采样开销。比例可信，绝对值不可信。
