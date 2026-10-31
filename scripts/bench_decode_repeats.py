@@ -41,7 +41,7 @@ def main(argv: list[str] | None = None) -> int:
         device=args.device,
         max_cache=args.max_cache,
         gpu_expert_cache_mb=args.gpu_expert_cache_mb,
-        pin_all_experts=bool(args.pin_all_experts),
+        pin_all_experts=(True if args.pin_all_experts else None),
         verbose=False,
     )
     if args.pin_all_experts:

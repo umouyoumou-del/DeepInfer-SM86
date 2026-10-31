@@ -553,3 +553,51 @@ prefill 阶段原本要处理的专家数远超 decode（一个 prompt 的每个
 - 默认路径不受影响（`pin_all_experts=False` 时行为与之前完全一致）；
 - 默认路径本次测得 168.3，高于 §7 的 158.2，属同机波动（本次极差仅 5.9%，更稳定）；
 - 预热成本仍大（第 1 次 89.8 vs 稳态 47.7），后续基准应丢弃前两次。
+
+---
+
+## 14. pin-all 改为自动：零参数下 3.2 倍
+
+§13 的收益藏在 `--pin-all-experts` 后面。现在改为**自动探测**：
+加载后计算全部专家所需字节，若能在**剩余显存的 70%** 之内，就自动配置缓存预算并预热。
+
+### 实测（`bench_decode_repeats.py`，5 次，12 token，无任何 flag）
+
+| 配置 | 逐次 ms/token | 中位数 | tok/s |
+|---|---|---:|---:|
+| 默认（自动未生效前） | 175.4 / 178.3 / 173.9 / 178.0 / 173.4 | 175.4 | 5.70 |
+| **自动 pin-all** | 74.9 / 75.0 / **54.5 / 47.6 / 48.0** | **54.5** | **18.35** |
+
+**3.2 倍**，且稳态（第 4–5 次）是 47.6 / 48.0，与手动开启时的 47.7 一致。
+
+### 实现要点
+
+```
+required = Σ(bytes_per_expert × expert_count)  over all MoE layers
+free     = cuda.mem_get_info()[0]
+if required <= free * 0.7:  启用缓存预算 + preload
+```
+
+启用的判定值实测：`required=9086 MiB, free=29699 MiB, ratio=0.31` → 通过。
+
+### 两个实现上的坑（都已修）
+
+1. `self.pin_all_experts = bool(pin_all_experts)` 把 `None`（auto）变成了 `False`，
+   导致自动分支永不进入；必须保留 `None`。
+2. 自动模式必须先设置 `_gpu_cache_limit_bytes` 与 `_gpu_cache_per_layer`，
+   否则 `preload_gpu_experts()` 会因"缓存未配置"直接抛错。
+
+### 副作用
+
+- `pin_active` 是解析后的真实布尔值，`generate()` 的两个分支都改用它，
+  避免"用户没传 flag 但专家其实已驻留"时走进默认（停用缓存）路径；
+- `--pin-all-experts` 仍可强制开启（即使判定为放不下）；
+- 未提供关闭开关——需要时传 `pin_all_experts=False`。
+
+### 累计
+
+| 配置 | tok/s | 相对 3050 |
+|---|---:|---:|
+| RTX 3050 4 GB（NVMe 流式） | 2.45 | 1× |
+| 4080 SUPER 默认（改前） | 5.70 | 2.3× |
+| **4080 SUPER 自动 pin-all（当前默认）** | **18.35**（稳态约 21） | **7.5×** |
