@@ -689,3 +689,51 @@ logits = forward(input_ids, weights, layer_weights,
 
 前面所有组件都是"与独立实现比对"，这一步是**第一次端到端整体比对**——
 输入 token id、输出 logits，中间 16 层全部参与。它通过意味着整个组装链没有接错。
+
+---
+
+## 18. 真实 GGUF 权重已接入并跑通
+
+`load_layer_tensor` 现在按实际 API 实现（`GGUFIndex.read_tensor(name)` 返回
+反量化后的 numpy 数组，文档注明仅适用于非专家权重）。
+
+新增测试对**真实 checkpoint 的第 0 层**执行完整链路：
+
+```
+GGUF 读取 → Q4_K/Q6_K 反量化 → attn_norm RMSNorm → q_proj
+→ q_norm（全向量 RMSNorm）→ reshape 成 16 头 → RoPE
+```
+
+断言：
+
+| 断言 | 作用 |
+|---|---|
+| dtype 为 float32 | 反量化正确落到目标类型 |
+| **所有元素有限** | 没有 NaN/Inf —— 反量化出错时最典型的症状 |
+| 形状 `(1, 3, 2048)` | 与 spec 一致 |
+| **RoPE 保持每个头的范数** | 旋转是正交变换，范数必须不变；这条能抓住实现错位 |
+
+```
+tests/moe  108 passed
+全量       207 passed
+```
+
+### 进度
+
+| 项 | 状态 |
+|---|---|
+| 全部组件 + 整层 + 整模型（对照 transformers） | ✅ |
+| **真实 GGUF 权重接入** | ✅ **验证** |
+| 端到端 token 对齐（对照 llama.cpp 输出） | 未开始（0.5 天） |
+| **剩余** | **0.5 天** |
+
+### 与 llama.cpp 对齐需要补的最后一块
+
+目前 `forward()` 接受**全部层权重一次性传入**。真实 checkpoint 是 7B，
+fp32 下 28 GB，超出本机 16 GB 内存。要对齐 token，需要：
+
+1. 逐层流式加载（本项目 `GGUFExpertStore` 已有该能力），或
+2. 在 32 GB 的 4080 SUPER 机器上以 fp16 加载全部层（约 13 GB）。
+
+后者更直接，且能顺带测出 OLMoE 在 ECS 栈上的真实吞吐——
+这正是移植的最初目的（验证 0.73 GB/token 是否带来约 2 倍于 DeepSeek 的速度）。

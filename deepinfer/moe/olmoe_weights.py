@@ -113,21 +113,23 @@ def load_layer_tensor(
     layer_index: int,
     role: str,
     *,
-    device: str | torch.device = "cpu",
     dtype: torch.dtype = torch.float32,
 ) -> torch.Tensor:
-    """Materialise one tensor through ``GGUFIndex.read_tensor``."""
+    """Dequantise one non-expert tensor and return it as a torch tensor.
+
+    ``GGUFIndex.read_tensor`` is documented for non-expert weights only, so this
+    helper is restricted to attention projections, norms and the router.
+    """
 
     tensors = layer_tensors(spec, layer_index)
     if role in tensors.attention:
         name = tensors.attention[role]
     elif role in tensors.norms:
         name = tensors.norms[role]
-    elif role in ("router", "expert_gate", "expert_up", "expert_down"):
-        name = getattr(tensors, role)
+    elif role == "router":
+        name = tensors.router
     else:
-        raise KeyError(f"unknown role {role!r}")
-    loaded = index.read_tensor(name, device=str(device))
-    if loaded.dtype != dtype:
-        loaded = loaded.to(dtype)
-    return loaded
+        raise KeyError(
+            f"{role!r} is not a non-expert tensor; use GGUFIndex.expert_tensor"
+        )
+    return torch.from_numpy(index.read_tensor(name)).to(dtype)

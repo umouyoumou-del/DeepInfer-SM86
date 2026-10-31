@@ -113,3 +113,46 @@ def test_real_checkpoint_layer_validates() -> None:
         report = validate_layer(index, spec, layer)
         assert report["expert_gate"][0] == 64
         assert report["expert_gate"][2] == 2048
+
+@pytest.mark.skipif(not os.path.exists(OLMOE_GGUF), reason="OLMoE GGUF not present")
+def test_real_layer_attention_weights_load_and_run() -> None:
+    """GGUF -> dequantise -> one real attention branch, end to end."""
+
+    import torch as _torch
+
+    from deepinfer.moe.gguf_index import GGUFIndex
+    from deepinfer.moe.olmoe_layer import build_rope, rms_norm
+    from deepinfer.moe.olmoe_spec import spec_from_gguf
+    from deepinfer.moe.olmoe_weights import load_layer_tensor
+
+    index = GGUFIndex(OLMOE_GGUF)
+    spec = spec_from_gguf(index)
+    weights = {
+        role: load_layer_tensor(index, spec, 0, role)
+        for role in ("q_proj", "k_proj", "v_proj", "o_proj", "attn_norm", "attn_q_norm")
+    }
+    for role, tensor in weights.items():
+        assert tensor.dtype == _torch.float32
+        assert _torch.isfinite(tensor).all(), f"{role} has non-finite values"
+
+    hidden = _torch.randn(1, 3, spec.hidden_size) * 0.1
+    normed = rms_norm(hidden, weights["attn_norm"], spec.rms_eps)
+    query = normed @ weights["q_proj"].t()
+    query = rms_norm(query, weights["attn_q_norm"], spec.rms_eps)
+    assert query.shape == (1, 3, spec.hidden_size)
+    assert _torch.isfinite(query).all()
+
+    heads, dim = spec.head_count, spec.head_dim
+    reshaped = query.view(1, 3, heads, dim).transpose(1, 2)
+    cos, sin = build_rope(
+        _torch.arange(3), dim, spec.rope_base, device=query.device, dtype=query.dtype
+    )
+    from deepinfer.moe.olmoe_layer import apply_rope
+
+    rotated = apply_rope(reshaped, cos, sin)
+    assert rotated.shape == reshaped.shape
+    assert _torch.isfinite(rotated).all()
+    # RoPE must preserve the norm of each head
+    assert _torch.allclose(
+        rotated.norm(dim=-1), reshaped.norm(dim=-1), atol=1e-3
+    )
