@@ -1,8 +1,15 @@
-"""Attention pieces that OLMoE needs and DeepSeek's MLA does not.
+"""Attention helpers used by the OLMoE port.
 
 OLMoE is plain multi-head attention (``head_count_kv == head_count == 16``,
-head_dim 128, GGUF metadata ``olmoe.attention.*``) with an extra per-head
-RMSNorm on queries and keys, applied after RoPE and before attention.
+head_dim 128).
+
+**Correction (2026-10-31):** this module originally claimed OLMoE normalises
+queries and keys *per head*.  It does not.  transformers builds
+``q_norm = OlmoeRMSNorm(hidden_size)`` and calls ``q_norm(q_proj(x))`` on the
+full projected vector, before it is split into heads, and before RoPE.
+``per_head_rms_norm`` below is therefore *not* what OLMoE uses and is kept only
+as a general utility; see ``olmoe_layer.py`` for the real path, which is
+verified against ``OlmoeDecoderLayer`` in ``tests/moe/test_olmoe_layer.py``.
 """
 
 from __future__ import annotations

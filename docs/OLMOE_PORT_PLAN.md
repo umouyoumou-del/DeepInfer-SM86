@@ -590,3 +590,56 @@ tests/moe  103 passed
 | 组装 runtime 前向 | 未开始（1–1.5 天） |
 | token 对齐 | 未开始（0.5 天） |
 | **剩余** | **1.5–2 天** |
+
+---
+
+## 16. 整层组装已通过 transformers 对照（里程碑）
+
+新增 `deepinfer/moe/olmoe_layer.py`：把 norm、QKV、RoPE、QK-norm、attention、
+残差、MoE 块串成一层。
+
+**验证方式**：与 `transformers.models.olmoe.modeling_olmoe.OlmoeDecoderLayer`
+逐元素比对（小配置 + 随机权重，`atol=1e-4`）。这是移植过程中**最强的一次验证**
+——norm 位置、RoPE 约定、QK-norm 作用范围、残差顺序、无共享专家，
+五件事必须同时正确才能对上。
+
+```
+test_matches_transformers_layer   PASSED
+test_no_shared_expert_path        PASSED   (专家置零后与 HF 同样置零一致)
+全量 203 passed
+```
+
+### 过程中发现的两个真实错误
+
+**错误 1：QK-norm 的位置。**
+我按"RoPE 之后做 QK-norm"实现。transformers 是
+`q_norm(q_proj(x))` —— **在 RoPE 之前**。看源码才能确认。
+
+**错误 2（更严重）：QK-norm 的作用范围。**
+我在 §10 实现了 `per_head_rms_norm`，并断定 OLMoE"Is 逐头在 head_dim 上做 RMSNorm"。
+**错。** transformers 用 `OlmoeRMSNorm(hidden_size)`，
+作用于**投影后的整个 hidden 向量**（2048），然后才 reshape 成 16 个头。
+
+也就是说：**`attn_q_norm` 的 2048 维不是"16 头 × 128"，而就是一个 2048 维向量**
+——这个数字和"16×128"巧合相等，正是它让我推出了错误结论。
+
+`olmoe_attention.py` 的文档已更正，`per_head_rms_norm` 保留为通用工具但注明**不是** OLMoE 用的。
+
+### 第三个问题在测试而非实现
+
+对照测试一开始差 0.75，原因不是实现，而是**参考实现缺 causal mask**——
+transformers 的 layer 由 model body 外部传入 mask，不传就是双向注意力。
+按 causal 实际行为要求补上后一致。
+
+> 这是今天第七次"问题在夹具或参考，而不在被测代码"。
+
+### 进度
+
+| 项 | 状态 |
+|---|---|
+| Q6_K / 专家读取 / Router / MHA 内核 / MoE 块 / ModelSpec / 权重校验 | ✅ |
+| **QK-norm（范围已更正）** | ✅ |
+| **整层组装** | ✅ **与 transformers 逐元素一致** |
+| 组装完整 runtime（嵌入 + 16 层 + LM head） | 未开始（0.5–1 天） |
+| token 对齐 | 未开始（0.5 天） |
+| **剩余** | **1–1.5 天** |
