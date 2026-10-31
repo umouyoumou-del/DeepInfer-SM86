@@ -22,38 +22,44 @@ def rms_norm(hidden: torch.Tensor, weight: torch.Tensor, eps: float) -> torch.Te
     )
 
 
-_ROPE_CACHE: dict[tuple, tuple[torch.Tensor, torch.Tensor]] = {}
+_ROPE_TABLES: dict[tuple, tuple[torch.Tensor, torch.Tensor]] = {}
 
 
 def build_rope(
     positions: torch.Tensor, head_dim: int, base: float, *, device, dtype
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """RoPE tables for the given positions, cached per shape/device/dtype.
+    """RoPE tables for the contiguous CPU ``positions``, as views of one table.
 
-    Computed on the CPU and moved once.  Building a GPU scalar from a Python
-    float (``torch.tensor(base, device=...)``) or calling ``.cpu()`` on a CUDA
-    tensor forces a synchronisation, and this used to run once per layer - 16
-    syncs at about 4 ms each, 43% of a forward pass.
+    One table per head_dim/base/device/dtype is computed on the CPU, moved once
+    and sliced per call, so a decode step costs no kernel, no transfer and no
+    synchronisation.  Two earlier forms each synced once per layer, 16 times a
+    token: building a GPU scalar from a Python float, and - after the KV cache
+    added position offsets - reading the start of CUDA ``positions`` with
+    ``int()``.  Keying the cache by start position also made every new decode
+    position a miss, with two blocking pageable copies.
     """
 
+    if positions.device.type != "cpu":
+        raise ValueError("positions must be a CPU tensor; reading a CUDA one syncs")
     tokens = int(positions.numel())
-    start = int(positions.flatten()[0]) if tokens else 0
-    key = (start, tokens, head_dim, float(base), str(device), str(dtype))
-    cached = _ROPE_CACHE.get(key)
-    if cached is not None:
-        return cached
-
-    half = head_dim // 2
-    exponents = torch.arange(half, dtype=torch.float32) * (2.0 / head_dim)
-    inverse = torch.pow(float(base), -exponents)
-    indices = torch.arange(start, start + tokens, dtype=torch.float32).unsqueeze(1)
-    angles = indices * inverse.unsqueeze(0)
-    tables = (
-        torch.cos(angles).to(device=device, dtype=dtype),
-        torch.sin(angles).to(device=device, dtype=dtype),
-    )
-    _ROPE_CACHE[key] = tables
-    return tables
+    start = int(positions[0]) if tokens else 0
+    end = start + tokens
+    key = (head_dim, float(base), str(device), str(dtype))
+    tables = _ROPE_TABLES.get(key)
+    if tables is None or tables[0].shape[0] < end:
+        # grow geometrically so a long generation rebuilds O(log n) times
+        length = max(end, 256, 0 if tables is None else 2 * tables[0].shape[0])
+        half = head_dim // 2
+        exponents = torch.arange(half, dtype=torch.float32) * (2.0 / head_dim)
+        inverse = torch.pow(float(base), -exponents)
+        indices = torch.arange(length, dtype=torch.float32).unsqueeze(1)
+        angles = indices * inverse.unsqueeze(0)
+        tables = (
+            torch.cos(angles).to(device=device, dtype=dtype),
+            torch.sin(angles).to(device=device, dtype=dtype),
+        )
+        _ROPE_TABLES[key] = tables
+    return tables[0][start:end], tables[1][start:end]
 
 
 def apply_rope(tensor: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
@@ -120,7 +126,7 @@ def decoder_layer_forward(
     # prefix ended, otherwise every decode step would rotate as position 0
     offset = 0 if cache is None else cache.length(layer_index)
     cos, sin = build_rope(
-        torch.arange(offset, offset + tokens, device=hidden.device), head_dim,
+        torch.arange(offset, offset + tokens), head_dim,
         rope_base, device=hidden.device, dtype=hidden.dtype,
     )
     query = apply_rope(query, cos, sin)
