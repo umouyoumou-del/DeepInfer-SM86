@@ -1,0 +1,880 @@
+{
+  "host": {
+    "gpu": "NVIDIA GeForce RTX 4080 SUPER 32 GB",
+    "driver": "580.105.08",
+    "cpu": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+    "logical_cpus_visible": 128,
+    "cgroup_cpu_quota_cpus": 16,
+    "software": "torch 2.5.1+cu124 cuda 12.4 cupy 14.2.0",
+    "full_test_suite": "212 passed, 4 skipped, 38 warnings in 14.76s"
+  },
+  "arbitration": {
+    "note": "original section 32/33 scripts (olmoe_sm89_original_scripts/), unchanged, alternated",
+    "genc_s32_12step_mean_ms": [
+      21.1,
+      21.9,
+      21.2
+    ],
+    "topk_s33_ms_by_top_k": [
+      {
+        "8": 18.2,
+        "6": 17.5,
+        "4": 17.5,
+        "2": 17.6,
+        "1": 17.3
+      },
+      {
+        "8": 28.3,
+        "6": 27.8,
+        "4": 27.4,
+        "2": 27.5,
+        "1": 27.8
+      },
+      {
+        "8": 18.5,
+        "6": 22.8,
+        "4": 19.8,
+        "2": 17.5,
+        "1": 19.0
+      }
+    ],
+    "genc_per_step_variant": [
+      {
+        "per_step_ms": [
+          60.3,
+          17.8,
+          17.7,
+          17.7,
+          17.6,
+          17.8,
+          17.7,
+          17.8,
+          17.7,
+          17.7,
+          19.1,
+          17.7,
+          17.6,
+          17.6,
+          19.1,
+          17.5,
+          19.1,
+          17.5,
+          17.6,
+          17.5,
+          18.3,
+          17.5,
+          17.6,
+          17.6,
+          19.7,
+          17.6,
+          17.5,
+          17.6,
+          17.6,
+          18.9,
+          18.1,
+          17.6
+        ],
+        "first12_mean_ms": 21.4
+      },
+      {
+        "per_step_ms": [
+          59.4,
+          17.5,
+          17.5,
+          17.6,
+          19.0,
+          17.4,
+          17.4,
+          17.4,
+          17.4,
+          17.4,
+          17.5,
+          17.5,
+          19.7,
+          17.3,
+          18.8,
+          17.3,
+          17.3,
+          17.2,
+          17.3,
+          17.2,
+          17.5,
+          19.8,
+          17.3,
+          17.3,
+          17.5,
+          17.3,
+          17.2,
+          17.3,
+          17.3,
+          20.3,
+          17.4,
+          21.5
+        ],
+        "first12_mean_ms": 21.1
+      }
+    ]
+  },
+  "deepseek": {
+    "layers": 27,
+    "bench_decode_repeats_unchanged": {
+      "samples_ms_per_token": [
+        57.93483074133595,
+        87.32147375121713,
+        91.11528936773539,
+        72.46594394867618,
+        56.34948859612147
+      ],
+      "median_ms_per_token": 72.46594394867618,
+      "spread_pct": 47.97536453294075
+    },
+    "decode_only": [
+      {
+        "source": "results2/deepseek_decode_only.log",
+        "prompt": "short",
+        "prefill_ms": 88.3,
+        "decode_ms_per_step_median": 46.49,
+        "decode_range_ms": [
+          46.44,
+          110.36
+        ],
+        "decode_ms_per_layer": 1.722,
+        "whole_generate_ms_per_token": 47.9
+      },
+      {
+        "source": "results2/deepseek_decode_only.log",
+        "prompt": "long",
+        "prefill_ms": 109.2,
+        "decode_ms_per_step_median": 46.53,
+        "decode_range_ms": [
+          46.43,
+          48.59
+        ],
+        "decode_ms_per_layer": 1.723,
+        "whole_generate_ms_per_token": 48.5
+      },
+      {
+        "source": "results3/deepseek_interleaved_1.log",
+        "prompt": "short",
+        "prefill_ms": 89.5,
+        "decode_ms_per_step_median": 63.69,
+        "decode_range_ms": [
+          45.91,
+          102.5
+        ],
+        "decode_ms_per_layer": 2.359,
+        "whole_generate_ms_per_token": 67.4
+      },
+      {
+        "source": "results3/deepseek_interleaved_1.log",
+        "prompt": "long",
+        "prefill_ms": 109.4,
+        "decode_ms_per_step_median": 46.6,
+        "decode_range_ms": [
+          45.91,
+          47.91
+        ],
+        "decode_ms_per_layer": 1.726,
+        "whole_generate_ms_per_token": 48.6
+      },
+      {
+        "source": "results3/deepseek_interleaved_2.log",
+        "prompt": "short",
+        "prefill_ms": 88.6,
+        "decode_ms_per_step_median": 46.7,
+        "decode_range_ms": [
+          46.39,
+          54.42
+        ],
+        "decode_ms_per_layer": 1.73,
+        "whole_generate_ms_per_token": 48.1
+      },
+      {
+        "source": "results3/deepseek_interleaved_2.log",
+        "prompt": "long",
+        "prefill_ms": 108.8,
+        "decode_ms_per_step_median": 46.35,
+        "decode_range_ms": [
+          46.13,
+          48.13
+        ],
+        "decode_ms_per_layer": 1.717,
+        "whole_generate_ms_per_token": 48.3
+      }
+    ]
+  },
+  "olmoe_interleaved": [
+    {
+      "order": "olmoe 1 then deepseek 1",
+      "layers": 16,
+      "top_k": 8,
+      "step_ms": 30.870567075908184,
+      "host_ms": 30.61941172927618,
+      "gpu_ms": 7.1787519454956055
+    },
+    {
+      "order": "olmoe 2 then deepseek 2",
+      "layers": 16,
+      "top_k": 8,
+      "step_ms": 19.899403676390648,
+      "host_ms": 19.623110070824623,
+      "gpu_ms": 7.192831993103027
+    }
+  ],
+  "slow_state_probe": [
+    {
+      "source": "slowstate.log",
+      "pearson_probe_vs_host": 0.855,
+      "torch_threads": null,
+      "rows": [
+        {
+          "probe_ms": 24.64,
+          "host_ms": 16.35,
+          "step_ms": 16.65,
+          "cpu": 127,
+          "mhz": 2615.0
+        },
+        {
+          "probe_ms": 21.98,
+          "host_ms": 16.27,
+          "step_ms": 16.57,
+          "cpu": 127,
+          "mhz": 2612.0
+        },
+        {
+          "probe_ms": 22.06,
+          "host_ms": 16.36,
+          "step_ms": 16.66,
+          "cpu": 127,
+          "mhz": 2021.0
+        },
+        {
+          "probe_ms": 21.53,
+          "host_ms": 16.34,
+          "step_ms": 16.65,
+          "cpu": 127,
+          "mhz": 2600.0
+        },
+        {
+          "probe_ms": 29.58,
+          "host_ms": 31.16,
+          "step_ms": 31.4,
+          "cpu": 127,
+          "mhz": 2000.0
+        },
+        {
+          "probe_ms": 41.47,
+          "host_ms": 31.1,
+          "step_ms": 31.35,
+          "cpu": 110,
+          "mhz": 2000.0
+        },
+        {
+          "probe_ms": 41.37,
+          "host_ms": 31.07,
+          "step_ms": 31.31,
+          "cpu": 110,
+          "mhz": 2000.0
+        },
+        {
+          "probe_ms": 32.51,
+          "host_ms": 16.21,
+          "step_ms": 16.52,
+          "cpu": 110,
+          "mhz": 1999.0
+        },
+        {
+          "probe_ms": 24.48,
+          "host_ms": 16.13,
+          "step_ms": 16.43,
+          "cpu": 110,
+          "mhz": 2022.0
+        },
+        {
+          "probe_ms": 23.64,
+          "host_ms": 16.11,
+          "step_ms": 16.42,
+          "cpu": 110,
+          "mhz": 2616.0
+        },
+        {
+          "probe_ms": 23.59,
+          "host_ms": 16.13,
+          "step_ms": 16.44,
+          "cpu": 110,
+          "mhz": 2360.0
+        },
+        {
+          "probe_ms": 22.74,
+          "host_ms": 16.09,
+          "step_ms": 16.4,
+          "cpu": 110,
+          "mhz": 3500.0
+        },
+        {
+          "probe_ms": 22.5,
+          "host_ms": 16.09,
+          "step_ms": 16.4,
+          "cpu": 110,
+          "mhz": 2370.0
+        },
+        {
+          "probe_ms": 22.48,
+          "host_ms": 16.02,
+          "step_ms": 16.33,
+          "cpu": 110,
+          "mhz": 2580.0
+        },
+        {
+          "probe_ms": 21.39,
+          "host_ms": 16.03,
+          "step_ms": 16.34,
+          "cpu": 110,
+          "mhz": 3458.0
+        },
+        {
+          "probe_ms": 21.37,
+          "host_ms": 16.14,
+          "step_ms": 16.45,
+          "cpu": 110,
+          "mhz": 2018.0
+        },
+        {
+          "probe_ms": 23.87,
+          "host_ms": 16.1,
+          "step_ms": 16.41,
+          "cpu": 110,
+          "mhz": 2575.0
+        },
+        {
+          "probe_ms": 24.94,
+          "host_ms": 16.11,
+          "step_ms": 16.42,
+          "cpu": 110,
+          "mhz": 2620.0
+        },
+        {
+          "probe_ms": 23.26,
+          "host_ms": 16.12,
+          "step_ms": 16.43,
+          "cpu": 110,
+          "mhz": 1966.0
+        },
+        {
+          "probe_ms": 23.28,
+          "host_ms": 16.11,
+          "step_ms": 16.42,
+          "cpu": 110,
+          "mhz": 2629.0
+        },
+        {
+          "probe_ms": 23.42,
+          "host_ms": 16.08,
+          "step_ms": 16.4,
+          "cpu": 110,
+          "mhz": 3457.0
+        },
+        {
+          "probe_ms": 23.44,
+          "host_ms": 16.11,
+          "step_ms": 16.42,
+          "cpu": 110,
+          "mhz": 1924.0
+        },
+        {
+          "probe_ms": 23.27,
+          "host_ms": 16.14,
+          "step_ms": 16.45,
+          "cpu": 110,
+          "mhz": 2622.0
+        },
+        {
+          "probe_ms": 23.31,
+          "host_ms": 16.12,
+          "step_ms": 16.43,
+          "cpu": 110,
+          "mhz": 2584.0
+        },
+        {
+          "probe_ms": 23.28,
+          "host_ms": 16.11,
+          "step_ms": 16.42,
+          "cpu": 110,
+          "mhz": 3458.0
+        },
+        {
+          "probe_ms": 23.27,
+          "host_ms": 16.13,
+          "step_ms": 16.44,
+          "cpu": 110,
+          "mhz": 2612.0
+        },
+        {
+          "probe_ms": 23.44,
+          "host_ms": 16.14,
+          "step_ms": 16.46,
+          "cpu": 110,
+          "mhz": 3460.0
+        },
+        {
+          "probe_ms": 23.33,
+          "host_ms": 16.09,
+          "step_ms": 16.4,
+          "cpu": 110,
+          "mhz": 2595.0
+        },
+        {
+          "probe_ms": 23.3,
+          "host_ms": 16.39,
+          "step_ms": 16.68,
+          "cpu": 110,
+          "mhz": 2321.0
+        },
+        {
+          "probe_ms": 23.3,
+          "host_ms": 16.13,
+          "step_ms": 16.43,
+          "cpu": 110,
+          "mhz": 2119.0
+        },
+        {
+          "probe_ms": 23.27,
+          "host_ms": 16.09,
+          "step_ms": 16.41,
+          "cpu": 110,
+          "mhz": 2582.0
+        },
+        {
+          "probe_ms": 23.51,
+          "host_ms": 16.1,
+          "step_ms": 16.41,
+          "cpu": 110,
+          "mhz": 2580.0
+        },
+        {
+          "probe_ms": 23.5,
+          "host_ms": 16.06,
+          "step_ms": 16.38,
+          "cpu": 110,
+          "mhz": 1924.0
+        },
+        {
+          "probe_ms": 23.36,
+          "host_ms": 16.07,
+          "step_ms": 16.38,
+          "cpu": 110,
+          "mhz": 3500.0
+        },
+        {
+          "probe_ms": 23.42,
+          "host_ms": 16.08,
+          "step_ms": 16.39,
+          "cpu": 110,
+          "mhz": 1933.0
+        },
+        {
+          "probe_ms": 23.61,
+          "host_ms": 16.08,
+          "step_ms": 16.39,
+          "cpu": 110,
+          "mhz": 2319.0
+        },
+        {
+          "probe_ms": 23.26,
+          "host_ms": 16.09,
+          "step_ms": 16.4,
+          "cpu": 110,
+          "mhz": 2079.0
+        },
+        {
+          "probe_ms": 23.26,
+          "host_ms": 16.11,
+          "step_ms": 16.42,
+          "cpu": 110,
+          "mhz": 2505.0
+        },
+        {
+          "probe_ms": 23.27,
+          "host_ms": 16.09,
+          "step_ms": 16.4,
+          "cpu": 110,
+          "mhz": 2616.0
+        },
+        {
+          "probe_ms": 23.27,
+          "host_ms": 16.09,
+          "step_ms": 16.4,
+          "cpu": 110,
+          "mhz": 2590.0
+        }
+      ]
+    },
+    {
+      "source": "slowstate2.log",
+      "pearson_probe_vs_host": 0.938,
+      "torch_threads": "64",
+      "rows": [
+        {
+          "probe_ms": 37.69,
+          "host_ms": 30.51,
+          "step_ms": 30.76,
+          "cpu": 117,
+          "mhz": 2000.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 39.4,
+          "host_ms": 30.45,
+          "step_ms": 30.7,
+          "cpu": 117,
+          "mhz": 2000.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 37.66,
+          "host_ms": 30.49,
+          "step_ms": 30.74,
+          "cpu": 117,
+          "mhz": 1999.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 37.68,
+          "host_ms": 30.5,
+          "step_ms": 30.75,
+          "cpu": 117,
+          "mhz": 2000.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 29.57,
+          "host_ms": 30.48,
+          "step_ms": 30.74,
+          "cpu": 117,
+          "mhz": 2000.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 21.53,
+          "host_ms": 15.96,
+          "step_ms": 16.27,
+          "cpu": 117,
+          "mhz": 2534.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 21.52,
+          "host_ms": 15.97,
+          "step_ms": 16.28,
+          "cpu": 117,
+          "mhz": 2301.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 21.56,
+          "host_ms": 15.95,
+          "step_ms": 16.27,
+          "cpu": 117,
+          "mhz": 2420.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 21.57,
+          "host_ms": 15.98,
+          "step_ms": 16.3,
+          "cpu": 117,
+          "mhz": 2475.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 21.5,
+          "host_ms": 16.04,
+          "step_ms": 16.35,
+          "cpu": 117,
+          "mhz": 2624.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 21.52,
+          "host_ms": 15.98,
+          "step_ms": 16.29,
+          "cpu": 117,
+          "mhz": 3460.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 21.51,
+          "host_ms": 15.98,
+          "step_ms": 16.3,
+          "cpu": 117,
+          "mhz": 2220.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 21.52,
+          "host_ms": 15.98,
+          "step_ms": 16.29,
+          "cpu": 117,
+          "mhz": 2620.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 21.59,
+          "host_ms": 15.98,
+          "step_ms": 16.29,
+          "cpu": 117,
+          "mhz": 1966.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 22.34,
+          "host_ms": 15.99,
+          "step_ms": 16.3,
+          "cpu": 117,
+          "mhz": 3466.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 21.88,
+          "host_ms": 15.98,
+          "step_ms": 16.3,
+          "cpu": 117,
+          "mhz": 2614.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 25.28,
+          "host_ms": 16.0,
+          "step_ms": 16.32,
+          "cpu": 117,
+          "mhz": 2555.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 26.42,
+          "host_ms": 15.93,
+          "step_ms": 16.25,
+          "cpu": 117,
+          "mhz": 2045.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 24.28,
+          "host_ms": 15.99,
+          "step_ms": 16.31,
+          "cpu": 117,
+          "mhz": 2208.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 24.4,
+          "host_ms": 15.96,
+          "step_ms": 16.28,
+          "cpu": 117,
+          "mhz": 2058.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 23.31,
+          "host_ms": 15.96,
+          "step_ms": 16.28,
+          "cpu": 117,
+          "mhz": 2579.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 23.31,
+          "host_ms": 15.96,
+          "step_ms": 16.28,
+          "cpu": 117,
+          "mhz": 1922.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 23.42,
+          "host_ms": 15.95,
+          "step_ms": 16.27,
+          "cpu": 117,
+          "mhz": 2614.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 23.29,
+          "host_ms": 15.93,
+          "step_ms": 16.25,
+          "cpu": 117,
+          "mhz": 2604.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 23.28,
+          "host_ms": 15.95,
+          "step_ms": 16.26,
+          "cpu": 117,
+          "mhz": 2618.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 23.43,
+          "host_ms": 15.98,
+          "step_ms": 16.29,
+          "cpu": 117,
+          "mhz": 2461.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 23.28,
+          "host_ms": 15.95,
+          "step_ms": 16.27,
+          "cpu": 117,
+          "mhz": 2582.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 23.28,
+          "host_ms": 15.94,
+          "step_ms": 16.26,
+          "cpu": 117,
+          "mhz": 3500.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 23.44,
+          "host_ms": 15.95,
+          "step_ms": 16.27,
+          "cpu": 117,
+          "mhz": 2616.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 23.3,
+          "host_ms": 15.97,
+          "step_ms": 16.29,
+          "cpu": 117,
+          "mhz": 3457.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 23.29,
+          "host_ms": 15.95,
+          "step_ms": 16.27,
+          "cpu": 117,
+          "mhz": 2617.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 23.43,
+          "host_ms": 15.96,
+          "step_ms": 16.27,
+          "cpu": 117,
+          "mhz": 2603.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 23.36,
+          "host_ms": 16.09,
+          "step_ms": 16.4,
+          "cpu": 117,
+          "mhz": 2606.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 23.3,
+          "host_ms": 15.98,
+          "step_ms": 16.29,
+          "cpu": 117,
+          "mhz": 2011.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 23.42,
+          "host_ms": 16.0,
+          "step_ms": 16.32,
+          "cpu": 117,
+          "mhz": 3500.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 23.35,
+          "host_ms": 15.97,
+          "step_ms": 16.29,
+          "cpu": 117,
+          "mhz": 3500.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 23.28,
+          "host_ms": 15.96,
+          "step_ms": 16.27,
+          "cpu": 117,
+          "mhz": 2615.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 23.4,
+          "host_ms": 15.96,
+          "step_ms": 16.27,
+          "cpu": 117,
+          "mhz": 3458.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 23.42,
+          "host_ms": 15.97,
+          "step_ms": 16.29,
+          "cpu": 117,
+          "mhz": 2398.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        },
+        {
+          "probe_ms": 24.17,
+          "host_ms": 15.98,
+          "step_ms": 16.29,
+          "cpu": 117,
+          "mhz": 2614.0,
+          "new_throttles": 0,
+          "throttled_ms": 0.0
+        }
+      ]
+    }
+  ]
+}
