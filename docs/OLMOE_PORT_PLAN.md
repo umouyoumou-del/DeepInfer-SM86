@@ -1080,3 +1080,65 @@ DeepSeek 1.35 GB / 0.0478 s = 28.2 GB/s（3.8%）
 用 `fused_*_ptr_grouped` 直接吃每个专家的指针——gather 和 dtype 转换都不再需要。
 
 那一步可以把字节数减半、op 数再降一个量级。
+
+---
+
+## 26. 打包权重路径已验证可行（下一步的最后一块拼图）
+
+§25 之后仍有一个结构性浪费：移植把专家反量化成 fp16 稠密，每 token 读 1.61 GB，
+而打包权重只有 0.73 GB。要消掉它必须**保持 Q4_K/Q6_K 打包**，
+用 `fused_*_ptr_grouped` 直接吃每个专家的指针。
+
+### 验证 1：字节数是自洽的
+
+| 张量 | dims | 每专家行字节 | 推导总量 | 实际 nbytes |
+|---|---|---:|---:|---:|
+| `ffn_gate_exps` Q4_K | (2048, 1024, 64) | 1024 × 1152 | 75,497,472 | **75,497,472** |
+| `ffn_down_exps` Q6_K | (1024, 2048, 64) | 2048 × 840 | 110,100,480 | **110,100,480** |
+
+（Q4_K 每 256 元素 144 字节；Q6_K 每 256 元素 210 字节。）
+
+### 验证 2：专家块在文件中是连续的
+
+`read_raw` 返回整张量的 uint8 视图。取 `raw[0 : OUT*RB]` 当作专家 0 的砖块，
+用 numpy 复刻 Q4_K 解量化，与 `expert_tensor(name, 0)` 比对：
+
+```
+slab0 row0 first256  maxdiff = 0.00000
+mine[:4] [-0.0124774   0.01464331  0.02006745 -0.01790154]
+ref [:4] [-0.0124774   0.01464331  0.02006745 -0.01790154]
+```
+
+**逐元素完全一致** → 专家是**最外层连续存放**的，可以零拷贝切片：
+
+```python
+raw = index.read_raw("blk.L.ffn_gate_exps.weight")   # mmap 视图，不复制
+slab_e = raw[e * out * row_bytes : (e + 1) * out * row_bytes]   # 连续
+```
+
+### 接线计划（decode 情形最简单）
+
+单 token decode 时 top-8 恰好是"8 个专家各 1 个 token"，
+与 `fused_gate_up_gemm_ptr_grouped` 的入参形状天然吻合：
+
+```
+n_experts = 8, max_count = 1, counts = [1]*8
+x_all     = hidden 重复 8 次 -> [8, 1, 2048]
+pointers  = 8 个专家的打包显存指针
+gate_qtype/up_qtype = "Q4_K",  gate_row_bytes = up_row_bytes = 1152
+down:             qtype "Q6_K", down_row_bytes = 840, out_features = 2048, k_size = 1024
+```
+
+然后加权求和即得输出。**gather 与 dtype 转换同时消失，字节数减半。**
+
+### 前置条件
+
+| 条件 | 状态 |
+|---|---|
+| Q6_K kernel 支持 | ✅ §8 已完成并验证 |
+| 专家块连续可零拷贝 | ✅ 本节验证 |
+| 指针数组 kernel | ✅ 已存在（DeepSeek 在用） |
+| 剩余 | 把 4.2 GB 打包砖块上传显存 + 接线 |
+
+预计打包路径可将 OLMoE 从 104 ms/token 推近 DeepSeek 的水平
+（1.61 → 0.73 GB/token，且 op 数大幅下降）。
