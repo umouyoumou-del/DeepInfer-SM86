@@ -1,0 +1,209 @@
+# v4: v3 + activation read through L1 (__ldg), weights L2-only (__ldcg), no shared staging (slower)
+# apply to the kept v3 to reproduce the variant measured in section 38
+--- a/deepinfer/moe/olmoe_fused.py
++++ b/deepinfer/moe/olmoe_fused.py
+@@ -16,7 +16,7 @@
+   5. RMSNorm, router logits, softmax and top-k: every block normalises the
+      hidden state itself and takes one expert's logit; the last block to
+      finish picks the experts
+-  6. gate/up for every routed expert, one warp per (row, expert)
++  6. gate/up for every routed expert, gate and up of a row on a warp pair
+   7. down for every routed expert, one warp per (row, expert)
+ 
+ and the step ends with the LM head, whose GEMV also takes the argmax through a
+@@ -24,12 +24,9 @@
+ residual stream and all activations stay in fp32; only the cache is fp16.
+ 
+ The GEMVs keep packed_gemv's lane mapping.  The super-block count is a template
+-parameter, so the loop unrolls and every load of a row is issued before the
+-first one is consumed, which packed_gemv's runtime-length loop could not do.
+-Each block stages the activation in shared memory first.  Two variants that
+-looked better on paper measured slower on the 4080 SUPER (OLMOE_PORT_PLAN
+-section 38): issuing the row's loads before staging, and reading the
+-activation through L1 with no staging at all.
++parameter, so the loop unrolls and a warp holds its whole row in registers;
++the row is loaded before the activation is staged in shared memory, since the
++weights do not depend on it, and the two latencies overlap.
+ """
+ 
+ from __future__ import annotations
+@@ -46,7 +43,7 @@
+ 
+ try:
+     import cupy as cp
+-except Exception:  # noqa: BLE001  # pragma: no cover - CuPy can fail to load with a CUDA error, not only ImportError
++except Exception:  # pragma: no cover - CPU-only hosts
+     cp = None
+ 
+ _QTYPES = {"Q4_K": 0, "Q6_K": 1}
+@@ -128,13 +125,13 @@
+     #pragma unroll
+     for (int b = 0; b < NB; ++b) {
+         const unsigned char* block = row + b * 144;
+-        const uint4 head = *reinterpret_cast<const uint4*>(block);  // d, dmin, scales
++        const uint4 head = __ldcg(reinterpret_cast<const uint4*>(block));  // d, dmin, scales
+         dm[b] = make_float2(__half2float(__ushort_as_half((unsigned short)(head.x & 0xFFFFu))),
+                             __half2float(__ushort_as_half((unsigned short)(head.x >> 16))));
+         w0[b] = head.y;
+         w1[b] = head.z;
+         w2[b] = head.w;
+-        q[b] = *reinterpret_cast<const unsigned int*>(block + 16 + lane * 4);
++        q[b] = __ldcg(reinterpret_cast<const unsigned int*>(block + 16 + lane * 4));
+     }
+     float acc = 0.0f;
+     #pragma unroll
+@@ -142,8 +139,8 @@
+         float sc0, m0, sc1, m1;
+         fz_q4k_scale_min(w0[b], w1[b], w2[b], s0, &sc0, &m0);
+         fz_q4k_scale_min(w0[b], w1[b], w2[b], s1, &sc1, &m1);
+-        const float4 xa = *reinterpret_cast<const float4*>(xs + b * 256 + s0 * 32 + pos);
+-        const float4 xb = *reinterpret_cast<const float4*>(xs + b * 256 + s1 * 32 + pos);
++        const float4 xa = __ldg(reinterpret_cast<const float4*>(xs + b * 256 + s0 * 32 + pos));
++        const float4 xb = __ldg(reinterpret_cast<const float4*>(xs + b * 256 + s1 * 32 + pos));
+         const unsigned int v = q[b];
+         const float dot0 = (float)(v & 0xF) * xa.x + (float)((v >> 8) & 0xF) * xa.y
+                          + (float)((v >> 16) & 0xF) * xa.z + (float)((v >> 24) & 0xF) * xa.w;
+@@ -170,13 +167,13 @@
+         const unsigned char* block = row + b * 210;
+         const unsigned char* ql = block + half * 64;
+         const unsigned short* sc = reinterpret_cast<const unsigned short*>(block + 192 + half * 8);
+-        lo_a[b] = *reinterpret_cast<const unsigned short*>(ql + l);
+-        lo_b[b] = *reinterpret_cast<const unsigned short*>(ql + l + 32);
+-        hi[b] = *reinterpret_cast<const unsigned short*>(block + 128 + half * 32 + l);
++        lo_a[b] = __ldcg(reinterpret_cast<const unsigned short*>(ql + l));
++        lo_b[b] = __ldcg(reinterpret_cast<const unsigned short*>(ql + l + 32));
++        hi[b] = __ldcg(reinterpret_cast<const unsigned short*>(block + 128 + half * 32 + l));
+         // scales is + 0, 2, 4, 6 sit in the low (is = 0) or high byte of ushorts 0..3
+-        s01[b] = (unsigned int)sc[0] | ((unsigned int)sc[1] << 16);
+-        s23[b] = (unsigned int)sc[2] | ((unsigned int)sc[3] << 16);
+-        d[b] = __half2float(*reinterpret_cast<const __half*>(block + 208));
++        s01[b] = (unsigned int)__ldcg(sc) | ((unsigned int)__ldcg(sc + 1) << 16);
++        s23[b] = (unsigned int)__ldcg(sc + 2) | ((unsigned int)__ldcg(sc + 3) << 16);
++        d[b] = __half2float(__ldcg(reinterpret_cast<const __half*>(block + 208)));
+     }
+     float acc = 0.0f;
+     #pragma unroll
+@@ -192,7 +189,7 @@
+                                | (((hi[b] >> (8 + 2 * quarter)) & 3) << 4)) - 32;
+             const unsigned int word = quarter < 2 ? s01[b] : s23[b];
+             const int scale = (int)(signed char)((word >> (16 * (quarter & 1) + 8 * is)) & 0xFF);
+-            const float2 xv = *reinterpret_cast<const float2*>(xh + 32 * quarter);
++            const float2 xv = __ldg(reinterpret_cast<const float2*>(xh + 32 * quarter));
+             sum += (float)scale * ((float)q0 * xv.x + (float)q1 * xv.y);
+         }
+         acc += d[b] * sum;
+@@ -204,15 +201,6 @@
+ __device__ __forceinline__ float fz_row_dot(const unsigned char* row, const float* xs, int qtype, int lane)
+ {
+     return qtype ? fz_q6k_dot<NB>(row, xs, lane) : fz_q4k_dot<NB>(row, xs, lane);
+-}
+-
+-// x (NB*256 floats) into shared memory with float4 copies
+-template <int NB>
+-__device__ __forceinline__ void fz_stage(const float* x, float4* shared4)
+-{
+-    const float4* x4 = reinterpret_cast<const float4*>(x);
+-    for (int i = threadIdx.x; i < NB * 64; i += blockDim.x) shared4[i] = x4[i];
+-    __syncthreads();
+ }
+ 
+ // argmax as a max over keys: orderable float bits, then the inverted row so a
+@@ -231,8 +219,6 @@
+     const float* __restrict__ x, const unsigned long long* __restrict__ table, int qtype_bits,
+     float* __restrict__ out, int rows, int mode, unsigned long long* __restrict__ argmax_key)
+ {
+-    extern __shared__ float4 shared4[];
+-    fz_stage<NB>(x, shared4);
+     const int lane = threadIdx.x & 31;
+     const int row = blockIdx.x * (blockDim.x >> 5) + (threadIdx.x >> 5);
+     if (row >= rows) return;
+@@ -240,7 +226,7 @@
+     const int qtype = (qtype_bits >> m) & 1;
+     const unsigned char* w = reinterpret_cast<const unsigned char*>(table[m])
+                            + (size_t)row * (NB * (qtype ? 210 : 144));
+-    const float dot = fz_warp_sum(fz_row_dot<NB>(w, reinterpret_cast<const float*>(shared4), qtype, lane));
++    const float dot = fz_warp_sum(fz_row_dot<NB>(w, x, qtype, lane));
+     if (lane != 0) return;
+     float* o = out + (size_t)m * rows;
+     if (mode == 1) {
+@@ -258,14 +244,12 @@
+     const unsigned long long* __restrict__ gate_table, const unsigned long long* __restrict__ up_table,
+     float* __restrict__ act, int inter, int gate_qtype, int up_qtype)
+ {
+-    extern __shared__ float4 shared4[];
+-    fz_stage<NB>(x, shared4);
+     const int lane = threadIdx.x & 31;
+     const int row = blockIdx.x * (blockDim.x >> 5) + (threadIdx.x >> 5);
+     if (row >= inter) return;
+     const int slot = blockIdx.y;
+     const long long expert = ids[slot];
+-    const float* xs = reinterpret_cast<const float*>(shared4);
++    const float* xs = x;
+     const unsigned char* g = reinterpret_cast<const unsigned char*>(gate_table[expert])
+                            + (size_t)row * (NB * (gate_qtype ? 210 : 144));
+     const unsigned char* u = reinterpret_cast<const unsigned char*>(up_table[expert])
+@@ -283,15 +267,13 @@
+     const float* __restrict__ route_weights, const unsigned long long* __restrict__ down_table,
+     float* __restrict__ out, int rows, int qtype)
+ {
+-    extern __shared__ float4 shared4[];
+     const int slot = blockIdx.y;
+-    fz_stage<NB>(act + (size_t)slot * NB * 256, shared4);
+     const int lane = threadIdx.x & 31;
+     const int row = blockIdx.x * (blockDim.x >> 5) + (threadIdx.x >> 5);
+     if (row >= rows) return;
+     const unsigned char* d = reinterpret_cast<const unsigned char*>(down_table[ids[slot]])
+                            + (size_t)row * (NB * (qtype ? 210 : 144));
+-    const float dot = fz_warp_sum(fz_row_dot<NB>(d, reinterpret_cast<const float*>(shared4), qtype, lane));
++    const float dot = fz_warp_sum(fz_row_dot<NB>(d, act + (size_t)slot * NB * 256, qtype, lane));
+     if (lane == 0) out[(size_t)slot * rows + row] = route_weights[slot] * dot;
+ }
+ 
+@@ -664,7 +646,7 @@
+     _launch(f"fz_gemv<{cols // 256}>", ((rows + _WARPS - 1) // _WARPS, len(matrices)),
+             (32 * _WARPS,), (_to_cupy(x.contiguous()), _to_cupy(table), _i32(bits),
+                              _to_cupy(out), _i32(rows), _i32(0), _to_cupy(key)),
+-            shared=cols * 4)
++            shared=0)
+     torch.cuda.current_stream().synchronize()  # table and key are temporaries
+     return out
+ 
+@@ -775,7 +757,7 @@
+                   c(layer.attn_norm), c(self.normed), _i32(n), eps), 0),
+                 (f"fz_gemv<{nb}>", (warp_grid, 3), threads,
+                  (c(self.normed), qkv_table, _i32(qkv_bits), c(self.qkv), _i32(n), _i32(0),
+-                  c(self.argmax_key)), n * 4),
++                  c(self.argmax_key)), 0),
+                 ("fz_attend", (self.num_heads,), (attend_threads,),
+                  (c(self.qkv), c(layer.q_norm), c(layer.k_norm), c(self.rope_cos),
+                   c(self.rope_sin), c(self.position), c(keys), c(values), c(self.context),
+@@ -783,17 +765,17 @@
+                  (hd + self.max_len + attend_threads) * 4),
+                 (f"fz_gemv<{nb}>", (warp_grid, 1), threads,
+                  (c(self.context), o_table, _i32(o_bits), c(self.hidden_state), _i32(n),
+-                  _i32(1), c(self.argmax_key)), n * 4),
++                  _i32(1), c(self.argmax_key)), 0),
+                 ("fz_route", (self.experts,), (128,),
+                  (c(self.hidden_state), c(layer.ffn_norm), c(layer.router), c(self.normed),
+                   c(self.router_logits), c(self.route_counter), _i32(n), eps, _i32(k),
+                   c(self.expert_ids), c(self.route_weights)), 0),
+                 (f"fz_gate_up<{nb}>", ((inter + _WARPS - 1) // _WARPS, k), threads,
+                  (c(self.normed), c(self.expert_ids), c(gate_table), c(up_table), c(self.act),
+-                  _i32(inter), _i32(_QTYPES[gate_qtype]), _i32(_QTYPES[up_qtype])), n * 4),
++                  _i32(inter), _i32(_QTYPES[gate_qtype]), _i32(_QTYPES[up_qtype])), 0),
+                 (f"fz_down<{inter // 256}>", (warp_grid, k), threads,
+                  (c(self.act), c(self.expert_ids), c(self.route_weights), c(down_table),
+-                  c(self.moe_out), _i32(n), _i32(_QTYPES[down_qtype])), inter * 4),
++                  c(self.moe_out), _i32(n), _i32(_QTYPES[down_qtype])), 0),
+             ]
+         head = self.model.lm_head
+         head_table, head_bits = self._table([head])
+@@ -803,7 +785,7 @@
+               c(self.normed), _i32(n), eps), 0),
+             (f"fz_gemv<{nb}>", ((head.rows + _WARPS - 1) // _WARPS, 1), threads,
+              (c(self.normed), head_table, _i32(head_bits), c(self._logits), _i32(head.rows),
+-              _i32(2), c(self.argmax_key)), n * 4),
++              _i32(2), c(self.argmax_key)), 0),
+             ("fz_finish", (1,), (1,),
+              (c(self.argmax_key), c(self.token), c(self.history), c(self.position)), 0),
+         ]

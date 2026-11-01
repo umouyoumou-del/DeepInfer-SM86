@@ -1956,3 +1956,305 @@ top_k=8 时 7.2 ms/token（**2.3 倍**），top_k=1 时 4.1 ms/token（4.1 倍�
 > **§35 说"decode = max(主机, GPU)"。这一轮把主机项打到 0.03 ms，
 > 于是 decode 就只剩下 GPU 的 4.02 ms——而 GPU 那 4 ms 里，gemv 又比原来的
 > pointer-grouped 快 1.64 倍。两个瓶颈按顺序各处理一次，得到 61 倍（16.63 → 4.04）。**
+
+---
+
+## 37. 同机对照 llama.cpp：578 vs 247 tok/s，差距在 GPU 上而不在主机
+
+§36 之后，本仓库在 4080 SUPER 上最快的配置是 graph+gemv，247.58 tok/s。这一节在同一台机器、同一个会话里，
+用同一份 GGUF 跑 llama.cpp 的当前版本做对照，再用 CUPTI 把两边每个 token 的 GPU 时间拆到 kernel。
+
+### 环境与口径
+
+| 项 | llama.cpp | DeepInfer |
+|---|---|---|
+| 版本 | b12024（`ddf48f8`，2026-10-31），源码编译：CUDA 12.4，`GGML_CUDA=ON`，`CMAKE_CUDA_ARCHITECTURES=89`（ggml 0.28.0） | 远端 120 个源文件与 HEAD `13ebab7` 逐字节一致（换行符归一化后） |
+| 机器 | RTX 4080 SUPER 32 GB，驱动 580.105.08；Xeon 8352V，cgroup 配额 16 核（与 §35 同一台） | 同左 |
+| 模型 | `OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf`，全部层在 GPU（`-ngl 99`） | 同一个文件 |
+| 计时 | `llama-bench -p 0 -d 5 -n 32,128 -r 10`：每次重复生成 n 个 token，每个 token 之后 `llama_synchronize`；token 随机生成，不经过采样 | `bench_olmoe_decode.py`：逐步 sync 到 sync，去掉前 4 步取中位数，5 次重复取中位数，贪心 |
+| 上下文 | 先填 5 个 token，再生成 32 / 128 个 | prompt 5 个 token，再生成 32 个 |
+| 每 token 读的字节 | **0.741 GB**：dense 保持 Q4_K/Q6_K 0.253 + 专家 0.488 | **1.239 GB**：dense 为 fp16 0.752 + 专家 0.488 |
+
+三轮交替（llama.cpp 先、DeepInfer 先、llama.cpp 先），每轮包括 llama-bench、关闭 CUDA Graph 的 llama-bench、
+pp512、一次贪心生成，以及 DeepInfer 的四种配置。数据：`docs/results/olmoe_sm89_vs_llamacpp.json`；
+kernel 级的数据在 `docs/results/olmoe_sm89_kernel_trace.json`。脚本保存在 `docs/results/olmoe_sm89_llamacpp_scripts/`，入库前只做了不改变行为的 lint 修整，重跑后输出一致。
+
+### 结果 1：decode 速度
+
+| 配置 | 第 1 轮 | 第 2 轮 | 第 3 轮 | ms/token |
+|---|---:|---:|---:|---:|
+| **llama.cpp tg128，FA 开** | **578.3** | **577.7** | **577.4** | **1.73** |
+| llama.cpp tg32，深度 5，FA 开（t=64） | 577.7 | 577.5 | 576.9 | 1.73 |
+| llama.cpp tg128，FA 关 | 562.1 | 562.0 | 561.1 | 1.78 |
+| llama.cpp 关闭 CUDA Graph（tg32，深度 5） | 503.2 | 503.6 | 471.5 | 1.99–2.12 |
+| **DeepInfer graph + gemv** | **246.8** | **247.6** | **247.3** | **4.04–4.05** |
+| DeepInfer graph + grouped | 151.0 | 151.1 | 150.6 | 6.62–6.64 |
+| DeepInfer eager + gemv | 61.8 | 65.8 | 65.5 | 15.2–16.2 |
+| DeepInfer eager + grouped | 56.7 | 60.2 | 59.8 | 16.6–17.6 |
+
+单位 tok/s。llama.cpp 取 10 次重复的中位数，DeepInfer 取 5 次重复的中位数。
+
+- **llama.cpp 比本仓库最快的配置快 2.34 倍**（1.73 vs 4.04 ms/token）。§36 的 247.58 tok/s 复现了（246.8–247.6）。
+- llama.cpp 对主机不敏感：线程数从 1 到 64，FA 开时 tg128 都在 575.4–577.7；关掉 CUDA Graph 也只慢 15–22%；
+  所有 llama.cpp 运行期间 cgroup 节流次数都是 0。
+  DeepInfer graph+gemv 第 1 轮的 5 次重复恰好落在慢态（进程内探针 37.4–41.4 ms），step 仍是 4.05 ms。
+  **两边的最快配置都受 GPU 限制，2.34 倍是 GPU 时间之比，和 §35 的主机慢态无关。**
+- 都不用 Graph 时，两边的主机开销差一个数量级：llama.cpp 关掉 Graph 也只要 1.99 ms/token，
+  DeepInfer eager 的主机时间是 14.9–17.4 ms。
+- 每个测试的第一次重复都偏慢（例如 529 vs 569 tok/s），属于 Graph 捕获和预热；llama-bench 的平均值把它算了进去，
+  上表用中位数。tg32 在 t=16 时是 568–569，比 t=64 低约 1.5%，这个差异只出现在每批测试里排第一个的配置上，没有继续追。
+
+### 结果 2：prefill
+
+llama.cpp pp512 为 **19,800–21,100 tok/s**。本仓库的 OLMoE 没有批量 prefill：prompt 一个 token 一个 token 地走 decode 步
+（见 `bench_olmoe_decode.py` 的文档字符串），所以 prefill 速度就是 decode 速度，约 247 tok/s，
+**相差约 80 倍**。这一项不是本节的测量重点，但在比较"速度"时不能漏掉。
+
+### 结果 3：输出在第 10 个生成 token 处分叉——两边都接近平局
+
+两边的 prompt 分词相同，都是 `[510, 5347, 273, 6181, 310]`（GGUF 的 `add_bos_token = False`）。贪心输出：
+
+- llama.cpp：` Paris.\n\nThe currency of France is the Euro.\n\nThe population of France is around 67 million people.\n\nThe official language of France is French`
+- DeepInfer（四种配置相同）：` Paris.\n\nThe currency of France is Euro.\n\nThe population ...`
+
+用 `logits_probe.cpp`（直接调用 llama.h）和 `margins.py`（DeepInfer 的 eager 前向）打印每一步的 top-5 logit：
+
+| 第 10 个生成 token | " the" | " Euro" | 领先幅度 |
+|---|---:|---:|---:|
+| llama.cpp | **19.611** | 19.309 | 0.30 |
+| DeepInfer gemv | 19.672 | **19.703** | 0.031 |
+| DeepInfer grouped | 19.672 | **19.688** | 0.016 |
+
+- 分叉之前的 9 步，两边 top-1 的 logit 差中位数是 0.049，最大 0.150；
+- DeepInfer 在分叉处只领先 0.016–0.031，属于近似平局。llama.cpp 用 Q8_1 量化激活来做点积，DeepInfer 用 fp16 激活和 fp16 的 dense 权重，
+  这一量级的数值差异足以翻转 argmax。**这是平局翻转，不是实现错误**；
+- 本仓库的 gemv 与 grouped 路径在 33 步内 top-1 全部相同。
+
+### 结果 4：每 token 的 GPU 时间拆到 kernel
+
+容器里没有 GPU 性能计数器权限（ncu 报 `ERR_NVGPUCTRPERM`）。CUPTI 的活动追踪只记录时间戳，不需要这个权限，
+所以写了一个通过 `CUDA_INJECTION64_PATH` 注入的小库 `kernel_trace.cpp`，**两边使用同一个 tracer**，都在 CUDA Graph 下运行。
+一次 graph replay 里的 kernel 共享 `cudaGraphLaunch` 的 correlation id，可以据此按 token 切分。
+llama.cpp 每个 token 拆成**两个** graph（9 层 + 7 层，224 + 182 个 kernel）。
+追踪本身有开销：DeepInfer 的 GPU 时间从 4.02 涨到 4.11 ms，llama.cpp 的 tg64 降到 439 tok/s。
+所以这里只使用 kernel 时长，端到端速度仍以结果 1 为准。
+
+| 类别 | DeepInfer µs | kernel | GB/s | llama.cpp µs | kernel | GB/s | 差 µs |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 专家 GEMV gate+up（302 MB，两边相同） | 602.4 | 16 | 501 | 460.5 | 16 | 656 | 142.0 |
+| 专家 GEMV down（186 MB，两边相同） | 630.4 | 16 | **294** | 290.5 | 16 | 639 | **339.9** |
+| dense GEMV 注意力投影（fp16 537 MB / 量化 160 MB） | 908.6 | 64 | 591 | 318.0 | 64 | 502 | **590.7** |
+| dense GEMV lm_head（fp16 206 MB / Q6_K 85 MB） | 295.9 | 1 | 696 | 122.7 | 1 | 689 | 173.2 |
+| 类型转换（`direct_copy`） | 373.1 | 211 | | — | 0 | | 373.1 |
+| RMSNorm | 427.5 | 390 | | 106.8 | 65 | | 320.6 |
+| RoPE | 302.1 | 227 | | 32.9 | 32 | | 269.2 |
+| 注意力 | 231.6 | 16 | | 98.8 | 32 | | 132.8 |
+| 注意力掩码 | 63.1 | 64 | | — | 0 | | 63.1 |
+| 路由 + top-k + 合并 | 177.6 | 80 | | 97.0 | 48 | | 80.6 |
+| KV 写入 | 59.6 | 32 | | 15.4 | 16 | | 44.3 |
+| 残差加 / 其他 | 42.8 | 36 | | 21.4 | 19 | | 21.4 |
+| 激活量化（Q8_1，llama.cpp 独有） | — | 0 | | 96.6 | 97 | | −96.6 |
+| **合计** | **4114** | **1153** | | **1661** | **406** | | **2454** |
+
+2454 µs 的差距按来源归并：
+
+| 来源 | 差 µs | 占比 |
+|---|---:|---:|
+| 胶水算子：类型转换、RMSNorm、RoPE、掩码、KV 写入、路由、残差，扣除 llama.cpp 的激活量化 | 1076 | **44%** |
+| dense GEMV：fp16 对比 Q4_K/Q6_K | 764 | **31%** |
+| 专家 GEMV：down 340 + gate/up 142 | 482 | 20% |
+| 注意力：DeepInfer 遍历整个 256 长度的缓冲区并加掩码，llama.cpp 只算实际长度 | 133 | 5% |
+
+三个发现：
+
+1. **dense GEMV 的问题在字节数，不在 kernel。** cuBLAS fp16 GEMV 的带宽是 591 / 696 GB/s，
+   不比 llama.cpp 的量化 GEMV（502 / 689 GB/s）差。764 µs 全部来自多读的字节：0.743 GB 对 0.244 GB。
+   注意力投影和 lm_head 本来就是 Q4_K/Q6_K，和专家是同一种格式，`packed_gemv` 已经能读这种格式。
+2. **专家 GEMV 的差距集中在 down。** gate+up 为 501 vs 656 GB/s（1.31 倍），down 为 294 vs 639 GB/s（2.17 倍）。
+   `pg_down_gemv_combine` 的 grid 是 256 个 block，每个 warp 负责一行、串行遍历 8 个专家，
+   每个 block 还要先把 8×1024 的激活转换后搬进 32 KB 的 shared memory，全卡只有 2048 个 warp。
+   llama.cpp 的 down 是 512×8 的 grid，共 16384 个 warp，专家维度并行；合并另由一个 25 µs 的 kernel 完成。
+   推测是在途访存不够；没有计数器，无法证实。
+3. **胶水算子占了差距的近一半。** `rms_norm`（`olmoe_layer.py`）的写法是 `.float()` 两次、pow、mean、add、rsqrt、两次 mul、`.to(half)`，
+   每次调用 9 个 kernel，每 token 65 次，约 585 个 kernel，占了 1153 个里的一半；llama.cpp 每次调用只要 1 个。
+   RoPE 对 q、k 各需要 4 次 mul、2 次 add/sub 和 1 次 cat，llama.cpp 各 1 个 kernel。
+   Graph 去掉了主机派发，但每个小 kernel 在 GPU 上仍然要 1–2 µs。
+
+### 对 §36 的更正
+
+| 原文 | 更正 |
+|---|---|
+| §36：eager+gemv 为 29.19 ms（34.26 tok/s），"eager 下更慢，因为每 token 发的 kernel 更多" | 快态三轮为 15.2–16.2 ms（61.8–65.8 tok/s），**比 eager+grouped（16.6–17.6 ms）快 1.09–1.10 倍**，主机时间也更少（14.9–15.9 vs 16.3–17.4 ms）。29.19 那次的探针是 23.3–44.0 ms，落在慢态 |
+| §36："graph+gemv 比 eager+gemv 快 7.23×" | 快态为 3.76–3.99 倍 |
+| §36："端到端 graph+gemv 比 eager+grouped 快 2.51×" | 16.63 / 4.04 = **4.12 倍**；2.51 倍是 graph+grouped 对 eager+grouped |
+| §36 的"一句话"："得到 61 倍（16.63 → 4.04）" | 4.1 倍 |
+
+两条测量上的注意事项：
+
+- `drive.py` 在每次运行前后，于驱动进程里跑同一个探针，读数是 37–56 ms，
+  而同一时间 bench 进程内的探针是 21–25 ms。驱动进程刚刚闲置，核心还没升频。
+  **探针只有在持续忙碌的进程里测才有意义**，判断慢态要看 `repeat_cpu_probe_ms`；
+- 在没有跑 bench 的时候读 `/proc/cpuinfo`，128 个核里有 124 个是 2000 MHz。2000 MHz 是这台宿主机最常见的读数，
+  这进一步说明 §35 所说的"单点频率读数不足以证明慢态"。
+
+### 下一步（按 trace 估算的可省时间，不是实测）
+
+1. **dense 权重保持量化**，复用 `packed_gemv` 读 Q4_K/Q6_K：最多约 0.76 ms；
+2. **融合 RMSNorm**（类型转换跟着消失）：约 0.6–0.7 ms（RMSNorm 的 428 µs，加上约 195 次转换中的大部分，再减去一个融合 kernel 的约 0.1 ms）；
+3. **down kernel 按专家并行**：最多约 0.34 ms；
+4. **融合 RoPE**：约 0.27 ms。
+
+四项都做到 llama.cpp 的水平，大约是 2.0 ms/token。剩下的约 0.4 ms 是注意力、路由、KV 写入和 gate/up 的差距。
+
+### 复现
+
+```bash
+# 远端 /root/autodl-tmp/llamacpp-vs-deepinfer，脚本见 docs/results/olmoe_sm89_llamacpp_scripts/
+./build_llama.sh                          # 下载 b12024 源码并编译（约 5 分钟）
+python drive.py explore                   # 线程数 / CUDA Graph 扫描
+python drive.py round 1 llama-first 16    # 一轮：llama-bench、无 Graph、pp512、贪心、DeepInfer 四种配置
+# kernel 拆解（CUPTI 取自 pip 的 nvidia-cuda-cupti-cu12 12.4.127）
+C=/root/miniconda3/lib/python3.12/site-packages/nvidia/cuda_cupti
+g++ -shared -fPIC -O2 -o libktrace.so kernel_trace.cpp -I$C/include -I/usr/local/cuda/include \
+    -L$C/lib -l:libcupti.so.12 -Wl,-rpath,$C/lib
+CUDA_INJECTION64_PATH=$PWD/libktrace.so KTRACE_OUT=trace_llama.csv \
+    llama-bench -m $M -ngl 99 -p 0 -d 5 -n 64 -r 1 --no-warmup -t 16 -fa on
+CUDA_INJECTION64_PATH=$PWD/libktrace.so KTRACE_OUT=trace_deepinfer.csv \
+    python scripts/bench_olmoe_decode.py --gguf $M --mode graph --expert-kernel gemv --repeats 1 --max-new-tokens 64
+python analyze_trace.py trace_llama.csv --replays-per-step 2 --json trace_llama_summary.json
+python analyze_trace.py trace_deepinfer.csv --json trace_deepinfer_summary.json
+python categorize.py trace_deepinfer_summary.json trace_llama_summary.json bytes_by_category.json kernel_categories.json
+# top-5 logit
+./logits_probe $M 33 510 5347 273 6181 310 > top5_llama.tsv
+python margins.py $M 33 gemv 510 5347 273 6181 310 > top5_deepinfer_gemv.tsv
+```
+
+### 一句话
+
+> **同一张卡、同一个文件，llama.cpp 跑出 578 tok/s，本仓库 247 tok/s，差 2.34 倍。两边的主机都不在关键路径上，
+> 差距全部在 GPU：本仓库每个 token 发 1153 个 kernel、读 1.24 GB，llama.cpp 发 406 个、读 0.74 GB。
+> 其中近一半来自没有融合的小算子，三成来自用 fp16 存放 dense 权重，两成来自专家 down kernel 的并行度。**
+
+---
+
+## 38. 融合解码器：每层 7 个 kernel、权重全程量化，4080 SUPER 上 629–643 tok/s，比 llama.cpp 快 9–11%
+
+§37 把差距拆到了 kernel：两边的主机都不在关键路径上，2.45 ms 的 GPU 时间差里，未融合的小算子占 44%，fp16 dense 权重占 31%，专家 down kernel 占 20%。
+这一节按这三项写了 `deepinfer/moe/olmoe_fused.py`，旧的 graph 路径保持不动，作为对照。
+
+### 设计
+
+每层 7 个 kernel，每 token 共 116 个（graph 路径是 1153 个，llama.cpp 是 406 个）：
+
+1. RMSNorm，同时把上一层 8 个专家的输出和残差加进来；
+2. q、k、v 三个投影一次启动，直接读 Q4_K/Q6_K 字节；
+3. q/k norm、RoPE、KV cache 写入和注意力合成一个 kernel，每个 head 一个 block。注意力只遍历已经写入的位置，不再对整个缓冲区加掩码；
+4. o_proj，结果原地加进残差流；
+5. ffn RMSNorm、路由 logit、softmax、top-k 合成一个 kernel：每个 block 自己做一遍归一化，算一个专家的 logit，最后完成的 block 选出专家；
+6. gate/up，每个 warp 负责一个（行，专家）；
+7. down，每个 warp 负责一个（行，专家），8 个专家并行。§37 的 down kernel 是一个 warp 串行遍历 8 个专家。
+
+每步最后是 lm_head（GEMV 里用 64 位 `atomicMax` 同时求出 argmax）和一个单线程 kernel，把预测的 token 写回作为下一步的输入。
+残差流和所有激活都是 fp32，只有 KV cache 是 fp16。dense 权重保持 GGUF 编码（0.253 GB/token，§37 的 graph 路径是 0.752）。
+GEMV 沿用 `packed_gemv` 已经验证的 lane 映射，但把 super-block 数做成模板参数，循环完全展开，一行的所有 load 先发出，再开始计算。
+接口与 `OLMoEGraphDecoder` 相同；基准脚本新增了 `--mode fused`。
+
+### 结果 1：同一会话三轮交替（定稿 v3）
+
+| | 第 1 轮 | 第 2 轮 | 第 3 轮 |
+|---|---:|---:|---:|
+| **DeepInfer fused v3** | **643.0** | **629.4** | **630.9** tok/s |
+| llama.cpp tg128，深度 5 | 578.3 | 577.1 | 578.3 |
+| llama.cpp tg32，深度 5（与 DeepInfer 口径相同） | 569.4 | 568.6 | 569.6 |
+| DeepInfer graph+gemv（§36/§37） | 246.6 | 247.0 | 247.1 |
+
+单位 tok/s。llama.cpp 取 10 次重复的中位数，DeepInfer 取 5 次重复的中位数，两边交替先后。fused 配置三轮的进程内探针都在快态（21.3–23.6 ms）。
+graph 配置三轮都落在慢态（37.4–45.7 ms），但它受 GPU 限制，4.05 ms 与快态时一致。llama.cpp 运行期间 cgroup 节流为 0。
+
+- **fused v3 比 llama.cpp tg128 快 1.09–1.11 倍，比同口径的 tg32 快 1.10–1.13 倍**；比 graph+gemv 快 2.55–2.61 倍；
+- 三轮的 GPU 时间都是 1.54 ms，step 为 1.56–1.59 ms，主机 0.02 ms；
+- 每 token 读 0.741 GB，与 llama.cpp 相同，有效带宽约 470 GB/s，llama.cpp 约 428 GB/s；
+- 第一版（v1，每层 10 个 kernel）的三轮是 611.3 / 627.1 / 626.8 tok/s，即 1.06–1.09 倍。
+
+§37 按 trace 估算四项改动做完后约 2.0 ms/token，实际做到了 1.54 ms：融合小算子、改写 down kernel 省下的比估算的多。
+
+### 结果 2：kernel 拆解（CUPTI，与 §37 同一个 tracer）
+
+| 类别 | DeepInfer v3 | llama.cpp（§37） | 差 µs |
+|---|---:|---:|---:|
+| 专家 GEMV（gate+up、down） | 842.5 | 751.0 | +91.5 |
+| dense GEMV（qkv、o、lm_head） | 478.6 | 440.7 | +37.9 |
+| 其余（norm、RoPE、注意力、路由、KV 写、激活量化、残差） | 246.4 | 469.0 | **−222.6** |
+| **合计（GPU busy）** | **1567.5** | **1660.7** | −93.2 |
+| kernel 数 / token | 116 | 406 | |
+
+**DeepInfer 赢在胶水算子上，GEMV 本身仍然比 llama.cpp 慢约 130 µs。** 专家 GEMV 的带宽是 gate+up 584、down 570 GB/s，llama.cpp 是 656、639 GB/s；
+o_proj 只有 316 GB/s，这个矩阵小（2.36 MB），单次启动的固定开销占了大头。
+llama.cpp 的 MMVQ 先把激活量化成 Q8_1、用 dp4a 做整数点积，每行用 4 个 warp，并且不经过 shared memory 搬运。这是下一步可以追的方向。
+
+### 结果 3：五个版本，其中两次"按理该变快"的优化反而更慢
+
+在同一会话里交替测量（v1/v2/v1/v2，以此类推），A/B 只看 spin 法测得的 GPU 时间：
+
+| 版本 | 相对上一版的改动 | GPU ms | 结论 |
+|---|---|---:|---|
+| v1 | 每层 10 个 kernel | 1.58 | |
+| v2 | 融合 route 和 attend；GEMV 先发权重 load、再搬 x；gate/up 分给 warp 对 | 1.61 | **慢 2%**，4 类 GEMV 全部变慢 80 µs |
+| **v3** | GEMV 退回 v1 的写法，保留 route 融合，attend 改成 512 线程 | **1.54** | **保留** |
+| v4 | v3 的 x 改走 L1（`__ldg`）、权重只走 L2（`__ldcg`），去掉 shared 搬运 | 1.59 | **慢 3%** |
+| v5 | v3 加一个 graph 并行分支，在注意力期间把 o_proj 权重预取进 L2 | 1.52–1.53 | 快约 1%，没有保留 |
+
+- "先发权重 load"想让权重和 x 的延迟重叠，"去掉 shared 搬运"想去掉块内屏障，两者实测都更慢。没有性能计数器（`ERR_NVGPUCTRPERM`），原因无法证实；
+- v5 的预取让 o_proj 从 119 µs 降到 90 µs，但注意力因为抢带宽从 122 µs 涨到 131 µs，净收益约 1%。
+  o_proj 即使从 L2 读也要 5.6 µs/层，**小 GEMV 的成本在单次 kernel 的固定开销，不在显存**；
+- v2 的贪心输出从第 19 个生成 token 起变成了 "The population of France is 67 million."，v1、v3 和 graph 路径是 "...is around 67 million people."。
+  这是 norm 求和顺序变化引起的又一次平局翻转。v3 和 graph 路径的 33 个 token 完全相同。
+
+各变体相对 v3 的补丁保存在 `docs/results/olmoe_sm89_fused_variants/`，打上补丁即可得到当时测量的源码，已逐个核对过哈希。
+
+### 结果 4：正确性
+
+- `tests/moe/test_olmoe_fused.py` 共 8 个测试：
+  - packed GEMV 与 NumPy 按 ggml 格式反量化的结果对比（4 种行长，Q4_K/Q6_K 混合）；
+  - 2 层合成模型逐步 teacher-forcing，与 eager PyTorch 前向的 logit 对比：最大偏差为最大 logit 的 **0.12%**（容差 2%）。故意去掉注意力输出、去掉专家输出或关闭 RoPE，偏差分别是 153%、168%、135%；
+  - 贪心生成在出现近似平局之前与 eager 一致；
+  - 超出 max_len 时报错；
+  - 真实 checkpoint 前 2 层与 eager 对比。
+- 全量测试：本机 233 passed；4080 SUPER 上 232 passed、1 skipped（该机没有 Qwen2.5-3B 的 checkpoint）。
+- 与 llama.cpp 的分叉点（第 10 个生成 token）：fused v3 是 " Euro" 19.693 对 " the" 19.675，只领先 0.018，和 §37 一样是近似平局。
+
+### 结果 5：RTX 3050 Laptop（L=8）
+
+| | step | GPU | tok/s |
+|---|---:|---:|---:|
+| graph+gemv | 6.49 ms | 6.15 ms | 154.0 |
+| **fused v3** | **4.22 ms** | **3.55 ms** | **237.0** |
+
+快 1.54 倍，token 完全相同。step 比 GPU 时间多约 0.67 ms，是 Windows WDDM 下 graph 启动和同步的开销。
+这块卡的 L2 只有 2 MB，装不下 o_proj，所以 v5 的预取在这里不会有效果。
+
+### 局限
+
+- **prefill 仍然是逐 token 走 decode 步**：约 640 tok/s，llama.cpp 的 pp512 约 20,000 tok/s，相差约 30 倍。这一节只追平了 decode；
+- 只支持 batch 1 和贪心解码（argmax 融合在 lm_head 里，采样需要另写收尾 kernel）；KV cache 是静态的 `max_len`（基准用 256）；
+- 只测了一个 prompt，上下文不超过 37 个 token。注意力 kernel 每个 head 只用一个 block，长上下文下与 llama.cpp 的 flash-attention 谁快没有测；
+- 形状限制：hidden ≤ 2048、head_dim 是 64 的倍数、专家数 ≤ 64、只支持 Q4_K/Q6_K，与 OLMoE 一致，换模型需要放宽。
+
+### 复现
+
+```bash
+# 测试（OLMOE_GGUF 指向本机或远端的 GGUF）
+PYTHONPATH=$PWD python -m pytest -q tests/moe/test_olmoe_fused.py
+# 单次：graph 与 fused 同场，token 自动比对
+PYTHONPATH=$PWD python scripts/bench_olmoe_decode.py --gguf $M --mode graph fused --expert-kernel gemv --repeats 5
+# 与 llama.cpp 交替三轮（脚本见 docs/results/olmoe_sm89_fused_scripts/）
+for spec in "1 llama-first" "2 deepinfer-first" "3 llama-first"; do python drive_fused.py v3 $spec; done
+```
+
+数据：`docs/results/olmoe_sm89_fused_decoder.json`（两组三轮、四次 A/B、各版本 kernel 拆解、top-5 logit、3050 结果）。
+
+### 一句话
+
+> **§37 说差距全在 GPU 上：1153 个 kernel、1.24 GB/token。把每层压到 7 个 kernel、权重全程保持量化之后，
+> 每 token 是 116 个 kernel、0.74 GB，GPU 时间 1.54 ms，在同一张卡、同一个文件、同一个会话里比 llama.cpp 快 9–11%。
+> 赢在胶水算子：比 llama.cpp 少 223 µs；GEMV 仍然慢 130 µs，这是下一步。prefill 还差约 30 倍，这一节没有碰。**

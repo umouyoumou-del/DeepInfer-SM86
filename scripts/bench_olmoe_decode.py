@@ -19,6 +19,9 @@ device, and no change to kernels or bytes will move it.  ``--top-k`` changes
 only device work and ``--host-delay-ms`` only host work, so sweeping each shows
 which side a configuration is bound by.  ``--mode graph`` replays the step from
 a CUDA graph (deepinfer.moe.olmoe_graph), which takes the host out of the loop.
+``--mode fused`` replays deepinfer.moe.olmoe_fused, seven kernels per layer over
+weights that all stay Q4_K/Q6_K; it shares the packed experts with the other
+modes and loads no fp16 dense weights when it runs alone.
 
 Prefill runs one token at a time through the decode path.  The packed kernels
 handle a single token, and a batched prefill would need fp16 experts at about
@@ -79,8 +82,12 @@ def cpu_name() -> str:
     return platform.processor()
 
 
-def load_model(index, spec, layers: int, device):
-    """Dense weights in fp16 (F32 norms/router kept as stored), experts packed."""
+def load_model(index, spec, layers: int, device, *, dense_fp16: bool = True):
+    """Dense weights in fp16 (F32 norms/router kept as stored), experts packed.
+
+    ``dense_fp16=False`` leaves out the fp16 matrices, embedding and LM head,
+    which only the eager and graph modes read.
+    """
 
     import torch
 
@@ -96,15 +103,15 @@ def load_model(index, spec, layers: int, device):
         # rms_norm and route_topk call .float() on it
         return dense(name, dtype=torch.float32)
 
-    weights = {
-        "embed_tokens": dense("token_embd.weight"),
-        "final_norm": stored("output_norm.weight"),
-        "lm_head": dense("output.weight"),
-    }
+    weights = {"final_norm": stored("output_norm.weight")}
+    if dense_fp16:
+        weights["embed_tokens"] = dense("token_embd.weight")
+        weights["lm_head"] = dense("output.weight")
     stack = []
     for layer_index in range(layers):
         names = layer_tensors(spec, layer_index)
-        layer = {role: dense(name) for role, name in names.attention.items()}
+        layer = ({role: dense(name) for role, name in names.attention.items()}
+                 if dense_fp16 else {})
         layer.update({role: stored(name) for role, name in names.norms.items()})
         layer["router"] = stored(names.router)
         inter = int(index.tensor(names.expert_gate).numpy_shape[1])
@@ -123,6 +130,27 @@ def load_model(index, spec, layers: int, device):
         layer["packed_gate_out"] = inter
         stack.append(layer)
     return weights, stack
+
+
+def fused_model(index, spec, weights, stack):
+    """The fused decoder's weights: packed dense matrices, the same packed experts."""
+
+    from deepinfer.moe.olmoe_fused import FusedLayer, FusedModel, packed_matrix
+    from deepinfer.moe.olmoe_weights import layer_tensors
+
+    layers = []
+    for layer_index, layer in enumerate(stack):
+        names = layer_tensors(spec, layer_index)
+        matrices = {role: packed_matrix(index, name) for role, name in names.attention.items()}
+        layers.append(FusedLayer(
+            q=matrices["q_proj"], k=matrices["k_proj"], v=matrices["v_proj"],
+            o=matrices["o_proj"], attn_norm=layer["attn_norm"], ffn_norm=layer["ffn_norm"],
+            q_norm=layer["attn_q_norm"], k_norm=layer["attn_k_norm"], router=layer["router"],
+            experts=layer["packed"], inter=layer["packed_gate_out"],
+        ))
+    return FusedModel(embed=packed_matrix(index, "token_embd.weight"),
+                      lm_head=packed_matrix(index, "output.weight"),
+                      final_norm=weights["final_norm"], layers=layers)
 
 
 def bytes_per_token(weights, stack, *, top_k: int, experts: int) -> dict[str, float]:
@@ -319,6 +347,22 @@ class GraphStep:
         return self._last
 
 
+class FusedStep(GraphStep):
+    """The step from the fused decoder (olmoe_fused), also one graph replay."""
+
+    def __init__(self, model, spec, *, layers: int, top_k: int, max_len: int):
+        from deepinfer.moe.olmoe_fused import FusedModel, OLMoEFusedDecoder
+
+        truncated = FusedModel(embed=model.embed, lm_head=model.lm_head,
+                               final_norm=model.final_norm, layers=model.layers[:layers])
+        self.decoder = OLMoEFusedDecoder(
+            truncated, num_heads=spec.head_count, eps=spec.rms_eps, rope_base=spec.rope_base,
+            top_k=top_k, max_len=max_len,
+        )
+        self.decoder.capture()
+        self._last = None
+
+
 def cpu_probe_ms() -> float:
     """Fixed pure-Python work with no GPU involvement.
 
@@ -370,8 +414,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repeats", type=int, default=5)
     parser.add_argument("--host-delay-ms", type=float, nargs="+", default=[0.0],
                         help="host-only spin per layer; several values sweep")
-    parser.add_argument("--mode", nargs="+", choices=("eager", "graph"), default=["eager"],
-                        help="eager PyTorch decode, or the step replayed from a CUDA graph")
+    parser.add_argument("--mode", nargs="+", choices=("eager", "graph", "fused"),
+                        default=["eager"],
+                        help="eager PyTorch decode, the step replayed from a CUDA graph, or "
+                             "the fused decoder (olmoe_fused), also replayed from a graph")
     parser.add_argument("--graph-max-len", type=int, default=256,
                         help="static KV cache length of the graph path")
     parser.add_argument("--expert-kernel", nargs="+", choices=("gemv", "grouped"),
@@ -399,8 +445,11 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(f"the checkpoint has {spec.block_count} layers")
 
     device = torch.device("cuda")
+    modes = list(dict.fromkeys(args.mode))
     loaded = time.perf_counter()
-    weights, stack = load_model(index, spec, max(layer_values), device)
+    weights, stack = load_model(index, spec, max(layer_values), device,
+                                dense_fp16=any(mode != "fused" for mode in modes))
+    fused = fused_model(index, spec, weights, stack) if "fused" in modes else None
     torch.cuda.synchronize()
     print(f"loaded {len(stack)} layers in {time.perf_counter() - loaded:.1f} s, "
           f"VRAM {torch.cuda.memory_allocated() / 2**30:.2f} GiB", flush=True)
@@ -418,8 +467,7 @@ def main(argv: list[str] | None = None) -> int:
     print("environment:", json.dumps(environment, ensure_ascii=False), flush=True)
     records = []
     delay_values = sorted(set(args.host_delay_ms))
-    modes = list(dict.fromkeys(args.mode))
-    if "graph" in modes and any(delay_values):
+    if any(mode != "eager" for mode in modes) and any(delay_values):
         parser.error("--host-delay-ms only applies to eager mode")
     from deepinfer.moe import olmoe_packed
 
@@ -427,11 +475,18 @@ def main(argv: list[str] | None = None) -> int:
     for layers in layer_values:
         for top_k, delay, mode, kernel in itertools.product(topk_values, delay_values, modes,
                                                             kernels):
+            if mode == "fused":
+                if kernel != kernels[0]:
+                    continue  # the fused decoder has its own expert kernels
+                kernel = "fused"
             step = None  # release the previous configuration's graph first
             # read at every eager call and baked in at graph capture
             olmoe_packed.USE_WARP_GEMV = kernel == "gemv"
             if mode == "graph":
                 step = GraphStep(weights, stack, spec, layers=layers, top_k=top_k,
+                                 max_len=args.graph_max_len)
+            elif mode == "fused":
+                step = FusedStep(fused, spec, layers=layers, top_k=top_k,
                                  max_len=args.graph_max_len)
             else:
                 step = ForwardStep(weights, stack, spec, layers=layers, top_k=top_k)
@@ -469,8 +524,11 @@ def main(argv: list[str] | None = None) -> int:
                           f"the {hold_ms:.1f} ms hold", flush=True)
                     gpus = []
 
-            traffic = bytes_per_token(weights, stack[:layers], top_k=top_k,
-                                      experts=spec.expert_count)
+            if mode == "fused":
+                traffic = step.decoder.bytes_per_token()
+            else:
+                traffic = bytes_per_token(weights, stack[:layers], top_k=top_k,
+                                          experts=spec.expert_count)
             record = {
                 "layers": layers,
                 "top_k": top_k,
@@ -497,7 +555,7 @@ def main(argv: list[str] | None = None) -> int:
             sync_text = "" if syncs is None else f"  syncs {len(syncs)} {sorted(set(syncs))}"
             delay_text = f" +{delay:.2f}ms/layer" if len(delay_values) > 1 or delay else ""
             mode_text = f" {mode:5s}" if len(modes) > 1 or mode != "eager" else ""
-            kernel_text = f" {kernel:7s}" if len(kernels) > 1 else ""
+            kernel_text = f" {kernel:7s}" if len(kernels) > 1 or kernel == "fused" else ""
             print(
                 f"L={layers:2d} top_k={top_k}{mode_text}{kernel_text}{delay_text}"
                 f"  step {record['step_ms']['median']:6.2f} ms"
@@ -515,10 +573,10 @@ def main(argv: list[str] | None = None) -> int:
                 profile_host(step, args.prompt_ids, new_tokens=args.max_new_tokens)
 
     # a faster variant must decode the same tokens as the one it replaces
-    def compare(record, field: str, baseline: str, label: str) -> None:
+    def compare(record, label: str, baseline: str, **match) -> None:
         keys = ("layers", "top_k", "mode", "expert_kernel", "host_delay_ms")
-        twin = next((r for r in records if r[field] == baseline and all(
-            r[k] == record[k] for k in keys if k != field)), None)
+        twin = next((r for r in records if all(
+            r[k] == match.get(k, record[k]) for k in keys)), None)
         if twin is None:
             return
         ours = [record["first_token_id"], *record["generated_ids"]]
@@ -532,9 +590,16 @@ def main(argv: list[str] | None = None) -> int:
 
     for record in records:
         if record["mode"] == "graph":
-            compare(record, "mode", "eager", f"graph vs eager ({record['expert_kernel']})")
+            compare(record, f"graph vs eager ({record['expert_kernel']})", "eager",
+                    mode="eager")
         if record["expert_kernel"] == "gemv":
-            compare(record, "expert_kernel", "grouped", f"gemv vs grouped ({record['mode']})")
+            compare(record, f"gemv vs grouped ({record['mode']})", "grouped",
+                    expert_kernel="grouped")
+        if record["mode"] == "fused":
+            # different numerics (fp32 activations, unrounded weights), so a
+            # split near a tie is expected; where it happens is the information
+            compare(record, "fused vs graph (gemv)", "graph", mode="graph",
+                    expert_kernel="gemv")
 
     if args.output:
         Path(args.output).write_text(json.dumps(

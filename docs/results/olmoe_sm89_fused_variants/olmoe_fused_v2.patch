@@ -1,0 +1,401 @@
+# v2: v1 + fused route/attend + weights loaded before staging x + gate/up on warp pairs (slower)
+# apply to the kept v3 to reproduce the variant measured in section 38
+--- a/deepinfer/moe/olmoe_fused.py
++++ b/deepinfer/moe/olmoe_fused.py
+@@ -16,7 +16,7 @@
+   5. RMSNorm, router logits, softmax and top-k: every block normalises the
+      hidden state itself and takes one expert's logit; the last block to
+      finish picks the experts
+-  6. gate/up for every routed expert, one warp per (row, expert)
++  6. gate/up for every routed expert, gate and up of a row on a warp pair
+   7. down for every routed expert, one warp per (row, expert)
+ 
+ and the step ends with the LM head, whose GEMV also takes the argmax through a
+@@ -24,12 +24,9 @@
+ residual stream and all activations stay in fp32; only the cache is fp16.
+ 
+ The GEMVs keep packed_gemv's lane mapping.  The super-block count is a template
+-parameter, so the loop unrolls and every load of a row is issued before the
+-first one is consumed, which packed_gemv's runtime-length loop could not do.
+-Each block stages the activation in shared memory first.  Two variants that
+-looked better on paper measured slower on the 4080 SUPER (OLMOE_PORT_PLAN
+-section 38): issuing the row's loads before staging, and reading the
+-activation through L1 with no staging at all.
++parameter, so the loop unrolls and a warp holds its whole row in registers;
++the row is loaded before the activation is staged in shared memory, since the
++weights do not depend on it, and the two latencies overlap.
+ """
+ 
+ from __future__ import annotations
+@@ -46,7 +43,7 @@
+ 
+ try:
+     import cupy as cp
+-except Exception:  # noqa: BLE001  # pragma: no cover - CuPy can fail to load with a CUDA error, not only ImportError
++except Exception:  # pragma: no cover - CPU-only hosts
+     cp = None
+ 
+ _QTYPES = {"Q4_K": 0, "Q6_K": 1}
+@@ -116,94 +113,97 @@
+     }
+ }
+ 
+-// packed_gemv's mapping: lane L reads quant bytes [4L, 4L+4) of each super-block,
+-// elements 4(L%8).. of sub-block 2(L/8) (low nibbles) and 2(L/8)+1 (high nibbles).
+-// All NB super-blocks are loaded before any is used.
++__device__ __forceinline__ float fz_half_bits(unsigned int bits)
++{
++    return __half2float(__ushort_as_half((unsigned short)(bits & 0xFFFFu)));
++}
++
++// A lane's share of one row, five words per super-block in either format:
++//   Q4_K  [quant word, scales 0-3, scales 4-7, scales 8-11, d | dmin]
++//   Q6_K  [ql pair a | b, qh, scales is+0 | is+2, scales is+4 | is+6, d]
++// packed_gemv's lane mapping: in Q4_K lane L reads quant bytes [4L, 4L+4) of
++// each super-block; in Q6_K lane L covers half L/16 at positions l = 2(L%16)
++// and l+1 in all four quarters (210-byte blocks allow only 2-byte loads).
+ template <int NB>
+-__device__ __forceinline__ float fz_q4k_dot(const unsigned char* row, const float* xs, int lane)
+-{
+-    const int pair = lane >> 3, pos = (lane & 7) * 4, s0 = 2 * pair, s1 = s0 + 1;
+-    unsigned int q[NB], w0[NB], w1[NB], w2[NB];
+-    float2 dm[NB];
+-    #pragma unroll
+-    for (int b = 0; b < NB; ++b) {
+-        const unsigned char* block = row + b * 144;
+-        const uint4 head = *reinterpret_cast<const uint4*>(block);  // d, dmin, scales
+-        dm[b] = make_float2(__half2float(__ushort_as_half((unsigned short)(head.x & 0xFFFFu))),
+-                            __half2float(__ushort_as_half((unsigned short)(head.x >> 16))));
+-        w0[b] = head.y;
+-        w1[b] = head.z;
+-        w2[b] = head.w;
+-        q[b] = *reinterpret_cast<const unsigned int*>(block + 16 + lane * 4);
+-    }
++__device__ __forceinline__ void fz_load(
++    unsigned int (&r)[NB][5], const unsigned char* row, int qtype, int lane)
++{
++    if (qtype == 0) {
++        #pragma unroll
++        for (int b = 0; b < NB; ++b) {
++            const unsigned char* block = row + b * 144;
++            const uint4 head = *reinterpret_cast<const uint4*>(block);
++            r[b][0] = *reinterpret_cast<const unsigned int*>(block + 16 + lane * 4);
++            r[b][1] = head.y;
++            r[b][2] = head.z;
++            r[b][3] = head.w;
++            r[b][4] = head.x;
++        }
++    } else {
++        const int half = lane >> 4, l = (lane & 15) * 2;
++        #pragma unroll
++        for (int b = 0; b < NB; ++b) {
++            const unsigned char* block = row + b * 210;
++            const unsigned char* ql = block + half * 64;
++            const unsigned short* sc = reinterpret_cast<const unsigned short*>(block + 192 + half * 8);
++            r[b][0] = (unsigned int)*reinterpret_cast<const unsigned short*>(ql + l)
++                    | ((unsigned int)*reinterpret_cast<const unsigned short*>(ql + l + 32) << 16);
++            r[b][1] = *reinterpret_cast<const unsigned short*>(block + 128 + half * 32 + l);
++            r[b][2] = (unsigned int)sc[0] | ((unsigned int)sc[1] << 16);
++            r[b][3] = (unsigned int)sc[2] | ((unsigned int)sc[3] << 16);
++            r[b][4] = *reinterpret_cast<const unsigned short*>(block + 208);
++        }
++    }
++}
++
++// The lane's partial dot product; xs is the activation in shared memory.
++template <int NB>
++__device__ __forceinline__ float fz_dot(
++    const unsigned int (&r)[NB][5], const float* xs, int qtype, int lane)
++{
+     float acc = 0.0f;
+-    #pragma unroll
+-    for (int b = 0; b < NB; ++b) {
+-        float sc0, m0, sc1, m1;
+-        fz_q4k_scale_min(w0[b], w1[b], w2[b], s0, &sc0, &m0);
+-        fz_q4k_scale_min(w0[b], w1[b], w2[b], s1, &sc1, &m1);
+-        const float4 xa = *reinterpret_cast<const float4*>(xs + b * 256 + s0 * 32 + pos);
+-        const float4 xb = *reinterpret_cast<const float4*>(xs + b * 256 + s1 * 32 + pos);
+-        const unsigned int v = q[b];
+-        const float dot0 = (float)(v & 0xF) * xa.x + (float)((v >> 8) & 0xF) * xa.y
+-                         + (float)((v >> 16) & 0xF) * xa.z + (float)((v >> 24) & 0xF) * xa.w;
+-        const float dot1 = (float)((v >> 4) & 0xF) * xb.x + (float)((v >> 12) & 0xF) * xb.y
+-                         + (float)((v >> 20) & 0xF) * xb.z + (float)((v >> 28) & 0xF) * xb.w;
+-        const float sum0 = xa.x + xa.y + xa.z + xa.w;
+-        const float sum1 = xb.x + xb.y + xb.z + xb.w;
+-        acc += dm[b].x * (sc0 * dot0 + sc1 * dot1) - dm[b].y * (m0 * sum0 + m1 * sum1);
++    if (qtype == 0) {
++        const int pair = lane >> 3, pos = (lane & 7) * 4, s0 = 2 * pair, s1 = s0 + 1;
++        #pragma unroll
++        for (int b = 0; b < NB; ++b) {
++            float sc0, m0, sc1, m1;
++            fz_q4k_scale_min(r[b][1], r[b][2], r[b][3], s0, &sc0, &m0);
++            fz_q4k_scale_min(r[b][1], r[b][2], r[b][3], s1, &sc1, &m1);
++            const float4 xa = *reinterpret_cast<const float4*>(xs + b * 256 + s0 * 32 + pos);
++            const float4 xb = *reinterpret_cast<const float4*>(xs + b * 256 + s1 * 32 + pos);
++            const unsigned int v = r[b][0];
++            const float dot0 = (float)(v & 0xF) * xa.x + (float)((v >> 8) & 0xF) * xa.y
++                             + (float)((v >> 16) & 0xF) * xa.z + (float)((v >> 24) & 0xF) * xa.w;
++            const float dot1 = (float)((v >> 4) & 0xF) * xb.x + (float)((v >> 12) & 0xF) * xb.y
++                             + (float)((v >> 20) & 0xF) * xb.z + (float)((v >> 28) & 0xF) * xb.w;
++            const float sum0 = xa.x + xa.y + xa.z + xa.w;
++            const float sum1 = xb.x + xb.y + xb.z + xb.w;
++            acc += fz_half_bits(r[b][4]) * (sc0 * dot0 + sc1 * dot1)
++                 - fz_half_bits(r[b][4] >> 16) * (m0 * sum0 + m1 * sum1);
++        }
++    } else {
++        const int half = lane >> 4, l = (lane & 15) * 2, is = l >> 4;
++        #pragma unroll
++        for (int b = 0; b < NB; ++b) {
++            const float* xh = xs + b * 256 + half * 128 + l;
++            const unsigned int lo_a = r[b][0] & 0xFFFFu, lo_b = r[b][0] >> 16, hi = r[b][1];
++            float sum = 0.0f;
++            #pragma unroll
++            for (int quarter = 0; quarter < 4; ++quarter) {
++                const unsigned int src = (quarter & 1) ? lo_b : lo_a;
++                const int shift = (quarter >> 1) * 4;
++                const int q0 = (int)(((src >> shift) & 0xF) | (((hi >> (2 * quarter)) & 3) << 4)) - 32;
++                const int q1 = (int)(((src >> (8 + shift)) & 0xF)
++                                   | (((hi >> (8 + 2 * quarter)) & 3) << 4)) - 32;
++                const unsigned int word = quarter < 2 ? r[b][2] : r[b][3];
++                const int scale = (int)(signed char)((word >> (16 * (quarter & 1) + 8 * is)) & 0xFF);
++                const float2 xv = *reinterpret_cast<const float2*>(xh + 32 * quarter);
++                sum += (float)scale * ((float)q0 * xv.x + (float)q1 * xv.y);
++            }
++            acc += fz_half_bits(r[b][4]) * sum;
++        }
+     }
+     return acc;
+-}
+-
+-// packed_gemv's mapping: lane L covers half L/16 of each super-block at
+-// positions l = 2(L%16), l+1 in all four quarters.  Q6_K blocks are 210 bytes,
+-// so only 2-byte loads are aligned.
+-template <int NB>
+-__device__ __forceinline__ float fz_q6k_dot(const unsigned char* row, const float* xs, int lane)
+-{
+-    const int half = lane >> 4, l = (lane & 15) * 2, is = l >> 4;
+-    unsigned int lo_a[NB], lo_b[NB], hi[NB], s01[NB], s23[NB];
+-    float d[NB];
+-    #pragma unroll
+-    for (int b = 0; b < NB; ++b) {
+-        const unsigned char* block = row + b * 210;
+-        const unsigned char* ql = block + half * 64;
+-        const unsigned short* sc = reinterpret_cast<const unsigned short*>(block + 192 + half * 8);
+-        lo_a[b] = *reinterpret_cast<const unsigned short*>(ql + l);
+-        lo_b[b] = *reinterpret_cast<const unsigned short*>(ql + l + 32);
+-        hi[b] = *reinterpret_cast<const unsigned short*>(block + 128 + half * 32 + l);
+-        // scales is + 0, 2, 4, 6 sit in the low (is = 0) or high byte of ushorts 0..3
+-        s01[b] = (unsigned int)sc[0] | ((unsigned int)sc[1] << 16);
+-        s23[b] = (unsigned int)sc[2] | ((unsigned int)sc[3] << 16);
+-        d[b] = __half2float(*reinterpret_cast<const __half*>(block + 208));
+-    }
+-    float acc = 0.0f;
+-    #pragma unroll
+-    for (int b = 0; b < NB; ++b) {
+-        const float* xh = xs + b * 256 + half * 128 + l;
+-        float sum = 0.0f;
+-        #pragma unroll
+-        for (int quarter = 0; quarter < 4; ++quarter) {
+-            const unsigned int src = (quarter & 1) ? lo_b[b] : lo_a[b];
+-            const int shift = (quarter >> 1) * 4;
+-            const int q0 = (int)(((src >> shift) & 0xF) | (((hi[b] >> (2 * quarter)) & 3) << 4)) - 32;
+-            const int q1 = (int)(((src >> (8 + shift)) & 0xF)
+-                               | (((hi[b] >> (8 + 2 * quarter)) & 3) << 4)) - 32;
+-            const unsigned int word = quarter < 2 ? s01[b] : s23[b];
+-            const int scale = (int)(signed char)((word >> (16 * (quarter & 1) + 8 * is)) & 0xFF);
+-            const float2 xv = *reinterpret_cast<const float2*>(xh + 32 * quarter);
+-            sum += (float)scale * ((float)q0 * xv.x + (float)q1 * xv.y);
+-        }
+-        acc += d[b] * sum;
+-    }
+-    return acc;
+-}
+-
+-template <int NB>
+-__device__ __forceinline__ float fz_row_dot(const unsigned char* row, const float* xs, int qtype, int lane)
+-{
+-    return qtype ? fz_q6k_dot<NB>(row, xs, lane) : fz_q4k_dot<NB>(row, xs, lane);
+ }
+ 
+ // x (NB*256 floats) into shared memory with float4 copies
+@@ -213,6 +213,11 @@
+     const float4* x4 = reinterpret_cast<const float4*>(x);
+     for (int i = threadIdx.x; i < NB * 64; i += blockDim.x) shared4[i] = x4[i];
+     __syncthreads();
++}
++
++__device__ __forceinline__ int fz_row_bytes(int nb, int qtype)
++{
++    return nb * (qtype ? 210 : 144);
+ }
+ 
+ // argmax as a max over keys: orderable float bits, then the inverted row so a
+@@ -232,15 +237,19 @@
+     float* __restrict__ out, int rows, int mode, unsigned long long* __restrict__ argmax_key)
+ {
+     extern __shared__ float4 shared4[];
+-    fz_stage<NB>(x, shared4);
+     const int lane = threadIdx.x & 31;
+     const int row = blockIdx.x * (blockDim.x >> 5) + (threadIdx.x >> 5);
+-    if (row >= rows) return;
+     const int m = blockIdx.y;
+     const int qtype = (qtype_bits >> m) & 1;
+-    const unsigned char* w = reinterpret_cast<const unsigned char*>(table[m])
+-                           + (size_t)row * (NB * (qtype ? 210 : 144));
+-    const float dot = fz_warp_sum(fz_row_dot<NB>(w, reinterpret_cast<const float*>(shared4), qtype, lane));
++    const bool active = row < rows;
++    unsigned int r[NB][5];
++    if (active) {
++        fz_load<NB>(r, reinterpret_cast<const unsigned char*>(table[m])
++                       + (size_t)row * fz_row_bytes(NB, qtype), qtype, lane);
++    }
++    fz_stage<NB>(x, shared4);
++    if (!active) return;
++    const float dot = fz_warp_sum(fz_dot<NB>(r, reinterpret_cast<const float*>(shared4), qtype, lane));
+     if (lane != 0) return;
+     float* o = out + (size_t)m * rows;
+     if (mode == 1) {
+@@ -251,7 +260,9 @@
+     }
+ }
+ 
+-// act[s, r] = silu(gate_e[r] . x) * (up_e[r] . x), e = ids[s]; grid (rows / warps, top_k)
++// act[s, r] = silu(gate_e[r] . x) * (up_e[r] . x), e = ids[s].  Warps 2i and
++// 2i+1 take gate and up of one row and meet in shared memory, so a warp holds
++// one row in registers.  grid (rows / (warps / 2), top_k)
+ template <int NB>
+ __global__ void fz_gate_up(
+     const float* __restrict__ x, const long long* __restrict__ ids,
+@@ -259,20 +270,28 @@
+     float* __restrict__ act, int inter, int gate_qtype, int up_qtype)
+ {
+     extern __shared__ float4 shared4[];
++    __shared__ float partial[32];
++    const int lane = threadIdx.x & 31, warp = threadIdx.x >> 5;
++    const int row = blockIdx.x * (blockDim.x >> 6) + (warp >> 1);
++    const int part = warp & 1;
++    const int slot = blockIdx.y;
++    const int qtype = part ? up_qtype : gate_qtype;
++    const bool active = row < inter;
++    unsigned int r[NB][5];
++    if (active) {
++        const unsigned long long* table = part ? up_table : gate_table;
++        fz_load<NB>(r, reinterpret_cast<const unsigned char*>(table[ids[slot]])
++                       + (size_t)row * fz_row_bytes(NB, qtype), qtype, lane);
++    }
+     fz_stage<NB>(x, shared4);
+-    const int lane = threadIdx.x & 31;
+-    const int row = blockIdx.x * (blockDim.x >> 5) + (threadIdx.x >> 5);
+-    if (row >= inter) return;
+-    const int slot = blockIdx.y;
+-    const long long expert = ids[slot];
+-    const float* xs = reinterpret_cast<const float*>(shared4);
+-    const unsigned char* g = reinterpret_cast<const unsigned char*>(gate_table[expert])
+-                           + (size_t)row * (NB * (gate_qtype ? 210 : 144));
+-    const unsigned char* u = reinterpret_cast<const unsigned char*>(up_table[expert])
+-                           + (size_t)row * (NB * (up_qtype ? 210 : 144));
+-    const float gate = fz_warp_sum(fz_row_dot<NB>(g, xs, gate_qtype, lane));
+-    const float up = fz_warp_sum(fz_row_dot<NB>(u, xs, up_qtype, lane));
+-    if (lane == 0) act[(size_t)slot * inter + row] = gate / (1.0f + expf(-gate)) * up;
++    float dot = 0.0f;
++    if (active) dot = fz_warp_sum(fz_dot<NB>(r, reinterpret_cast<const float*>(shared4), qtype, lane));
++    if (lane == 0) partial[warp] = dot;
++    __syncthreads();
++    if (active && part == 0 && lane == 0) {
++        const float gate = partial[warp], up = partial[warp + 1];
++        act[(size_t)slot * inter + row] = gate / (1.0f + expf(-gate)) * up;
++    }
+ }
+ 
+ // out[s, r] = w[s] * (down_e[r] . act[s]); one warp per (row, expert), grid (rows / warps, top_k).
+@@ -285,13 +304,17 @@
+ {
+     extern __shared__ float4 shared4[];
+     const int slot = blockIdx.y;
+-    fz_stage<NB>(act + (size_t)slot * NB * 256, shared4);
+     const int lane = threadIdx.x & 31;
+     const int row = blockIdx.x * (blockDim.x >> 5) + (threadIdx.x >> 5);
+-    if (row >= rows) return;
+-    const unsigned char* d = reinterpret_cast<const unsigned char*>(down_table[ids[slot]])
+-                           + (size_t)row * (NB * (qtype ? 210 : 144));
+-    const float dot = fz_warp_sum(fz_row_dot<NB>(d, reinterpret_cast<const float*>(shared4), qtype, lane));
++    const bool active = row < rows;
++    unsigned int r[NB][5];
++    if (active) {
++        fz_load<NB>(r, reinterpret_cast<const unsigned char*>(down_table[ids[slot]])
++                       + (size_t)row * fz_row_bytes(NB, qtype), qtype, lane);
++    }
++    fz_stage<NB>(act + (size_t)slot * NB * 256, shared4);
++    if (!active) return;
++    const float dot = fz_warp_sum(fz_dot<NB>(r, reinterpret_cast<const float*>(shared4), qtype, lane));
+     if (lane == 0) out[(size_t)slot * rows + row] = route_weights[slot] * dot;
+ }
+ 
+@@ -348,11 +371,10 @@
+     for (int i = threadIdx.x; i < n; i += blockDim.x) normed[i] = hidden[i] * inv * weight[i];
+ }
+ 
+-// One block per head, a multiple of head_dim threads.  q_norm and k_norm span
+-// the whole vector, so every block takes both sums of squares itself (the same
++// One block per head, one thread per dimension.  q_norm and k_norm span the
++// whole vector, so every block takes both sums of squares itself (the same
+ // order in every block, so the same result); then it rotates its own head,
+ // writes its key and value at the position and attends over 0..position.
+-// The weighted sum over positions is split between blockDim / head_dim groups.
+ extern "C" __global__ void fz_attend(
+     const float* __restrict__ qkv, const float* __restrict__ q_norm, const float* __restrict__ k_norm,
+     const float* __restrict__ rope_cos, const float* __restrict__ rope_sin,
+@@ -413,18 +435,10 @@
+         total += e;
+     }
+     total = fz_block_sum(total, scratch);
+-    const int groups = blockDim.x / head_dim, d = t % head_dim, group = t / head_dim;
+-    float* partial = scores + max_len;
+-    const __half* values = v_cache + cache_head + d;
++    const __half* values = v_cache + cache_head + t;
+     float acc = 0.0f;
+-    for (int j = group; j < len; j += groups) acc += scores[j] * __half2float(values[(size_t)j * head_dim]);
+-    partial[group * head_dim + d] = acc;
+-    __syncthreads();
+-    if (t < head_dim) {
+-        float sum = 0.0f;
+-        for (int g = 0; g < groups; ++g) sum += partial[g * head_dim + t];
+-        out[head * head_dim + t] = sum / total;
+-    }
++    for (int j = 0; j < len; ++j) acc += scores[j] * __half2float(values[(size_t)j * head_dim]);
++    out[head * head_dim + t] = acc / total;
+ }
+ 
+ // RMSNorm, router and top-k in one launch, one block per expert.  Every block
+@@ -747,8 +761,6 @@
+         n, hd, k = self.hidden, self.head_dim, self.top_k
+         nb = n // 256
+         warp_grid = (n + _WARPS - 1) // _WARPS
+-        # four groups share an attention head's weighted sum when they fit in a block
+-        attend_threads = hd * max(1, min(4, 1024 // hd))
+         threads = (32 * _WARPS,)
+         eps = _f32(self.eps)
+         plan: list[tuple] = []
+@@ -776,11 +788,11 @@
+                 (f"fz_gemv<{nb}>", (warp_grid, 3), threads,
+                  (c(self.normed), qkv_table, _i32(qkv_bits), c(self.qkv), _i32(n), _i32(0),
+                   c(self.argmax_key)), n * 4),
+-                ("fz_attend", (self.num_heads,), (attend_threads,),
++                ("fz_attend", (self.num_heads,), (hd,),
+                  (c(self.qkv), c(layer.q_norm), c(layer.k_norm), c(self.rope_cos),
+                   c(self.rope_sin), c(self.position), c(keys), c(values), c(self.context),
+                   _i32(n), _i32(hd), _i32(self.max_len), eps, _f32(1.0 / math.sqrt(hd))),
+-                 (hd + self.max_len + attend_threads) * 4),
++                 (hd + self.max_len) * 4),
+                 (f"fz_gemv<{nb}>", (warp_grid, 1), threads,
+                  (c(self.context), o_table, _i32(o_bits), c(self.hidden_state), _i32(n),
+                   _i32(1), c(self.argmax_key)), n * 4),
+@@ -788,7 +800,7 @@
+                  (c(self.hidden_state), c(layer.ffn_norm), c(layer.router), c(self.normed),
+                   c(self.router_logits), c(self.route_counter), _i32(n), eps, _i32(k),
+                   c(self.expert_ids), c(self.route_weights)), 0),
+-                (f"fz_gate_up<{nb}>", ((inter + _WARPS - 1) // _WARPS, k), threads,
++                (f"fz_gate_up<{nb}>", ((inter + _WARPS // 2 - 1) // (_WARPS // 2), k), threads,
+                  (c(self.normed), c(self.expert_ids), c(gate_table), c(up_table), c(self.act),
+                   _i32(inter), _i32(_QTYPES[gate_qtype]), _i32(_QTYPES[up_qtype])), n * 4),
+                 (f"fz_down<{inter // 256}>", (warp_grid, k), threads,

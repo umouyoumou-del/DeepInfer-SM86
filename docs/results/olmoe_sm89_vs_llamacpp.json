@@ -1,0 +1,8011 @@
+{
+ "description": "OLMoE-1B-7B-0924-Instruct Q4_K_M decode on one RTX 4080 SUPER: llama.cpp b12024 vs DeepInfer scripts/bench_olmoe_decode.py, three interleaved rounds in one session, plus greedy top-5 logits from both engines and a CUPTI per-kernel breakdown. See docs/OLMOE_PORT_PLAN.md section 37.",
+ "date": "2026-11-01",
+ "environment": {
+  "gpu": "NVIDIA GeForce RTX 4080 SUPER 32 GB (SM89), driver 580.105.08",
+  "cpu": "Intel Xeon Platinum 8352V @ 2.10GHz, 128 visible threads, cgroup quota 16 CPUs",
+  "os": "Ubuntu 22.04.4, Linux 5.15.0-78 (AutoDL container)",
+  "cuda_toolkit": "12.4.131",
+  "python": "3.12.3",
+  "torch": "2.5.1+cu124"
+ },
+ "model": {
+  "file": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+  "file_bytes": 4213513024,
+  "llama_bench_model_size": 4211730432,
+  "llama_bench_n_params": 6919161856
+ },
+ "llamacpp": {
+  "release": "b12024",
+  "commit": "ddf48f85c933c1f438212a02eb21e7b001d2d37d",
+  "ggml_version": "0.28.0",
+  "source": "https://github.com/ggml-org/llama.cpp/archive/<commit>.tar.gz",
+  "source_sha256": "48ec81d2f8c7019b8660ce50b2a6b7b889cc983b4846f3b09afff37b4d0474a0",
+  "cmake": [
+   "-DCMAKE_BUILD_TYPE=Release",
+   "-DGGML_CUDA=ON",
+   "-DCMAKE_CUDA_ARCHITECTURES=89",
+   "-DLLAMA_CURL=OFF",
+   "-DLLAMA_BUILD_TESTS=OFF"
+  ],
+  "note": "built from a tarball, so llama-bench reports build_commit 'unknown'"
+ },
+ "deepinfer": {
+  "repo_head": "13ebab7",
+  "remote_tree": "120 tracked sources under deepinfer/, kernels/, tests/moe and scripts/bench_olmoe_decode.py identical to HEAD (CRLF-normalised sha256)"
+ },
+ "bytes_per_token_mb": {
+  "quantized_mb": {
+   "attn": 159.645696,
+   "lm_head": 84.51072,
+   "gate_up": 301.989888,
+   "down": 185.597952,
+   "small": 8.92224
+  },
+  "fp16_mb": {
+   "attn": 536.870912,
+   "lm_head": 206.045184
+  },
+  "total_llamacpp_gb": 0.740666496
+ },
+ "rounds": [
+  {
+   "round": 1,
+   "order": "llama-first",
+   "runs": [
+    {
+     "label": "r1_llama_bench",
+     "cmd": [
+      "/root/autodl-tmp/llamacpp-vs-deepinfer/llama.cpp-ddf48f85c933c1f438212a02eb21e7b001d2d37d/build/bin/llama-bench",
+      "-m",
+      "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+      "-ngl",
+      "99",
+      "-o",
+      "json",
+      "-p",
+      "0",
+      "-d",
+      "5",
+      "-n",
+      "32,128",
+      "-t",
+      "16,64",
+      "-fa",
+      "on,off",
+      "-r",
+      "10"
+     ],
+     "env": {},
+     "returncode": 0,
+     "wall_s": 15.578130006790161,
+     "cpu_probe_ms": [
+      41.31295345723629,
+      53.36610786616802
+     ],
+     "throttled_periods": 0,
+     "throttled_ms": 0.0,
+     "periods": 155,
+     "cpu_s": 16.056391,
+     "llama_bench": [
+      {
+       "build_commit": "unknown",
+       "build_number": 0,
+       "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+       "backends": "CUDA",
+       "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "model_type": "olmoe A1.7B Q4_K - Medium",
+       "model_size": 4211730432,
+       "model_n_params": 6919161856,
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "n_threads": 16,
+       "cpu_mask": "0x0",
+       "cpu_strict": false,
+       "poll": 50,
+       "type_k": "f16",
+       "type_v": "f16",
+       "n_gpu_layers": 99,
+       "n_cpu_moe": 0,
+       "split_mode": "layer",
+       "main_gpu": 0,
+       "no_kv_offload": false,
+       "flash_attn": 1,
+       "devices": "auto",
+       "tensor_split": "0.00",
+       "tensor_buft_overrides": "none",
+       "load_mode": "auto",
+       "lazy_mode": "auto",
+       "embeddings": false,
+       "no_op_offload": 0,
+       "no_host": false,
+       "repack": true,
+       "fit_target": 0,
+       "fit_min_ctx": 0,
+       "n_prompt": 0,
+       "n_gen": 32,
+       "n_depth": 5,
+       "test_time": "2026-11-01T00:57:37Z",
+       "avg_ns": 56631500,
+       "stddev_ns": 1362195,
+       "avg_ts": 565.334072,
+       "stddev_ts": 12.819693,
+       "samples_ns": [
+        60506533,
+        56293071,
+        56246994,
+        56184793,
+        56197435,
+        56203451,
+        56160039,
+        56176745,
+        56195839,
+        56150101
+       ],
+       "samples_ts": [
+        528.869,
+        568.454,
+        568.919,
+        569.549,
+        569.421,
+        569.36,
+        569.8,
+        569.631,
+        569.437,
+        569.901
+       ],
+       "median_ts": 569.4290924642448
+      },
+      {
+       "build_commit": "unknown",
+       "build_number": 0,
+       "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+       "backends": "CUDA",
+       "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "model_type": "olmoe A1.7B Q4_K - Medium",
+       "model_size": 4211730432,
+       "model_n_params": 6919161856,
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "n_threads": 16,
+       "cpu_mask": "0x0",
+       "cpu_strict": false,
+       "poll": 50,
+       "type_k": "f16",
+       "type_v": "f16",
+       "n_gpu_layers": 99,
+       "n_cpu_moe": 0,
+       "split_mode": "layer",
+       "main_gpu": 0,
+       "no_kv_offload": false,
+       "flash_attn": 1,
+       "devices": "auto",
+       "tensor_split": "0.00",
+       "tensor_buft_overrides": "none",
+       "load_mode": "auto",
+       "lazy_mode": "auto",
+       "embeddings": false,
+       "no_op_offload": 0,
+       "no_host": false,
+       "repack": true,
+       "fit_target": 0,
+       "fit_min_ctx": 0,
+       "n_prompt": 0,
+       "n_gen": 128,
+       "n_depth": 5,
+       "test_time": "2026-11-01T00:57:38Z",
+       "avg_ns": 221717646,
+       "stddev_ns": 1010820,
+       "avg_ts": 577.321517,
+       "stddev_ts": 2.602866,
+       "samples_ns": [
+        224568979,
+        221356074,
+        221627821,
+        221558833,
+        221568433,
+        221280941,
+        221281812,
+        221344843,
+        221277635,
+        221311091
+       ],
+       "samples_ts": [
+        569.981,
+        578.254,
+        577.545,
+        577.725,
+        577.7,
+        578.45,
+        578.448,
+        578.283,
+        578.459,
+        578.371
+       ],
+       "median_ts": 578.2685111645287
+      },
+      {
+       "build_commit": "unknown",
+       "build_number": 0,
+       "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+       "backends": "CUDA",
+       "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "model_type": "olmoe A1.7B Q4_K - Medium",
+       "model_size": 4211730432,
+       "model_n_params": 6919161856,
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "n_threads": 64,
+       "cpu_mask": "0x0",
+       "cpu_strict": false,
+       "poll": 50,
+       "type_k": "f16",
+       "type_v": "f16",
+       "n_gpu_layers": 99,
+       "n_cpu_moe": 0,
+       "split_mode": "layer",
+       "main_gpu": 0,
+       "no_kv_offload": false,
+       "flash_attn": 1,
+       "devices": "auto",
+       "tensor_split": "0.00",
+       "tensor_buft_overrides": "none",
+       "load_mode": "auto",
+       "lazy_mode": "auto",
+       "embeddings": false,
+       "no_op_offload": 0,
+       "no_host": false,
+       "repack": true,
+       "fit_target": 0,
+       "fit_min_ctx": 0,
+       "n_prompt": 0,
+       "n_gen": 32,
+       "n_depth": 5,
+       "test_time": "2026-11-01T00:57:40Z",
+       "avg_ns": 55529993,
+       "stddev_ns": 309307,
+       "avg_ts": 576.281044,
+       "stddev_ts": 3.171705,
+       "samples_ns": [
+        56364804,
+        55597468,
+        55390806,
+        55392068,
+        55399310,
+        55392031,
+        55358708,
+        55380550,
+        55638989,
+        55385201
+       ],
+       "samples_ts": [
+        567.73,
+        575.566,
+        577.713,
+        577.7,
+        577.625,
+        577.7,
+        578.048,
+        577.82,
+        575.136,
+        577.772
+       ],
+       "median_ts": 577.7002347602893
+      },
+      {
+       "build_commit": "unknown",
+       "build_number": 0,
+       "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+       "backends": "CUDA",
+       "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "model_type": "olmoe A1.7B Q4_K - Medium",
+       "model_size": 4211730432,
+       "model_n_params": 6919161856,
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "n_threads": 64,
+       "cpu_mask": "0x0",
+       "cpu_strict": false,
+       "poll": 50,
+       "type_k": "f16",
+       "type_v": "f16",
+       "n_gpu_layers": 99,
+       "n_cpu_moe": 0,
+       "split_mode": "layer",
+       "main_gpu": 0,
+       "no_kv_offload": false,
+       "flash_attn": 1,
+       "devices": "auto",
+       "tensor_split": "0.00",
+       "tensor_buft_overrides": "none",
+       "load_mode": "auto",
+       "lazy_mode": "auto",
+       "embeddings": false,
+       "no_op_offload": 0,
+       "no_host": false,
+       "repack": true,
+       "fit_target": 0,
+       "fit_min_ctx": 0,
+       "n_prompt": 0,
+       "n_gen": 128,
+       "n_depth": 5,
+       "test_time": "2026-11-01T00:57:41Z",
+       "avg_ns": 221455118,
+       "stddev_ns": 299179,
+       "avg_ts": 577.996164,
+       "stddev_ts": 0.777543,
+       "samples_ns": [
+        222265959,
+        221345047,
+        221388194,
+        221325472,
+        221436599,
+        221561951,
+        221282141,
+        221253240,
+        221289838,
+        221402744
+       ],
+       "samples_ts": [
+        575.887,
+        578.283,
+        578.17,
+        578.334,
+        578.044,
+        577.717,
+        578.447,
+        578.523,
+        578.427,
+        578.132
+       ],
+       "median_ts": 578.2262968400036
+      },
+      {
+       "build_commit": "unknown",
+       "build_number": 0,
+       "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+       "backends": "CUDA",
+       "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "model_type": "olmoe A1.7B Q4_K - Medium",
+       "model_size": 4211730432,
+       "model_n_params": 6919161856,
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "n_threads": 16,
+       "cpu_mask": "0x0",
+       "cpu_strict": false,
+       "poll": 50,
+       "type_k": "f16",
+       "type_v": "f16",
+       "n_gpu_layers": 99,
+       "n_cpu_moe": 0,
+       "split_mode": "layer",
+       "main_gpu": 0,
+       "no_kv_offload": false,
+       "flash_attn": 0,
+       "devices": "auto",
+       "tensor_split": "0.00",
+       "tensor_buft_overrides": "none",
+       "load_mode": "auto",
+       "lazy_mode": "auto",
+       "embeddings": false,
+       "no_op_offload": 0,
+       "no_host": false,
+       "repack": true,
+       "fit_target": 0,
+       "fit_min_ctx": 0,
+       "n_prompt": 0,
+       "n_gen": 32,
+       "n_depth": 5,
+       "test_time": "2026-11-01T00:57:43Z",
+       "avg_ns": 57151111,
+       "stddev_ns": 583195,
+       "avg_ts": 559.970294,
+       "stddev_ts": 5.573162,
+       "samples_ns": [
+        58799540,
+        57063620,
+        56940899,
+        56924840,
+        56927542,
+        56947504,
+        56935392,
+        56925268,
+        57118700,
+        56927812
+       ],
+       "samples_ts": [
+        544.222,
+        560.778,
+        561.986,
+        562.145,
+        562.118,
+        561.921,
+        562.041,
+        562.141,
+        560.237,
+        562.115
+       ],
+       "median_ts": 562.0133882800328
+      },
+      {
+       "build_commit": "unknown",
+       "build_number": 0,
+       "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+       "backends": "CUDA",
+       "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "model_type": "olmoe A1.7B Q4_K - Medium",
+       "model_size": 4211730432,
+       "model_n_params": 6919161856,
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "n_threads": 16,
+       "cpu_mask": "0x0",
+       "cpu_strict": false,
+       "poll": 50,
+       "type_k": "f16",
+       "type_v": "f16",
+       "n_gpu_layers": 99,
+       "n_cpu_moe": 0,
+       "split_mode": "layer",
+       "main_gpu": 0,
+       "no_kv_offload": false,
+       "flash_attn": 0,
+       "devices": "auto",
+       "tensor_split": "0.00",
+       "tensor_buft_overrides": "none",
+       "load_mode": "auto",
+       "lazy_mode": "auto",
+       "embeddings": false,
+       "no_op_offload": 0,
+       "no_host": false,
+       "repack": true,
+       "fit_target": 0,
+       "fit_min_ctx": 0,
+       "n_prompt": 0,
+       "n_gen": 128,
+       "n_depth": 5,
+       "test_time": "2026-11-01T00:57:44Z",
+       "avg_ns": 227862496,
+       "stddev_ns": 324333,
+       "avg_ts": 561.743304,
+       "stddev_ts": 0.795804,
+       "samples_ns": [
+        228697578,
+        227737123,
+        227973922,
+        227687874,
+        227833883,
+        227673776,
+        227657193,
+        227629159,
+        227703579,
+        228030882
+       ],
+       "samples_ts": [
+        559.691,
+        562.052,
+        561.468,
+        562.173,
+        561.813,
+        562.208,
+        562.249,
+        562.318,
+        562.134,
+        561.327
+       ],
+       "median_ts": 562.092936060625
+      },
+      {
+       "build_commit": "unknown",
+       "build_number": 0,
+       "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+       "backends": "CUDA",
+       "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "model_type": "olmoe A1.7B Q4_K - Medium",
+       "model_size": 4211730432,
+       "model_n_params": 6919161856,
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "n_threads": 64,
+       "cpu_mask": "0x0",
+       "cpu_strict": false,
+       "poll": 50,
+       "type_k": "f16",
+       "type_v": "f16",
+       "n_gpu_layers": 99,
+       "n_cpu_moe": 0,
+       "split_mode": "layer",
+       "main_gpu": 0,
+       "no_kv_offload": false,
+       "flash_attn": 0,
+       "devices": "auto",
+       "tensor_split": "0.00",
+       "tensor_buft_overrides": "none",
+       "load_mode": "auto",
+       "lazy_mode": "auto",
+       "embeddings": false,
+       "no_op_offload": 0,
+       "no_host": false,
+       "repack": true,
+       "fit_target": 0,
+       "fit_min_ctx": 0,
+       "n_prompt": 0,
+       "n_gen": 32,
+       "n_depth": 5,
+       "test_time": "2026-11-01T00:57:47Z",
+       "avg_ns": 57050023,
+       "stddev_ns": 338304,
+       "avg_ts": 560.928755,
+       "stddev_ts": 3.280131,
+       "samples_ns": [
+        57991726,
+        56933052,
+        56914894,
+        56953495,
+        56906812,
+        56882766,
+        56924054,
+        57136810,
+        56920288,
+        56936336
+       ],
+       "samples_ts": [
+        551.803,
+        562.064,
+        562.243,
+        561.862,
+        562.323,
+        562.561,
+        562.153,
+        560.059,
+        562.19,
+        562.031
+       ],
+       "median_ts": 562.1080901153075
+      },
+      {
+       "build_commit": "unknown",
+       "build_number": 0,
+       "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+       "backends": "CUDA",
+       "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "model_type": "olmoe A1.7B Q4_K - Medium",
+       "model_size": 4211730432,
+       "model_n_params": 6919161856,
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "n_threads": 64,
+       "cpu_mask": "0x0",
+       "cpu_strict": false,
+       "poll": 50,
+       "type_k": "f16",
+       "type_v": "f16",
+       "n_gpu_layers": 99,
+       "n_cpu_moe": 0,
+       "split_mode": "layer",
+       "main_gpu": 0,
+       "no_kv_offload": false,
+       "flash_attn": 0,
+       "devices": "auto",
+       "tensor_split": "0.00",
+       "tensor_buft_overrides": "none",
+       "load_mode": "auto",
+       "lazy_mode": "auto",
+       "embeddings": false,
+       "no_op_offload": 0,
+       "no_host": false,
+       "repack": true,
+       "fit_target": 0,
+       "fit_min_ctx": 0,
+       "n_prompt": 0,
+       "n_gen": 128,
+       "n_depth": 5,
+       "test_time": "2026-11-01T00:57:49Z",
+       "avg_ns": 227896902,
+       "stddev_ns": 539788,
+       "avg_ts": 561.660308,
+       "stddev_ts": 1.326015,
+       "samples_ns": [
+        228546470,
+        227577569,
+        227577238,
+        227699962,
+        227600372,
+        227581467,
+        227531732,
+        229127556,
+        228108195,
+        227618459
+       ],
+       "samples_ts": [
+        560.061,
+        562.446,
+        562.446,
+        562.143,
+        562.389,
+        562.436,
+        562.559,
+        558.641,
+        561.137,
+        562.345
+       ],
+       "median_ts": 562.366894712536
+      }
+     ]
+    },
+    {
+     "label": "r1_llama_nograph",
+     "cmd": [
+      "/root/autodl-tmp/llamacpp-vs-deepinfer/llama.cpp-ddf48f85c933c1f438212a02eb21e7b001d2d37d/build/bin/llama-bench",
+      "-m",
+      "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+      "-ngl",
+      "99",
+      "-o",
+      "json",
+      "-p",
+      "0",
+      "-d",
+      "5",
+      "-n",
+      "32",
+      "-t",
+      "16",
+      "-fa",
+      "on",
+      "-r",
+      "10"
+     ],
+     "env": {
+      "GGML_CUDA_DISABLE_GRAPHS": "1"
+     },
+     "returncode": 0,
+     "wall_s": 1.9060957431793213,
+     "cpu_probe_ms": [
+      38.26815076172352,
+      51.619548350572586
+     ],
+     "throttled_periods": 0,
+     "throttled_ms": 0.0,
+     "periods": 19,
+     "cpu_s": 1.904597,
+     "llama_bench": [
+      {
+       "build_commit": "unknown",
+       "build_number": 0,
+       "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+       "backends": "CUDA",
+       "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "model_type": "olmoe A1.7B Q4_K - Medium",
+       "model_size": 4211730432,
+       "model_n_params": 6919161856,
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "n_threads": 16,
+       "cpu_mask": "0x0",
+       "cpu_strict": false,
+       "poll": 50,
+       "type_k": "f16",
+       "type_v": "f16",
+       "n_gpu_layers": 99,
+       "n_cpu_moe": 0,
+       "split_mode": "layer",
+       "main_gpu": 0,
+       "no_kv_offload": false,
+       "flash_attn": 1,
+       "devices": "auto",
+       "tensor_split": "0.00",
+       "tensor_buft_overrides": "none",
+       "load_mode": "auto",
+       "lazy_mode": "auto",
+       "embeddings": false,
+       "no_op_offload": 0,
+       "no_host": false,
+       "repack": true,
+       "fit_target": 0,
+       "fit_min_ctx": 0,
+       "n_prompt": 0,
+       "n_gen": 32,
+       "n_depth": 5,
+       "test_time": "2026-11-01T00:57:53Z",
+       "avg_ns": 63651962,
+       "stddev_ns": 173246,
+       "avg_ts": 502.737243,
+       "stddev_ts": 1.359525,
+       "samples_ns": [
+        64131733,
+        63684669,
+        63646999,
+        63610180,
+        63577620,
+        63562521,
+        63558415,
+        63572016,
+        63582182,
+        63593286
+       ],
+       "samples_ts": [
+        498.973,
+        502.476,
+        502.773,
+        503.064,
+        503.322,
+        503.441,
+        503.474,
+        503.366,
+        503.286,
+        503.198
+       ],
+       "median_ts": 503.24171394361645
+      }
+     ]
+    },
+    {
+     "label": "r1_llama_pp",
+     "cmd": [
+      "/root/autodl-tmp/llamacpp-vs-deepinfer/llama.cpp-ddf48f85c933c1f438212a02eb21e7b001d2d37d/build/bin/llama-bench",
+      "-m",
+      "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+      "-ngl",
+      "99",
+      "-o",
+      "json",
+      "-p",
+      "512",
+      "-n",
+      "0",
+      "-t",
+      "16",
+      "-fa",
+      "on",
+      "-r",
+      "5"
+     ],
+     "env": {},
+     "returncode": 0,
+     "wall_s": 1.8736495971679688,
+     "cpu_probe_ms": [
+      38.05139102041721,
+      52.65144631266594
+     ],
+     "throttled_periods": 0,
+     "throttled_ms": 0.0,
+     "periods": 19,
+     "cpu_s": 1.883096,
+     "llama_bench": [
+      {
+       "build_commit": "unknown",
+       "build_number": 0,
+       "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+       "backends": "CUDA",
+       "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "model_type": "olmoe A1.7B Q4_K - Medium",
+       "model_size": 4211730432,
+       "model_n_params": 6919161856,
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "n_threads": 16,
+       "cpu_mask": "0x0",
+       "cpu_strict": false,
+       "poll": 50,
+       "type_k": "f16",
+       "type_v": "f16",
+       "n_gpu_layers": 99,
+       "n_cpu_moe": 0,
+       "split_mode": "layer",
+       "main_gpu": 0,
+       "no_kv_offload": false,
+       "flash_attn": 1,
+       "devices": "auto",
+       "tensor_split": "0.00",
+       "tensor_buft_overrides": "none",
+       "load_mode": "auto",
+       "lazy_mode": "auto",
+       "embeddings": false,
+       "no_op_offload": 0,
+       "no_host": false,
+       "repack": true,
+       "fit_target": 0,
+       "fit_min_ctx": 0,
+       "n_prompt": 512,
+       "n_gen": 0,
+       "n_depth": 0,
+       "test_time": "2026-11-01T00:57:55Z",
+       "avg_ns": 25736149,
+       "stddev_ns": 1546131,
+       "avg_ts": 19947.55436,
+       "stddev_ts": 1110.285246,
+       "samples_ns": [
+        28494306,
+        24956736,
+        25147497,
+        25172234,
+        24909974
+       ],
+       "samples_ts": [
+        17968.5,
+        20515.5,
+        20359.9,
+        20339.9,
+        20554
+       ],
+       "median_ts": 20359.87915616413
+      }
+     ]
+    },
+    {
+     "label": "r1_llama_greedy",
+     "cmd": [
+      "/root/autodl-tmp/llamacpp-vs-deepinfer/llama.cpp-ddf48f85c933c1f438212a02eb21e7b001d2d37d/build/bin/llama-completion",
+      "-m",
+      "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+      "-ngl",
+      "99",
+      "-p",
+      "The capital of France is",
+      "-n",
+      "33",
+      "--temp",
+      "0",
+      "--top-k",
+      "1",
+      "--ignore-eos",
+      "-no-cnv",
+      "--verbose-prompt",
+      "--no-display-prompt",
+      "--simple-io",
+      "-t",
+      "16",
+      "-fa",
+      "on",
+      "--seed",
+      "1"
+     ],
+     "env": {},
+     "returncode": 0,
+     "wall_s": 1.4598712921142578,
+     "cpu_probe_ms": [
+      38.29970024526119,
+      53.36569994688034
+     ],
+     "throttled_periods": 0,
+     "throttled_ms": 0.0,
+     "periods": 15,
+     "cpu_s": 1.406994,
+     "eval_ms": 59.01,
+     "eval_runs": 32,
+     "text": " Paris.\n\nThe currency of France is the Euro.\n\nThe population of France is around 67 million people.\n\nThe official language of France is French\n\n",
+     "perf_lines": [
+      "0.01.151.108 I    510 -> 'The'",
+      "0.01.151.109 I   5347 -> ' capital'",
+      "0.01.151.109 I    273 -> ' of'",
+      "0.01.151.109 I   6181 -> ' France'",
+      "0.01.151.110 I    310 -> ' is'",
+      "0.01.220.925 I common_perf_print:    sampling time =       3.07 ms",
+      "0.01.220.926 I common_perf_print:    samplers time =       0.99 ms /    38 tokens",
+      "0.01.220.930 I common_perf_print:        load time =     856.68 ms",
+      "0.01.220.931 I common_perf_print: prompt eval time =       7.41 ms /     5 tokens (    1.48 ms per token,   675.04 tokens per second)",
+      "0.01.220.933 I common_perf_print:        eval time =      59.01 ms /    32 runs   (    1.84 ms per token,   542.32 tokens per second)",
+      "0.01.220.934 I common_perf_print:       total time =      69.98 ms /    37 tokens",
+      "0.01.220.935 I common_perf_print: unaccounted time =       0.49 ms /   0.7 %      (total - sampling - prompt eval - eval) / (total)",
+      "0.01.220.935 I common_perf_print:    graphs reused =         31",
+      "0.01.220.936 I common_perf_print:   graph reallocs =          0    /     0        (same size) / (changed size)"
+     ]
+    },
+    {
+     "label": "r1_deepinfer",
+     "cmd": [
+      "/root/miniconda3/bin/python",
+      "/root/autodl-tmp/DeepInfer-SM86/scripts/bench_olmoe_decode.py",
+      "--gguf",
+      "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+      "--repeats",
+      "5",
+      "--output",
+      "/root/autodl-tmp/llamacpp-vs-deepinfer/results/r1_deepinfer.json",
+      "--mode",
+      "graph",
+      "eager",
+      "--expert-kernel",
+      "gemv",
+      "grouped"
+     ],
+     "env": {
+      "PYTHONPATH": "/root/autodl-tmp/DeepInfer-SM86"
+     },
+     "returncode": 0,
+     "wall_s": 62.61326241493225,
+     "cpu_probe_ms": [
+      39.97732326388359,
+      59.74232964217663
+     ],
+     "throttled_periods": 42,
+     "throttled_ms": 85079.707,
+     "periods": 627,
+     "cpu_s": 146.486632,
+     "deepinfer_bench": {
+      "environment": {
+       "gpu": "NVIDIA GeForce RTX 4080 SUPER",
+       "torch": "2.5.1+cu124",
+       "cuda": "12.4",
+       "python": "3.12.3",
+       "cpu": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "os": "Linux-5.15.0-78-generic-x86_64-with-glibc2.35",
+       "gguf": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf"
+      },
+      "args": {
+       "gguf": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "layers": null,
+       "top_k": null,
+       "prompt_ids": [
+        510,
+        5347,
+        273,
+        6181,
+        310
+       ],
+       "max_new_tokens": 32,
+       "warmup_tokens": 4,
+       "repeats": 5,
+       "host_delay_ms": [
+        0.0
+       ],
+       "mode": [
+        "graph",
+        "eager"
+       ],
+       "graph_max_len": 256,
+       "expert_kernel": [
+        "gemv",
+        "grouped"
+       ],
+       "sync_debug": false,
+       "profile_host": false,
+       "output": "/root/autodl-tmp/llamacpp-vs-deepinfer/results/r1_deepinfer.json"
+      },
+      "records": [
+       {
+        "layers": 16,
+        "top_k": 8,
+        "mode": "graph",
+        "expert_kernel": "gemv",
+        "host_delay_ms": 0.0,
+        "step_ms": {
+         "median": 4.052385687828064,
+         "q1": 4.051483701914549,
+         "q3": 4.094760864973068,
+         "min": 4.051214084029198,
+         "max": 4.136300645768642,
+         "n": 5
+        },
+        "repeat_step_ms": [
+         4.136300645768642,
+         4.053221084177494,
+         4.0517533197999,
+         4.051214084029198,
+         4.052385687828064
+        ],
+        "repeat_cpu_probe_ms": [
+         41.39496199786663,
+         37.4956876039505,
+         37.43787109851837,
+         37.44402341544628,
+         37.46791183948517
+        ],
+        "host_ms": {
+         "median": 0.046681612730026245,
+         "q1": 0.0464022159576416,
+         "q3": 0.04760315641760826,
+         "min": 0.04622898995876312,
+         "max": 0.04822295159101486,
+         "n": 5
+        },
+        "gpu_ms": {
+         "median": 4.021247863769531,
+         "q1": 4.021207928657532,
+         "q3": 4.022199988365173,
+         "min": 4.021167993545532,
+         "max": 4.022655963897705,
+         "n": 5
+        },
+        "tokens_per_second": 246.76821927479583,
+        "bytes": {
+         "dense_gb": 0.75184128,
+         "expert_gb": 0.48758784,
+         "total_gb": 1.23942912
+        },
+        "effective_gb_s": 305.8517168597272,
+        "gpu_hold_ms": 20.144668854773045,
+        "syncs_per_step": null,
+        "sync_sites": null,
+        "first_token_id": 7785,
+        "generated_ids": [
+         15,
+         187,
+         187,
+         510,
+         14731,
+         273,
+         6181,
+         310,
+         14029,
+         15,
+         187,
+         187,
+         510,
+         3072,
+         273,
+         6181,
+         310,
+         1475,
+         9963,
+         3041,
+         952,
+         15,
+         187,
+         187,
+         510,
+         3565,
+         3448,
+         273,
+         6181,
+         310,
+         5112,
+         15
+        ],
+        "tokens_match_eager": true,
+        "tokens_match_grouped": true
+       },
+       {
+        "layers": 16,
+        "top_k": 8,
+        "mode": "graph",
+        "expert_kernel": "grouped",
+        "host_delay_ms": 0.0,
+        "step_ms": {
+         "median": 6.6231247037649155,
+         "q1": 6.622309796512127,
+         "q3": 6.632552016526461,
+         "min": 6.622049026191235,
+         "max": 6.640881299972534,
+         "n": 5
+        },
+        "repeat_step_ms": [
+         6.640881299972534,
+         6.624222733080387,
+         6.622049026191235,
+         6.6231247037649155,
+         6.622570566833019
+        ],
+        "repeat_cpu_probe_ms": [
+         21.366076543927193,
+         21.425358951091766,
+         23.13942462205887,
+         21.37759141623974,
+         21.405119448900223
+        ],
+        "host_ms": {
+         "median": 0.032670795917510986,
+         "q1": 0.032460782676935196,
+         "q3": 0.03433413803577423,
+         "min": 0.03246031701564789,
+         "max": 0.034817494451999664,
+         "n": 5
+        },
+        "gpu_ms": {
+         "median": 6.598656177520752,
+         "q1": 6.597375988960266,
+         "q3": 6.5989121198654175,
+         "min": 6.597120046615601,
+         "max": 6.599168062210083,
+         "n": 5
+        },
+        "tokens_per_second": 150.98613490269176,
+        "bytes": {
+         "dense_gb": 0.75184128,
+         "expert_gb": 0.48758784,
+         "total_gb": 1.23942912
+        },
+        "effective_gb_s": 187.13661231464457,
+        "gpu_hold_ms": 20.104452483356,
+        "syncs_per_step": null,
+        "sync_sites": null,
+        "first_token_id": 7785,
+        "generated_ids": [
+         15,
+         187,
+         187,
+         510,
+         14731,
+         273,
+         6181,
+         310,
+         14029,
+         15,
+         187,
+         187,
+         510,
+         3072,
+         273,
+         6181,
+         310,
+         1475,
+         9963,
+         3041,
+         952,
+         15,
+         187,
+         187,
+         510,
+         3565,
+         3448,
+         273,
+         6181,
+         310,
+         5112,
+         15
+        ],
+        "tokens_match_eager": true
+       },
+       {
+        "layers": 16,
+        "top_k": 8,
+        "mode": "eager",
+        "expert_kernel": "gemv",
+        "host_delay_ms": 0.0,
+        "step_ms": {
+         "median": 16.180542297661304,
+         "q1": 16.17006491869688,
+         "q3": 16.192557755857706,
+         "min": 16.164974309504032,
+         "max": 16.192776151001453,
+         "n": 5
+        },
+        "repeat_step_ms": [
+         16.164974309504032,
+         16.180542297661304,
+         16.19233936071396,
+         16.192776151001453,
+         16.17515552788973
+        ],
+        "repeat_cpu_probe_ms": [
+         24.204883724451065,
+         21.429235115647316,
+         23.292362689971924,
+         21.373707801103592,
+         23.267511278390884
+        ],
+        "host_ms": {
+         "median": 15.903009101748466,
+         "q1": 15.892723575234413,
+         "q3": 15.915657859295607,
+         "min": 15.887489542365074,
+         "max": 15.915664844214916,
+         "n": 5
+        },
+        "gpu_ms": {
+         "median": 4.471888065338135,
+         "q1": 4.471376061439514,
+         "q3": 4.472640037536621,
+         "min": 4.471296072006226,
+         "max": 4.472832202911377,
+         "n": 5
+        },
+        "tokens_per_second": 61.802625746637524,
+        "bytes": {
+         "dense_gb": 0.75184128,
+         "expert_gb": 0.48758784,
+         "total_gb": 1.23942912
+        },
+        "effective_gb_s": 76.5999740428443,
+        "gpu_hold_ms": 67.74699453264475,
+        "syncs_per_step": null,
+        "sync_sites": null,
+        "first_token_id": 7785,
+        "generated_ids": [
+         15,
+         187,
+         187,
+         510,
+         14731,
+         273,
+         6181,
+         310,
+         14029,
+         15,
+         187,
+         187,
+         510,
+         3072,
+         273,
+         6181,
+         310,
+         1475,
+         9963,
+         3041,
+         952,
+         15,
+         187,
+         187,
+         510,
+         3565,
+         3448,
+         273,
+         6181,
+         310,
+         5112,
+         15
+        ],
+        "tokens_match_grouped": true
+       },
+       {
+        "layers": 16,
+        "top_k": 8,
+        "mode": "eager",
+        "expert_kernel": "grouped",
+        "host_delay_ms": 0.0,
+        "step_ms": {
+         "median": 17.64125097543001,
+         "q1": 17.6067347638309,
+         "q3": 17.658603843301535,
+         "min": 17.605985514819622,
+         "max": 17.66201574355364,
+         "n": 5
+        },
+        "repeat_step_ms": [
+         17.64125097543001,
+         17.605985514819622,
+         17.66201574355364,
+         17.65519194304943,
+         17.60748401284218
+        ],
+        "repeat_cpu_probe_ms": [
+         21.383581683039665,
+         21.35089412331581,
+         23.610170930624008,
+         21.70291543006897,
+         23.27526919543743
+        ],
+        "host_ms": {
+         "median": 17.347846180200577,
+         "q1": 17.31347292661667,
+         "q3": 17.36487913876772,
+         "min": 17.312915064394474,
+         "max": 17.36555900424719,
+         "n": 5
+        },
+        "gpu_ms": {
+         "median": 7.2218239307403564,
+         "q1": 7.218959927558899,
+         "q3": 7.222312092781067,
+         "min": 7.218303918838501,
+         "max": 7.222352027893066,
+         "n": 5
+        },
+        "tokens_per_second": 56.685322452061804,
+        "bytes": {
+         "dense_gb": 0.75184128,
+         "expert_gb": 0.48758784,
+         "total_gb": 1.23942912
+        },
+        "effective_gb_s": 70.2574393236752,
+        "gpu_hold_ms": 72.09667701274157,
+        "syncs_per_step": null,
+        "sync_sites": null,
+        "first_token_id": 7785,
+        "generated_ids": [
+         15,
+         187,
+         187,
+         510,
+         14731,
+         273,
+         6181,
+         310,
+         14029,
+         15,
+         187,
+         187,
+         510,
+         3072,
+         273,
+         6181,
+         310,
+         1475,
+         9963,
+         3041,
+         952,
+         15,
+         187,
+         187,
+         510,
+         3565,
+         3448,
+         273,
+         6181,
+         310,
+         5112,
+         15
+        ]
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "round": 2,
+   "order": "deepinfer-first",
+   "runs": [
+    {
+     "label": "r2_deepinfer",
+     "cmd": [
+      "/root/miniconda3/bin/python",
+      "/root/autodl-tmp/DeepInfer-SM86/scripts/bench_olmoe_decode.py",
+      "--gguf",
+      "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+      "--repeats",
+      "5",
+      "--output",
+      "/root/autodl-tmp/llamacpp-vs-deepinfer/results/r2_deepinfer.json",
+      "--mode",
+      "graph",
+      "eager",
+      "--expert-kernel",
+      "gemv",
+      "grouped"
+     ],
+     "env": {
+      "PYTHONPATH": "/root/autodl-tmp/DeepInfer-SM86"
+     },
+     "returncode": 0,
+     "wall_s": 60.30171275138855,
+     "cpu_probe_ms": [
+      40.79663008451462,
+      53.93459275364876
+     ],
+     "throttled_periods": 48,
+     "throttled_ms": 111970.223,
+     "periods": 603,
+     "cpu_s": 141.38588,
+     "deepinfer_bench": {
+      "environment": {
+       "gpu": "NVIDIA GeForce RTX 4080 SUPER",
+       "torch": "2.5.1+cu124",
+       "cuda": "12.4",
+       "python": "3.12.3",
+       "cpu": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "os": "Linux-5.15.0-78-generic-x86_64-with-glibc2.35",
+       "gguf": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf"
+      },
+      "args": {
+       "gguf": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "layers": null,
+       "top_k": null,
+       "prompt_ids": [
+        510,
+        5347,
+        273,
+        6181,
+        310
+       ],
+       "max_new_tokens": 32,
+       "warmup_tokens": 4,
+       "repeats": 5,
+       "host_delay_ms": [
+        0.0
+       ],
+       "mode": [
+        "graph",
+        "eager"
+       ],
+       "graph_max_len": 256,
+       "expert_kernel": [
+        "gemv",
+        "grouped"
+       ],
+       "sync_debug": false,
+       "profile_host": false,
+       "output": "/root/autodl-tmp/llamacpp-vs-deepinfer/results/r2_deepinfer.json"
+      },
+      "records": [
+       {
+        "layers": 16,
+        "top_k": 8,
+        "mode": "graph",
+        "expert_kernel": "gemv",
+        "host_delay_ms": 0.0,
+        "step_ms": {
+         "median": 4.0394943207502365,
+         "q1": 4.0336837992072105,
+         "q3": 4.079692997038364,
+         "min": 4.033003002405167,
+         "max": 4.118231125175953,
+         "n": 5
+        },
+        "repeat_step_ms": [
+         4.118231125175953,
+         4.0394943207502365,
+         4.033003002405167,
+         4.0343645960092545,
+         4.041154868900776
+        ],
+        "repeat_cpu_probe_ms": [
+         25.453567504882812,
+         23.391233757138252,
+         23.43233861029148,
+         23.877792060375214,
+         23.37655983865261
+        ],
+        "host_ms": {
+         "median": 0.026329420506954193,
+         "q1": 0.026013702154159546,
+         "q3": 0.026586465537548065,
+         "min": 0.025874003767967224,
+         "max": 0.026782043278217316,
+         "n": 5
+        },
+        "gpu_ms": {
+         "median": 4.024144172668457,
+         "q1": 4.023959994316101,
+         "q3": 4.0250160694122314,
+         "min": 4.023808002471924,
+         "max": 4.025200128555298,
+         "n": 5
+        },
+        "tokens_per_second": 247.55573856439403,
+        "bytes": {
+         "dense_gb": 0.75184128,
+         "expert_gb": 0.48758784,
+         "total_gb": 1.23942912
+        },
+        "effective_gb_s": 306.82779119981694,
+        "gpu_hold_ms": 20.080346129834652,
+        "syncs_per_step": null,
+        "sync_sites": null,
+        "first_token_id": 7785,
+        "generated_ids": [
+         15,
+         187,
+         187,
+         510,
+         14731,
+         273,
+         6181,
+         310,
+         14029,
+         15,
+         187,
+         187,
+         510,
+         3072,
+         273,
+         6181,
+         310,
+         1475,
+         9963,
+         3041,
+         952,
+         15,
+         187,
+         187,
+         510,
+         3565,
+         3448,
+         273,
+         6181,
+         310,
+         5112,
+         15
+        ],
+        "tokens_match_eager": true,
+        "tokens_match_grouped": true
+       },
+       {
+        "layers": 16,
+        "top_k": 8,
+        "mode": "graph",
+        "expert_kernel": "grouped",
+        "host_delay_ms": 0.0,
+        "step_ms": {
+         "median": 6.620465777814388,
+         "q1": 6.617873441427946,
+         "q3": 6.717203184962273,
+         "min": 6.615739315748215,
+         "max": 6.813298910856247,
+         "n": 5
+        },
+        "repeat_step_ms": [
+         6.813298910856247,
+         6.615739315748215,
+         6.621107459068298,
+         6.620465777814388,
+         6.6200075671076775
+        ],
+        "repeat_cpu_probe_ms": [
+         24.072883650660515,
+         23.570425808429718,
+         23.425433784723282,
+         23.401400074362755,
+         23.466628044843674
+        ],
+        "host_ms": {
+         "median": 0.026670284569263458,
+         "q1": 0.026133842766284943,
+         "q3": 0.02724630758166313,
+         "min": 0.026067718863487244,
+         "max": 0.027534551918506622,
+         "n": 5
+        },
+        "gpu_ms": {
+         "median": 6.592512130737305,
+         "q1": 6.591488003730774,
+         "q3": 6.592967987060547,
+         "min": 6.590463876724243,
+         "max": 6.593024015426636,
+         "n": 5
+        },
+        "tokens_per_second": 151.04677428453223,
+        "bytes": {
+         "dense_gb": 0.75184128,
+         "expert_gb": 0.48758784,
+         "total_gb": 1.23942912
+        },
+        "effective_gb_s": 187.21177053031641,
+        "gpu_hold_ms": 20.08260365575552,
+        "syncs_per_step": null,
+        "sync_sites": null,
+        "first_token_id": 7785,
+        "generated_ids": [
+         15,
+         187,
+         187,
+         510,
+         14731,
+         273,
+         6181,
+         310,
+         14029,
+         15,
+         187,
+         187,
+         510,
+         3072,
+         273,
+         6181,
+         310,
+         1475,
+         9963,
+         3041,
+         952,
+         15,
+         187,
+         187,
+         510,
+         3565,
+         3448,
+         273,
+         6181,
+         310,
+         5112,
+         15
+        ],
+        "tokens_match_eager": true
+       },
+       {
+        "layers": 16,
+        "top_k": 8,
+        "mode": "eager",
+        "expert_kernel": "gemv",
+        "host_delay_ms": 0.0,
+        "step_ms": {
+         "median": 15.195352025330067,
+         "q1": 15.190679114311934,
+         "q3": 15.213992446660995,
+         "min": 15.188210643827915,
+         "max": 15.226086601614952,
+         "n": 5
+        },
+        "repeat_step_ms": [
+         15.201898291707039,
+         15.195352025330067,
+         15.193147584795952,
+         15.188210643827915,
+         15.226086601614952
+        ],
+        "repeat_cpu_probe_ms": [
+         25.696245953440666,
+         24.074068292975426,
+         25.663891807198524,
+         23.47482554614544,
+         25.65179206430912
+        ],
+        "host_ms": {
+         "median": 14.917253516614437,
+         "q1": 14.911615755409002,
+         "q3": 14.936015009880066,
+         "min": 14.908766373991966,
+         "max": 14.948509633541107,
+         "n": 5
+        },
+        "gpu_ms": {
+         "median": 4.445184230804443,
+         "q1": 4.443696022033691,
+         "q3": 4.4462080001831055,
+         "min": 4.443135976791382,
+         "max": 4.4467198848724365,
+         "n": 5
+        },
+        "tokens_per_second": 65.80959745671167,
+        "bytes": {
+         "dense_gb": 0.75184128,
+         "expert_gb": 0.48758784,
+         "total_gb": 1.23942912
+        },
+        "effective_gb_s": 81.56633146332638,
+        "gpu_hold_ms": 64.84552890062332,
+        "syncs_per_step": null,
+        "sync_sites": null,
+        "first_token_id": 7785,
+        "generated_ids": [
+         15,
+         187,
+         187,
+         510,
+         14731,
+         273,
+         6181,
+         310,
+         14029,
+         15,
+         187,
+         187,
+         510,
+         3072,
+         273,
+         6181,
+         310,
+         1475,
+         9963,
+         3041,
+         952,
+         15,
+         187,
+         187,
+         510,
+         3565,
+         3448,
+         273,
+         6181,
+         310,
+         5112,
+         15
+        ],
+        "tokens_match_grouped": true
+       },
+       {
+        "layers": 16,
+        "top_k": 8,
+        "mode": "eager",
+        "expert_kernel": "grouped",
+        "host_delay_ms": 0.0,
+        "step_ms": {
+         "median": 16.623632051050663,
+         "q1": 16.53697295114398,
+         "q3": 16.64033718407154,
+         "min": 16.525601968169212,
+         "max": 16.648389399051666,
+         "n": 5
+        },
+        "repeat_step_ms": [
+         16.648389399051666,
+         16.525601968169212,
+         16.548343934118748,
+         16.632284969091415,
+         16.623632051050663
+        ],
+        "repeat_cpu_probe_ms": [
+         23.51517044007778,
+         23.483239114284515,
+         25.40428563952446,
+         23.449797183275223,
+         25.469684973359108
+        ],
+        "host_ms": {
+         "median": 16.318674199283123,
+         "q1": 16.228387597948313,
+         "q3": 16.3394957780838,
+         "min": 16.220271587371826,
+         "max": 16.351481899619102,
+         "n": 5
+        },
+        "gpu_ms": {
+         "median": 7.187968015670776,
+         "q1": 7.186176061630249,
+         "q3": 7.190176010131836,
+         "min": 7.185920000076294,
+         "max": 7.192064046859741,
+         "n": 5
+        },
+        "tokens_per_second": 60.15532567907126,
+        "bytes": {
+         "dense_gb": 0.75184128,
+         "expert_gb": 0.48758784,
+         "total_gb": 1.23942912
+        },
+        "effective_gb_s": 74.5582623697247,
+        "gpu_hold_ms": 69.05444569885731,
+        "syncs_per_step": null,
+        "sync_sites": null,
+        "first_token_id": 7785,
+        "generated_ids": [
+         15,
+         187,
+         187,
+         510,
+         14731,
+         273,
+         6181,
+         310,
+         14029,
+         15,
+         187,
+         187,
+         510,
+         3072,
+         273,
+         6181,
+         310,
+         1475,
+         9963,
+         3041,
+         952,
+         15,
+         187,
+         187,
+         510,
+         3565,
+         3448,
+         273,
+         6181,
+         310,
+         5112,
+         15
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "label": "r2_llama_bench",
+     "cmd": [
+      "/root/autodl-tmp/llamacpp-vs-deepinfer/llama.cpp-ddf48f85c933c1f438212a02eb21e7b001d2d37d/build/bin/llama-bench",
+      "-m",
+      "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+      "-ngl",
+      "99",
+      "-o",
+      "json",
+      "-p",
+      "0",
+      "-d",
+      "5",
+      "-n",
+      "32,128",
+      "-t",
+      "16,64",
+      "-fa",
+      "on,off",
+      "-r",
+      "10"
+     ],
+     "env": {},
+     "returncode": 0,
+     "wall_s": 15.62647271156311,
+     "cpu_probe_ms": [
+      37.580907344818115,
+      54.465511813759804
+     ],
+     "throttled_periods": 0,
+     "throttled_ms": 0.0,
+     "periods": 156,
+     "cpu_s": 16.176266,
+     "llama_bench": [
+      {
+       "build_commit": "unknown",
+       "build_number": 0,
+       "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+       "backends": "CUDA",
+       "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "model_type": "olmoe A1.7B Q4_K - Medium",
+       "model_size": 4211730432,
+       "model_n_params": 6919161856,
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "n_threads": 16,
+       "cpu_mask": "0x0",
+       "cpu_strict": false,
+       "poll": 50,
+       "type_k": "f16",
+       "type_v": "f16",
+       "n_gpu_layers": 99,
+       "n_cpu_moe": 0,
+       "split_mode": "layer",
+       "main_gpu": 0,
+       "no_kv_offload": false,
+       "flash_attn": 1,
+       "devices": "auto",
+       "tensor_split": "0.00",
+       "tensor_buft_overrides": "none",
+       "load_mode": "auto",
+       "lazy_mode": "auto",
+       "embeddings": false,
+       "no_op_offload": 0,
+       "no_host": false,
+       "repack": true,
+       "fit_target": 0,
+       "fit_min_ctx": 0,
+       "n_prompt": 0,
+       "n_gen": 32,
+       "n_depth": 5,
+       "test_time": "2026-11-01T01:01:03Z",
+       "avg_ns": 56680297,
+       "stddev_ns": 1384557,
+       "avg_ts": 564.855762,
+       "stddev_ts": 12.995042,
+       "samples_ns": [
+        60620255,
+        56287492,
+        56268031,
+        56230935,
+        56216805,
+        56239748,
+        56249213,
+        56238023,
+        56220730,
+        56231745
+       ],
+       "samples_ts": [
+        527.876,
+        568.51,
+        568.707,
+        569.082,
+        569.225,
+        568.993,
+        568.897,
+        569.01,
+        569.185,
+        569.074
+       ],
+       "median_ts": 569.0013186254648
+      },
+      {
+       "build_commit": "unknown",
+       "build_number": 0,
+       "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+       "backends": "CUDA",
+       "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "model_type": "olmoe A1.7B Q4_K - Medium",
+       "model_size": 4211730432,
+       "model_n_params": 6919161856,
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "n_threads": 16,
+       "cpu_mask": "0x0",
+       "cpu_strict": false,
+       "poll": 50,
+       "type_k": "f16",
+       "type_v": "f16",
+       "n_gpu_layers": 99,
+       "n_cpu_moe": 0,
+       "split_mode": "layer",
+       "main_gpu": 0,
+       "no_kv_offload": false,
+       "flash_attn": 1,
+       "devices": "auto",
+       "tensor_split": "0.00",
+       "tensor_buft_overrides": "none",
+       "load_mode": "auto",
+       "lazy_mode": "auto",
+       "embeddings": false,
+       "no_op_offload": 0,
+       "no_host": false,
+       "repack": true,
+       "fit_target": 0,
+       "fit_min_ctx": 0,
+       "n_prompt": 0,
+       "n_gen": 128,
+       "n_depth": 5,
+       "test_time": "2026-11-01T01:01:04Z",
+       "avg_ns": 222205792,
+       "stddev_ns": 1760225,
+       "avg_ts": 576.074516,
+       "stddev_ts": 4.478659,
+       "samples_ns": [
+        227127789,
+        222579220,
+        221575036,
+        221539566,
+        221532372,
+        221570567,
+        221484361,
+        221516203,
+        221609368,
+        221523447
+       ],
+       "samples_ts": [
+        563.559,
+        575.076,
+        577.682,
+        577.775,
+        577.794,
+        577.694,
+        577.919,
+        577.836,
+        577.593,
+        577.817
+       ],
+       "median_ts": 577.7344777016166
+      },
+      {
+       "build_commit": "unknown",
+       "build_number": 0,
+       "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+       "backends": "CUDA",
+       "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "model_type": "olmoe A1.7B Q4_K - Medium",
+       "model_size": 4211730432,
+       "model_n_params": 6919161856,
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "n_threads": 64,
+       "cpu_mask": "0x0",
+       "cpu_strict": false,
+       "poll": 50,
+       "type_k": "f16",
+       "type_v": "f16",
+       "n_gpu_layers": 99,
+       "n_cpu_moe": 0,
+       "split_mode": "layer",
+       "main_gpu": 0,
+       "no_kv_offload": false,
+       "flash_attn": 1,
+       "devices": "auto",
+       "tensor_split": "0.00",
+       "tensor_buft_overrides": "none",
+       "load_mode": "auto",
+       "lazy_mode": "auto",
+       "embeddings": false,
+       "no_op_offload": 0,
+       "no_host": false,
+       "repack": true,
+       "fit_target": 0,
+       "fit_min_ctx": 0,
+       "n_prompt": 0,
+       "n_gen": 32,
+       "n_depth": 5,
+       "test_time": "2026-11-01T01:01:06Z",
+       "avg_ns": 55531523,
+       "stddev_ns": 317631,
+       "avg_ts": 576.266013,
+       "stddev_ts": 3.25263,
+       "samples_ns": [
+        56409589,
+        55423038,
+        55643136,
+        55425888,
+        55410477,
+        55407957,
+        55407892,
+        55407200,
+        55374653,
+        55405404
+       ],
+       "samples_ts": [
+        567.279,
+        577.377,
+        575.093,
+        577.348,
+        577.508,
+        577.534,
+        577.535,
+        577.542,
+        577.882,
+        577.561
+       ],
+       "median_ts": 577.5212455456156
+      },
+      {
+       "build_commit": "unknown",
+       "build_number": 0,
+       "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+       "backends": "CUDA",
+       "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "model_type": "olmoe A1.7B Q4_K - Medium",
+       "model_size": 4211730432,
+       "model_n_params": 6919161856,
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "n_threads": 64,
+       "cpu_mask": "0x0",
+       "cpu_strict": false,
+       "poll": 50,
+       "type_k": "f16",
+       "type_v": "f16",
+       "n_gpu_layers": 99,
+       "n_cpu_moe": 0,
+       "split_mode": "layer",
+       "main_gpu": 0,
+       "no_kv_offload": false,
+       "flash_attn": 1,
+       "devices": "auto",
+       "tensor_split": "0.00",
+       "tensor_buft_overrides": "none",
+       "load_mode": "auto",
+       "lazy_mode": "auto",
+       "embeddings": false,
+       "no_op_offload": 0,
+       "no_host": false,
+       "repack": true,
+       "fit_target": 0,
+       "fit_min_ctx": 0,
+       "n_prompt": 0,
+       "n_gen": 128,
+       "n_depth": 5,
+       "test_time": "2026-11-01T01:01:07Z",
+       "avg_ns": 221680799,
+       "stddev_ns": 312567,
+       "avg_ts": 577.407823,
+       "stddev_ts": 0.81078,
+       "samples_ns": [
+        222509387,
+        221535327,
+        221540451,
+        221551269,
+        221556996,
+        221899991,
+        221554989,
+        221605661,
+        221508321,
+        221545603
+       ],
+       "samples_ts": [
+        575.257,
+        577.786,
+        577.773,
+        577.744,
+        577.729,
+        576.836,
+        577.735,
+        577.603,
+        577.856,
+        577.759
+       ],
+       "median_ts": 577.7395272491119
+      },
+      {
+       "build_commit": "unknown",
+       "build_number": 0,
+       "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+       "backends": "CUDA",
+       "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "model_type": "olmoe A1.7B Q4_K - Medium",
+       "model_size": 4211730432,
+       "model_n_params": 6919161856,
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "n_threads": 16,
+       "cpu_mask": "0x0",
+       "cpu_strict": false,
+       "poll": 50,
+       "type_k": "f16",
+       "type_v": "f16",
+       "n_gpu_layers": 99,
+       "n_cpu_moe": 0,
+       "split_mode": "layer",
+       "main_gpu": 0,
+       "no_kv_offload": false,
+       "flash_attn": 0,
+       "devices": "auto",
+       "tensor_split": "0.00",
+       "tensor_buft_overrides": "none",
+       "load_mode": "auto",
+       "lazy_mode": "auto",
+       "embeddings": false,
+       "no_op_offload": 0,
+       "no_host": false,
+       "repack": true,
+       "fit_target": 0,
+       "fit_min_ctx": 0,
+       "n_prompt": 0,
+       "n_gen": 32,
+       "n_depth": 5,
+       "test_time": "2026-11-01T01:01:09Z",
+       "avg_ns": 57168454,
+       "stddev_ns": 591218,
+       "avg_ts": 559.801781,
+       "stddev_ts": 5.643796,
+       "samples_ns": [
+        58842284,
+        56988019,
+        56949111,
+        56979163,
+        56942298,
+        56963961,
+        56954418,
+        56980790,
+        57144991,
+        56939511
+       ],
+       "samples_ts": [
+        543.827,
+        561.522,
+        561.905,
+        561.609,
+        561.972,
+        561.759,
+        561.853,
+        561.593,
+        559.979,
+        562
+       ],
+       "median_ts": 561.683749685621
+      },
+      {
+       "build_commit": "unknown",
+       "build_number": 0,
+       "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+       "backends": "CUDA",
+       "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "model_type": "olmoe A1.7B Q4_K - Medium",
+       "model_size": 4211730432,
+       "model_n_params": 6919161856,
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "n_threads": 16,
+       "cpu_mask": "0x0",
+       "cpu_strict": false,
+       "poll": 50,
+       "type_k": "f16",
+       "type_v": "f16",
+       "n_gpu_layers": 99,
+       "n_cpu_moe": 0,
+       "split_mode": "layer",
+       "main_gpu": 0,
+       "no_kv_offload": false,
+       "flash_attn": 0,
+       "devices": "auto",
+       "tensor_split": "0.00",
+       "tensor_buft_overrides": "none",
+       "load_mode": "auto",
+       "lazy_mode": "auto",
+       "embeddings": false,
+       "no_op_offload": 0,
+       "no_host": false,
+       "repack": true,
+       "fit_target": 0,
+       "fit_min_ctx": 0,
+       "n_prompt": 0,
+       "n_gen": 128,
+       "n_depth": 5,
+       "test_time": "2026-11-01T01:01:10Z",
+       "avg_ns": 227867473,
+       "stddev_ns": 345747,
+       "avg_ts": 561.731174,
+       "stddev_ts": 0.847966,
+       "samples_ns": [
+        228836292,
+        227758862,
+        227754244,
+        227720894,
+        227713840,
+        227743068,
+        227774386,
+        227710345,
+        227750997,
+        227911809
+       ],
+       "samples_ts": [
+        559.352,
+        561.998,
+        562.009,
+        562.092,
+        562.109,
+        562.037,
+        561.96,
+        562.118,
+        562.017,
+        561.621
+       ],
+       "median_ts": 562.0132919897802
+      },
+      {
+       "build_commit": "unknown",
+       "build_number": 0,
+       "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+       "backends": "CUDA",
+       "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "model_type": "olmoe A1.7B Q4_K - Medium",
+       "model_size": 4211730432,
+       "model_n_params": 6919161856,
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "n_threads": 64,
+       "cpu_mask": "0x0",
+       "cpu_strict": false,
+       "poll": 50,
+       "type_k": "f16",
+       "type_v": "f16",
+       "n_gpu_layers": 99,
+       "n_cpu_moe": 0,
+       "split_mode": "layer",
+       "main_gpu": 0,
+       "no_kv_offload": false,
+       "flash_attn": 0,
+       "devices": "auto",
+       "tensor_split": "0.00",
+       "tensor_buft_overrides": "none",
+       "load_mode": "auto",
+       "lazy_mode": "auto",
+       "embeddings": false,
+       "no_op_offload": 0,
+       "no_host": false,
+       "repack": true,
+       "fit_target": 0,
+       "fit_min_ctx": 0,
+       "n_prompt": 0,
+       "n_gen": 32,
+       "n_depth": 5,
+       "test_time": "2026-11-01T01:01:13Z",
+       "avg_ns": 57069039,
+       "stddev_ns": 352118,
+       "avg_ts": 560.743258,
+       "stddev_ts": 3.406197,
+       "samples_ns": [
+        58068830,
+        57001253,
+        56956103,
+        56964878,
+        56965387,
+        56907302,
+        56954619,
+        56965575,
+        56955201,
+        56951247
+       ],
+       "samples_ts": [
+        551.07,
+        561.391,
+        561.836,
+        561.75,
+        561.745,
+        562.318,
+        561.851,
+        561.743,
+        561.845,
+        561.884
+       ],
+       "median_ts": 561.7929183714009
+      },
+      {
+       "build_commit": "unknown",
+       "build_number": 0,
+       "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+       "backends": "CUDA",
+       "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "model_type": "olmoe A1.7B Q4_K - Medium",
+       "model_size": 4211730432,
+       "model_n_params": 6919161856,
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "n_threads": 64,
+       "cpu_mask": "0x0",
+       "cpu_strict": false,
+       "poll": 50,
+       "type_k": "f16",
+       "type_v": "f16",
+       "n_gpu_layers": 99,
+       "n_cpu_moe": 0,
+       "split_mode": "layer",
+       "main_gpu": 0,
+       "no_kv_offload": false,
+       "flash_attn": 0,
+       "devices": "auto",
+       "tensor_split": "0.00",
+       "tensor_buft_overrides": "none",
+       "load_mode": "auto",
+       "lazy_mode": "auto",
+       "embeddings": false,
+       "no_op_offload": 0,
+       "no_host": false,
+       "repack": true,
+       "fit_target": 0,
+       "fit_min_ctx": 0,
+       "n_prompt": 0,
+       "n_gen": 128,
+       "n_depth": 5,
+       "test_time": "2026-11-01T01:01:14Z",
+       "avg_ns": 227860517,
+       "stddev_ns": 322794,
+       "avg_ts": 561.748177,
+       "stddev_ts": 0.792737,
+       "samples_ns": [
+        228741676,
+        227762523,
+        227766723,
+        227668801,
+        227767313,
+        227710738,
+        227746054,
+        228000920,
+        227747596,
+        227692829
+       ],
+       "samples_ts": [
+        559.583,
+        561.989,
+        561.978,
+        562.22,
+        561.977,
+        562.117,
+        562.029,
+        561.401,
+        562.026,
+        562.161
+       ],
+       "median_ts": 562.0072740357915
+      }
+     ]
+    },
+    {
+     "label": "r2_llama_nograph",
+     "cmd": [
+      "/root/autodl-tmp/llamacpp-vs-deepinfer/llama.cpp-ddf48f85c933c1f438212a02eb21e7b001d2d37d/build/bin/llama-bench",
+      "-m",
+      "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+      "-ngl",
+      "99",
+      "-o",
+      "json",
+      "-p",
+      "0",
+      "-d",
+      "5",
+      "-n",
+      "32",
+      "-t",
+      "16",
+      "-fa",
+      "on",
+      "-r",
+      "10"
+     ],
+     "env": {
+      "GGML_CUDA_DISABLE_GRAPHS": "1"
+     },
+     "returncode": 0,
+     "wall_s": 1.906184434890747,
+     "cpu_probe_ms": [
+      37.63112612068653,
+      53.04602161049843
+     ],
+     "throttled_periods": 0,
+     "throttled_ms": 0.0,
+     "periods": 19,
+     "cpu_s": 1.917846,
+     "llama_bench": [
+      {
+       "build_commit": "unknown",
+       "build_number": 0,
+       "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+       "backends": "CUDA",
+       "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "model_type": "olmoe A1.7B Q4_K - Medium",
+       "model_size": 4211730432,
+       "model_n_params": 6919161856,
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "n_threads": 16,
+       "cpu_mask": "0x0",
+       "cpu_strict": false,
+       "poll": 50,
+       "type_k": "f16",
+       "type_v": "f16",
+       "n_gpu_layers": 99,
+       "n_cpu_moe": 0,
+       "split_mode": "layer",
+       "main_gpu": 0,
+       "no_kv_offload": false,
+       "flash_attn": 1,
+       "devices": "auto",
+       "tensor_split": "0.00",
+       "tensor_buft_overrides": "none",
+       "load_mode": "auto",
+       "lazy_mode": "auto",
+       "embeddings": false,
+       "no_op_offload": 0,
+       "no_host": false,
+       "repack": true,
+       "fit_target": 0,
+       "fit_min_ctx": 0,
+       "n_prompt": 0,
+       "n_gen": 32,
+       "n_depth": 5,
+       "test_time": "2026-11-01T01:01:19Z",
+       "avg_ns": 63599233,
+       "stddev_ns": 179744,
+       "avg_ts": 503.1543,
+       "stddev_ts": 1.410582,
+       "samples_ns": [
+        64103005,
+        63610096,
+        63575030,
+        63530103,
+        63527735,
+        63542144,
+        63547997,
+        63506735,
+        63517946,
+        63531545
+       ],
+       "samples_ts": [
+        499.197,
+        503.065,
+        503.342,
+        503.698,
+        503.717,
+        503.603,
+        503.556,
+        503.884,
+        503.795,
+        503.687
+       ],
+       "median_ts": 503.6447824005835
+      }
+     ]
+    },
+    {
+     "label": "r2_llama_pp",
+     "cmd": [
+      "/root/autodl-tmp/llamacpp-vs-deepinfer/llama.cpp-ddf48f85c933c1f438212a02eb21e7b001d2d37d/build/bin/llama-bench",
+      "-m",
+      "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+      "-ngl",
+      "99",
+      "-o",
+      "json",
+      "-p",
+      "512",
+      "-n",
+      "0",
+      "-t",
+      "16",
+      "-fa",
+      "on",
+      "-r",
+      "5"
+     ],
+     "env": {},
+     "returncode": 0,
+     "wall_s": 1.5119867324829102,
+     "cpu_probe_ms": [
+      38.48578594624996,
+      54.108843207359314
+     ],
+     "throttled_periods": 0,
+     "throttled_ms": 0.0,
+     "periods": 15,
+     "cpu_s": 1.547189,
+     "llama_bench": [
+      {
+       "build_commit": "unknown",
+       "build_number": 0,
+       "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+       "backends": "CUDA",
+       "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "model_type": "olmoe A1.7B Q4_K - Medium",
+       "model_size": 4211730432,
+       "model_n_params": 6919161856,
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "n_threads": 16,
+       "cpu_mask": "0x0",
+       "cpu_strict": false,
+       "poll": 50,
+       "type_k": "f16",
+       "type_v": "f16",
+       "n_gpu_layers": 99,
+       "n_cpu_moe": 0,
+       "split_mode": "layer",
+       "main_gpu": 0,
+       "no_kv_offload": false,
+       "flash_attn": 1,
+       "devices": "auto",
+       "tensor_split": "0.00",
+       "tensor_buft_overrides": "none",
+       "load_mode": "auto",
+       "lazy_mode": "auto",
+       "embeddings": false,
+       "no_op_offload": 0,
+       "no_host": false,
+       "repack": true,
+       "fit_target": 0,
+       "fit_min_ctx": 0,
+       "n_prompt": 512,
+       "n_gen": 0,
+       "n_depth": 0,
+       "test_time": "2026-11-01T01:01:21Z",
+       "avg_ns": 24333558,
+       "stddev_ns": 1010095,
+       "avg_ts": 21068.623774,
+       "stddev_ts": 835.019521,
+       "samples_ns": [
+        26088984,
+        23606700,
+        24112910,
+        24148781,
+        23710419
+       ],
+       "samples_ts": [
+        19625.1,
+        21688.8,
+        21233.4,
+        21201.9,
+        21593.9
+       ],
+       "median_ts": 21233.438850806477
+      }
+     ]
+    },
+    {
+     "label": "r2_llama_greedy",
+     "cmd": [
+      "/root/autodl-tmp/llamacpp-vs-deepinfer/llama.cpp-ddf48f85c933c1f438212a02eb21e7b001d2d37d/build/bin/llama-completion",
+      "-m",
+      "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+      "-ngl",
+      "99",
+      "-p",
+      "The capital of France is",
+      "-n",
+      "33",
+      "--temp",
+      "0",
+      "--top-k",
+      "1",
+      "--ignore-eos",
+      "-no-cnv",
+      "--verbose-prompt",
+      "--no-display-prompt",
+      "--simple-io",
+      "-t",
+      "16",
+      "-fa",
+      "on",
+      "--seed",
+      "1"
+     ],
+     "env": {},
+     "returncode": 0,
+     "wall_s": 1.4760301113128662,
+     "cpu_probe_ms": [
+      38.188183680176735,
+      52.65882983803749
+     ],
+     "throttled_periods": 0,
+     "throttled_ms": 0.0,
+     "periods": 15,
+     "cpu_s": 1.428614,
+     "eval_ms": 59.11,
+     "eval_runs": 32,
+     "text": " Paris.\n\nThe currency of France is the Euro.\n\nThe population of France is around 67 million people.\n\nThe official language of France is French\n\n",
+     "perf_lines": [
+      "0.01.166.383 I    510 -> 'The'",
+      "0.01.166.384 I   5347 -> ' capital'",
+      "0.01.166.384 I    273 -> ' of'",
+      "0.01.166.385 I   6181 -> ' France'",
+      "0.01.166.385 I    310 -> ' is'",
+      "0.01.236.208 I common_perf_print:    sampling time =       3.03 ms",
+      "0.01.236.209 I common_perf_print:    samplers time =       0.98 ms /    38 tokens",
+      "0.01.236.213 I common_perf_print:        load time =     866.94 ms",
+      "0.01.236.215 I common_perf_print: prompt eval time =       7.34 ms /     5 tokens (    1.47 ms per token,   681.48 tokens per second)",
+      "0.01.236.216 I common_perf_print:        eval time =      59.11 ms /    32 runs   (    1.85 ms per token,   541.34 tokens per second)",
+      "0.01.236.217 I common_perf_print:       total time =      69.99 ms /    37 tokens",
+      "0.01.236.218 I common_perf_print: unaccounted time =       0.51 ms /   0.7 %      (total - sampling - prompt eval - eval) / (total)",
+      "0.01.236.218 I common_perf_print:    graphs reused =         31",
+      "0.01.236.219 I common_perf_print:   graph reallocs =          0    /     0        (same size) / (changed size)"
+     ]
+    }
+   ]
+  },
+  {
+   "round": 3,
+   "order": "llama-first",
+   "runs": [
+    {
+     "label": "r3_llama_bench",
+     "cmd": [
+      "/root/autodl-tmp/llamacpp-vs-deepinfer/llama.cpp-ddf48f85c933c1f438212a02eb21e7b001d2d37d/build/bin/llama-bench",
+      "-m",
+      "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+      "-ngl",
+      "99",
+      "-o",
+      "json",
+      "-p",
+      "0",
+      "-d",
+      "5",
+      "-n",
+      "32,128",
+      "-t",
+      "16,64",
+      "-fa",
+      "on,off",
+      "-r",
+      "10"
+     ],
+     "env": {},
+     "returncode": 0,
+     "wall_s": 15.686801671981812,
+     "cpu_probe_ms": [
+      23.37726578116417,
+      52.988432347774506
+     ],
+     "throttled_periods": 0,
+     "throttled_ms": 0.0,
+     "periods": 157,
+     "cpu_s": 16.177119,
+     "llama_bench": [
+      {
+       "build_commit": "unknown",
+       "build_number": 0,
+       "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+       "backends": "CUDA",
+       "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "model_type": "olmoe A1.7B Q4_K - Medium",
+       "model_size": 4211730432,
+       "model_n_params": 6919161856,
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "n_threads": 16,
+       "cpu_mask": "0x0",
+       "cpu_strict": false,
+       "poll": 50,
+       "type_k": "f16",
+       "type_v": "f16",
+       "n_gpu_layers": 99,
+       "n_cpu_moe": 0,
+       "split_mode": "layer",
+       "main_gpu": 0,
+       "no_kv_offload": false,
+       "flash_attn": 1,
+       "devices": "auto",
+       "tensor_split": "0.00",
+       "tensor_buft_overrides": "none",
+       "load_mode": "auto",
+       "lazy_mode": "auto",
+       "embeddings": false,
+       "no_op_offload": 0,
+       "no_host": false,
+       "repack": true,
+       "fit_target": 0,
+       "fit_min_ctx": 0,
+       "n_prompt": 0,
+       "n_gen": 32,
+       "n_depth": 5,
+       "test_time": "2026-11-01T01:01:24Z",
+       "avg_ns": 56746557,
+       "stddev_ns": 1392489,
+       "avg_ts": 564.198744,
+       "stddev_ts": 13.035486,
+       "samples_ns": [
+        60709420,
+        56291963,
+        56333968,
+        56288495,
+        56294139,
+        56301383,
+        56313193,
+        56314374,
+        56309158,
+        56309481
+       ],
+       "samples_ts": [
+        527.101,
+        568.465,
+        568.041,
+        568.5,
+        568.443,
+        568.37,
+        568.25,
+        568.239,
+        568.291,
+        568.288
+       ],
+       "median_ts": 568.28958837379
+      },
+      {
+       "build_commit": "unknown",
+       "build_number": 0,
+       "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+       "backends": "CUDA",
+       "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "model_type": "olmoe A1.7B Q4_K - Medium",
+       "model_size": 4211730432,
+       "model_n_params": 6919161856,
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "n_threads": 16,
+       "cpu_mask": "0x0",
+       "cpu_strict": false,
+       "poll": 50,
+       "type_k": "f16",
+       "type_v": "f16",
+       "n_gpu_layers": 99,
+       "n_cpu_moe": 0,
+       "split_mode": "layer",
+       "main_gpu": 0,
+       "no_kv_offload": false,
+       "flash_attn": 1,
+       "devices": "auto",
+       "tensor_split": "0.00",
+       "tensor_buft_overrides": "none",
+       "load_mode": "auto",
+       "lazy_mode": "auto",
+       "embeddings": false,
+       "no_op_offload": 0,
+       "no_host": false,
+       "repack": true,
+       "fit_target": 0,
+       "fit_min_ctx": 0,
+       "n_prompt": 0,
+       "n_gen": 128,
+       "n_depth": 5,
+       "test_time": "2026-11-01T01:01:25Z",
+       "avg_ns": 222307096,
+       "stddev_ns": 1844649,
+       "avg_ts": 575.815048,
+       "stddev_ts": 4.6811,
+       "samples_ns": [
+        227535068,
+        221731455,
+        221683367,
+        221612244,
+        222193021,
+        221636113,
+        221644785,
+        221670504,
+        221692737,
+        221671669
+       ],
+       "samples_ts": [
+        562.551,
+        577.275,
+        577.4,
+        577.585,
+        576.076,
+        577.523,
+        577.501,
+        577.434,
+        577.376,
+        577.431
+       ],
+       "median_ts": 577.4153429898593
+      },
+      {
+       "build_commit": "unknown",
+       "build_number": 0,
+       "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+       "backends": "CUDA",
+       "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "model_type": "olmoe A1.7B Q4_K - Medium",
+       "model_size": 4211730432,
+       "model_n_params": 6919161856,
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "n_threads": 64,
+       "cpu_mask": "0x0",
+       "cpu_strict": false,
+       "poll": 50,
+       "type_k": "f16",
+       "type_v": "f16",
+       "n_gpu_layers": 99,
+       "n_cpu_moe": 0,
+       "split_mode": "layer",
+       "main_gpu": 0,
+       "no_kv_offload": false,
+       "flash_attn": 1,
+       "devices": "auto",
+       "tensor_split": "0.00",
+       "tensor_buft_overrides": "none",
+       "load_mode": "auto",
+       "lazy_mode": "auto",
+       "embeddings": false,
+       "no_op_offload": 0,
+       "no_host": false,
+       "repack": true,
+       "fit_target": 0,
+       "fit_min_ctx": 0,
+       "n_prompt": 0,
+       "n_gen": 32,
+       "n_depth": 5,
+       "test_time": "2026-11-01T01:01:27Z",
+       "avg_ns": 55584897,
+       "stddev_ns": 323932,
+       "avg_ts": 575.713298,
+       "stddev_ts": 3.308607,
+       "samples_ns": [
+        56492129,
+        55521770,
+        55632288,
+        55481767,
+        55449251,
+        55463585,
+        55439532,
+        55469481,
+        55454179,
+        55444990
+       ],
+       "samples_ts": [
+        566.451,
+        576.351,
+        575.206,
+        576.766,
+        577.104,
+        576.955,
+        577.205,
+        576.894,
+        577.053,
+        577.149
+       ],
+       "median_ts": 576.9244688575485
+      },
+      {
+       "build_commit": "unknown",
+       "build_number": 0,
+       "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+       "backends": "CUDA",
+       "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "model_type": "olmoe A1.7B Q4_K - Medium",
+       "model_size": 4211730432,
+       "model_n_params": 6919161856,
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "n_threads": 64,
+       "cpu_mask": "0x0",
+       "cpu_strict": false,
+       "poll": 50,
+       "type_k": "f16",
+       "type_v": "f16",
+       "n_gpu_layers": 99,
+       "n_cpu_moe": 0,
+       "split_mode": "layer",
+       "main_gpu": 0,
+       "no_kv_offload": false,
+       "flash_attn": 1,
+       "devices": "auto",
+       "tensor_split": "0.00",
+       "tensor_buft_overrides": "none",
+       "load_mode": "auto",
+       "lazy_mode": "auto",
+       "embeddings": false,
+       "no_op_offload": 0,
+       "no_host": false,
+       "repack": true,
+       "fit_target": 0,
+       "fit_min_ctx": 0,
+       "n_prompt": 0,
+       "n_gen": 128,
+       "n_depth": 5,
+       "test_time": "2026-11-01T01:01:27Z",
+       "avg_ns": 222232503,
+       "stddev_ns": 236157,
+       "avg_ts": 575.973932,
+       "stddev_ts": 0.609192,
+       "samples_ns": [
+        222785064,
+        222354186,
+        222304014,
+        222097862,
+        222070450,
+        222251365,
+        222270842,
+        221911634,
+        222198028,
+        222081593
+       ],
+       "samples_ts": [
+        574.545,
+        575.658,
+        575.788,
+        576.323,
+        576.394,
+        575.924,
+        575.874,
+        576.806,
+        576.063,
+        576.365
+       ],
+       "median_ts": 575.9935950386703
+      },
+      {
+       "build_commit": "unknown",
+       "build_number": 0,
+       "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+       "backends": "CUDA",
+       "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "model_type": "olmoe A1.7B Q4_K - Medium",
+       "model_size": 4211730432,
+       "model_n_params": 6919161856,
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "n_threads": 16,
+       "cpu_mask": "0x0",
+       "cpu_strict": false,
+       "poll": 50,
+       "type_k": "f16",
+       "type_v": "f16",
+       "n_gpu_layers": 99,
+       "n_cpu_moe": 0,
+       "split_mode": "layer",
+       "main_gpu": 0,
+       "no_kv_offload": false,
+       "flash_attn": 0,
+       "devices": "auto",
+       "tensor_split": "0.00",
+       "tensor_buft_overrides": "none",
+       "load_mode": "auto",
+       "lazy_mode": "auto",
+       "embeddings": false,
+       "no_op_offload": 0,
+       "no_host": false,
+       "repack": true,
+       "fit_target": 0,
+       "fit_min_ctx": 0,
+       "n_prompt": 0,
+       "n_gen": 32,
+       "n_depth": 5,
+       "test_time": "2026-11-01T01:01:30Z",
+       "avg_ns": 57256006,
+       "stddev_ns": 619691,
+       "avg_ts": 558.950727,
+       "stddev_ts": 5.892203,
+       "samples_ns": [
+        59008396,
+        57029233,
+        57030328,
+        57169489,
+        57000490,
+        57161991,
+        56993422,
+        56992946,
+        57141503,
+        57032262
+       ],
+       "samples_ts": [
+        542.296,
+        561.116,
+        561.105,
+        559.739,
+        561.399,
+        559.813,
+        561.468,
+        561.473,
+        560.013,
+        561.086
+       ],
+       "median_ts": 561.0954478449028
+      },
+      {
+       "build_commit": "unknown",
+       "build_number": 0,
+       "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+       "backends": "CUDA",
+       "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "model_type": "olmoe A1.7B Q4_K - Medium",
+       "model_size": 4211730432,
+       "model_n_params": 6919161856,
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "n_threads": 16,
+       "cpu_mask": "0x0",
+       "cpu_strict": false,
+       "poll": 50,
+       "type_k": "f16",
+       "type_v": "f16",
+       "n_gpu_layers": 99,
+       "n_cpu_moe": 0,
+       "split_mode": "layer",
+       "main_gpu": 0,
+       "no_kv_offload": false,
+       "flash_attn": 0,
+       "devices": "auto",
+       "tensor_split": "0.00",
+       "tensor_buft_overrides": "none",
+       "load_mode": "auto",
+       "lazy_mode": "auto",
+       "embeddings": false,
+       "no_op_offload": 0,
+       "no_host": false,
+       "repack": true,
+       "fit_target": 0,
+       "fit_min_ctx": 0,
+       "n_prompt": 0,
+       "n_gen": 128,
+       "n_depth": 5,
+       "test_time": "2026-11-01T01:01:31Z",
+       "avg_ns": 228268724,
+       "stddev_ns": 429192,
+       "avg_ts": 560.744384,
+       "stddev_ts": 1.049475,
+       "samples_ns": [
+        229435783,
+        228178611,
+        228105788,
+        228431348,
+        228026952,
+        228241639,
+        228064253,
+        228052464,
+        228003710,
+        228146696
+       ],
+       "samples_ts": [
+        557.89,
+        560.964,
+        561.143,
+        560.343,
+        561.337,
+        560.809,
+        561.245,
+        561.274,
+        561.394,
+        561.043
+       ],
+       "median_ts": 561.0928401170149
+      },
+      {
+       "build_commit": "unknown",
+       "build_number": 0,
+       "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+       "backends": "CUDA",
+       "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "model_type": "olmoe A1.7B Q4_K - Medium",
+       "model_size": 4211730432,
+       "model_n_params": 6919161856,
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "n_threads": 64,
+       "cpu_mask": "0x0",
+       "cpu_strict": false,
+       "poll": 50,
+       "type_k": "f16",
+       "type_v": "f16",
+       "n_gpu_layers": 99,
+       "n_cpu_moe": 0,
+       "split_mode": "layer",
+       "main_gpu": 0,
+       "no_kv_offload": false,
+       "flash_attn": 0,
+       "devices": "auto",
+       "tensor_split": "0.00",
+       "tensor_buft_overrides": "none",
+       "load_mode": "auto",
+       "lazy_mode": "auto",
+       "embeddings": false,
+       "no_op_offload": 0,
+       "no_host": false,
+       "repack": true,
+       "fit_target": 0,
+       "fit_min_ctx": 0,
+       "n_prompt": 0,
+       "n_gen": 32,
+       "n_depth": 5,
+       "test_time": "2026-11-01T01:01:34Z",
+       "avg_ns": 57236577,
+       "stddev_ns": 343037,
+       "avg_ts": 559.100875,
+       "stddev_ts": 3.307735,
+       "samples_ns": [
+        58165679,
+        57029434,
+        57019742,
+        57167340,
+        57251154,
+        57032517,
+        57325680,
+        57169637,
+        57172561,
+        57032034
+       ],
+       "samples_ts": [
+        550.153,
+        561.114,
+        561.209,
+        559.76,
+        558.941,
+        561.083,
+        558.214,
+        559.738,
+        559.709,
+        561.088
+       ],
+       "median_ts": 559.7489255451476
+      },
+      {
+       "build_commit": "unknown",
+       "build_number": 0,
+       "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+       "backends": "CUDA",
+       "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "model_type": "olmoe A1.7B Q4_K - Medium",
+       "model_size": 4211730432,
+       "model_n_params": 6919161856,
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "n_threads": 64,
+       "cpu_mask": "0x0",
+       "cpu_strict": false,
+       "poll": 50,
+       "type_k": "f16",
+       "type_v": "f16",
+       "n_gpu_layers": 99,
+       "n_cpu_moe": 0,
+       "split_mode": "layer",
+       "main_gpu": 0,
+       "no_kv_offload": false,
+       "flash_attn": 0,
+       "devices": "auto",
+       "tensor_split": "0.00",
+       "tensor_buft_overrides": "none",
+       "load_mode": "auto",
+       "lazy_mode": "auto",
+       "embeddings": false,
+       "no_op_offload": 0,
+       "no_host": false,
+       "repack": true,
+       "fit_target": 0,
+       "fit_min_ctx": 0,
+       "n_prompt": 0,
+       "n_gen": 128,
+       "n_depth": 5,
+       "test_time": "2026-11-01T01:01:35Z",
+       "avg_ns": 228182121,
+       "stddev_ns": 349276,
+       "avg_ts": 560.956607,
+       "stddev_ts": 0.85521,
+       "samples_ns": [
+        229116095,
+        228067356,
+        228031721,
+        228012621,
+        228045475,
+        228003525,
+        227999214,
+        228095631,
+        228403879,
+        228045697
+       ],
+       "samples_ts": [
+        558.669,
+        561.238,
+        561.325,
+        561.372,
+        561.292,
+        561.395,
+        561.405,
+        561.168,
+        560.411,
+        561.291
+       ],
+       "median_ts": 561.291284980321
+      }
+     ]
+    },
+    {
+     "label": "r3_llama_nograph",
+     "cmd": [
+      "/root/autodl-tmp/llamacpp-vs-deepinfer/llama.cpp-ddf48f85c933c1f438212a02eb21e7b001d2d37d/build/bin/llama-bench",
+      "-m",
+      "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+      "-ngl",
+      "99",
+      "-o",
+      "json",
+      "-p",
+      "0",
+      "-d",
+      "5",
+      "-n",
+      "32",
+      "-t",
+      "16",
+      "-fa",
+      "on",
+      "-r",
+      "10"
+     ],
+     "env": {
+      "GGML_CUDA_DISABLE_GRAPHS": "1"
+     },
+     "returncode": 0,
+     "wall_s": 2.2213380336761475,
+     "cpu_probe_ms": [
+      37.487370893359184,
+      53.0023667961359
+     ],
+     "throttled_periods": 0,
+     "throttled_ms": 0.0,
+     "periods": 22,
+     "cpu_s": 2.285767,
+     "llama_bench": [
+      {
+       "build_commit": "unknown",
+       "build_number": 0,
+       "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+       "backends": "CUDA",
+       "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "model_type": "olmoe A1.7B Q4_K - Medium",
+       "model_size": 4211730432,
+       "model_n_params": 6919161856,
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "n_threads": 16,
+       "cpu_mask": "0x0",
+       "cpu_strict": false,
+       "poll": 50,
+       "type_k": "f16",
+       "type_v": "f16",
+       "n_gpu_layers": 99,
+       "n_cpu_moe": 0,
+       "split_mode": "layer",
+       "main_gpu": 0,
+       "no_kv_offload": false,
+       "flash_attn": 1,
+       "devices": "auto",
+       "tensor_split": "0.00",
+       "tensor_buft_overrides": "none",
+       "load_mode": "auto",
+       "lazy_mode": "auto",
+       "embeddings": false,
+       "no_op_offload": 0,
+       "no_host": false,
+       "repack": true,
+       "fit_target": 0,
+       "fit_min_ctx": 0,
+       "n_prompt": 0,
+       "n_gen": 32,
+       "n_depth": 5,
+       "test_time": "2026-11-01T01:01:40Z",
+       "avg_ns": 67164545,
+       "stddev_ns": 1625459,
+       "avg_ts": 476.699843,
+       "stddev_ts": 11.84778,
+       "samples_ns": [
+        69140229,
+        67980587,
+        67905700,
+        67655339,
+        67889782,
+        67891685,
+        67838559,
+        66689609,
+        63787997,
+        64865967
+       ],
+       "samples_ts": [
+        462.828,
+        470.723,
+        471.242,
+        472.986,
+        471.352,
+        471.339,
+        471.708,
+        479.835,
+        501.662,
+        493.325
+       ],
+       "median_ts": 471.5301803862629
+      }
+     ]
+    },
+    {
+     "label": "r3_llama_pp",
+     "cmd": [
+      "/root/autodl-tmp/llamacpp-vs-deepinfer/llama.cpp-ddf48f85c933c1f438212a02eb21e7b001d2d37d/build/bin/llama-bench",
+      "-m",
+      "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+      "-ngl",
+      "99",
+      "-o",
+      "json",
+      "-p",
+      "512",
+      "-n",
+      "0",
+      "-t",
+      "16",
+      "-fa",
+      "on",
+      "-r",
+      "5"
+     ],
+     "env": {},
+     "returncode": 0,
+     "wall_s": 1.862194299697876,
+     "cpu_probe_ms": [
+      37.44189627468586,
+      53.497498854994774
+     ],
+     "throttled_periods": 0,
+     "throttled_ms": 0.0,
+     "periods": 19,
+     "cpu_s": 1.867358,
+     "llama_bench": [
+      {
+       "build_commit": "unknown",
+       "build_number": 0,
+       "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+       "backends": "CUDA",
+       "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "model_type": "olmoe A1.7B Q4_K - Medium",
+       "model_size": 4211730432,
+       "model_n_params": 6919161856,
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "n_threads": 16,
+       "cpu_mask": "0x0",
+       "cpu_strict": false,
+       "poll": 50,
+       "type_k": "f16",
+       "type_v": "f16",
+       "n_gpu_layers": 99,
+       "n_cpu_moe": 0,
+       "split_mode": "layer",
+       "main_gpu": 0,
+       "no_kv_offload": false,
+       "flash_attn": 1,
+       "devices": "auto",
+       "tensor_split": "0.00",
+       "tensor_buft_overrides": "none",
+       "load_mode": "auto",
+       "lazy_mode": "auto",
+       "embeddings": false,
+       "no_op_offload": 0,
+       "no_host": false,
+       "repack": true,
+       "fit_target": 0,
+       "fit_min_ctx": 0,
+       "n_prompt": 512,
+       "n_gen": 0,
+       "n_depth": 0,
+       "test_time": "2026-11-01T01:01:42Z",
+       "avg_ns": 25972078,
+       "stddev_ns": 1566019,
+       "avg_ts": 19767.095978,
+       "stddev_ts": 1111.977568,
+       "samples_ns": [
+        28719744,
+        24793884,
+        25472429,
+        25595035,
+        25279300
+       ],
+       "samples_ts": [
+        17827.5,
+        20650.3,
+        20100.2,
+        20003.9,
+        20253.7
+       ],
+       "median_ts": 20100.16398514645
+      }
+     ]
+    },
+    {
+     "label": "r3_llama_greedy",
+     "cmd": [
+      "/root/autodl-tmp/llamacpp-vs-deepinfer/llama.cpp-ddf48f85c933c1f438212a02eb21e7b001d2d37d/build/bin/llama-completion",
+      "-m",
+      "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+      "-ngl",
+      "99",
+      "-p",
+      "The capital of France is",
+      "-n",
+      "33",
+      "--temp",
+      "0",
+      "--top-k",
+      "1",
+      "--ignore-eos",
+      "-no-cnv",
+      "--verbose-prompt",
+      "--no-display-prompt",
+      "--simple-io",
+      "-t",
+      "16",
+      "-fa",
+      "on",
+      "--seed",
+      "1"
+     ],
+     "env": {},
+     "returncode": 0,
+     "wall_s": 1.7555770874023438,
+     "cpu_probe_ms": [
+      37.48292103409767,
+      52.5450985878706
+     ],
+     "throttled_periods": 0,
+     "throttled_ms": 0.0,
+     "periods": 17,
+     "cpu_s": 1.758383,
+     "eval_ms": 62.29,
+     "eval_runs": 32,
+     "text": " Paris.\n\nThe currency of France is the Euro.\n\nThe population of France is around 67 million people.\n\nThe official language of France is French\n\n",
+     "perf_lines": [
+      "0.01.465.691 I    510 -> 'The'",
+      "0.01.465.691 I   5347 -> ' capital'",
+      "0.01.465.692 I    273 -> ' of'",
+      "0.01.465.693 I   6181 -> ' France'",
+      "0.01.465.693 I    310 -> ' is'",
+      "0.01.542.643 I common_perf_print:    sampling time =       4.83 ms",
+      "0.01.542.645 I common_perf_print:    samplers time =       1.72 ms /    38 tokens",
+      "0.01.542.651 I common_perf_print:        load time =    1096.16 ms",
+      "0.01.542.653 I common_perf_print: prompt eval time =       9.35 ms /     5 tokens (    1.87 ms per token,   535.05 tokens per second)",
+      "0.01.542.656 I common_perf_print:        eval time =      62.29 ms /    32 runs   (    1.95 ms per token,   513.77 tokens per second)",
+      "0.01.542.657 I common_perf_print:       total time =      77.16 ms /    37 tokens",
+      "0.01.542.659 I common_perf_print: unaccounted time =       0.70 ms /   0.9 %      (total - sampling - prompt eval - eval) / (total)",
+      "0.01.542.659 I common_perf_print:    graphs reused =         31",
+      "0.01.542.660 I common_perf_print:   graph reallocs =          0    /     0        (same size) / (changed size)"
+     ]
+    },
+    {
+     "label": "r3_deepinfer",
+     "cmd": [
+      "/root/miniconda3/bin/python",
+      "/root/autodl-tmp/DeepInfer-SM86/scripts/bench_olmoe_decode.py",
+      "--gguf",
+      "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+      "--repeats",
+      "5",
+      "--output",
+      "/root/autodl-tmp/llamacpp-vs-deepinfer/results/r3_deepinfer.json",
+      "--mode",
+      "graph",
+      "eager",
+      "--expert-kernel",
+      "gemv",
+      "grouped"
+     ],
+     "env": {
+      "PYTHONPATH": "/root/autodl-tmp/DeepInfer-SM86"
+     },
+     "returncode": 0,
+     "wall_s": 60.150142669677734,
+     "cpu_probe_ms": [
+      38.45270536839962,
+      52.871862426400185
+     ],
+     "throttled_periods": 48,
+     "throttled_ms": 119367.704,
+     "periods": 602,
+     "cpu_s": 140.703597,
+     "deepinfer_bench": {
+      "environment": {
+       "gpu": "NVIDIA GeForce RTX 4080 SUPER",
+       "torch": "2.5.1+cu124",
+       "cuda": "12.4",
+       "python": "3.12.3",
+       "cpu": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+       "os": "Linux-5.15.0-78-generic-x86_64-with-glibc2.35",
+       "gguf": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf"
+      },
+      "args": {
+       "gguf": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+       "layers": null,
+       "top_k": null,
+       "prompt_ids": [
+        510,
+        5347,
+        273,
+        6181,
+        310
+       ],
+       "max_new_tokens": 32,
+       "warmup_tokens": 4,
+       "repeats": 5,
+       "host_delay_ms": [
+        0.0
+       ],
+       "mode": [
+        "graph",
+        "eager"
+       ],
+       "graph_max_len": 256,
+       "expert_kernel": [
+        "gemv",
+        "grouped"
+       ],
+       "sync_debug": false,
+       "profile_host": false,
+       "output": "/root/autodl-tmp/llamacpp-vs-deepinfer/results/r3_deepinfer.json"
+      },
+      "records": [
+       {
+        "layers": 16,
+        "top_k": 8,
+        "mode": "graph",
+        "expert_kernel": "gemv",
+        "host_delay_ms": 0.0,
+        "step_ms": {
+         "median": 4.044504836201668,
+         "q1": 4.042682237923145,
+         "q3": 4.087125416845083,
+         "min": 4.042123444378376,
+         "max": 4.129592329263687,
+         "n": 5
+        },
+        "repeat_step_ms": [
+         4.129592329263687,
+         4.044504836201668,
+         4.044658504426479,
+         4.043241031467915,
+         4.042123444378376
+        ],
+        "repeat_cpu_probe_ms": [
+         23.585468530654907,
+         21.390128880739212,
+         21.382015198469162,
+         21.41006663441658,
+         21.41360752284527
+        ],
+        "host_ms": {
+         "median": 0.02641044557094574,
+         "q1": 0.026221852749586105,
+         "q3": 0.026969239115715027,
+         "min": 0.026180408895015717,
+         "max": 0.0270158052444458,
+         "n": 5
+        },
+        "gpu_ms": {
+         "median": 4.025856018066406,
+         "q1": 4.024832010269165,
+         "q3": 4.0268800258636475,
+         "min": 4.024320125579834,
+         "max": 4.0273919105529785,
+         "n": 5
+        },
+        "tokens_per_second": 247.24905532295867,
+        "bytes": {
+         "dense_gb": 0.75184128,
+         "expert_gb": 0.48758784,
+         "total_gb": 1.23942912
+        },
+        "effective_gb_s": 306.44767905976596,
+        "gpu_hold_ms": 20.081047415733337,
+        "syncs_per_step": null,
+        "sync_sites": null,
+        "first_token_id": 7785,
+        "generated_ids": [
+         15,
+         187,
+         187,
+         510,
+         14731,
+         273,
+         6181,
+         310,
+         14029,
+         15,
+         187,
+         187,
+         510,
+         3072,
+         273,
+         6181,
+         310,
+         1475,
+         9963,
+         3041,
+         952,
+         15,
+         187,
+         187,
+         510,
+         3565,
+         3448,
+         273,
+         6181,
+         310,
+         5112,
+         15
+        ],
+        "tokens_match_eager": true,
+        "tokens_match_grouped": true
+       },
+       {
+        "layers": 16,
+        "top_k": 8,
+        "mode": "graph",
+        "expert_kernel": "grouped",
+        "host_delay_ms": 0.0,
+        "step_ms": {
+         "median": 6.64041843265295,
+         "q1": 6.632225122302771,
+         "q3": 6.703075487166643,
+         "min": 6.631743162870407,
+         "max": 6.755899637937546,
+         "n": 5
+        },
+        "repeat_step_ms": [
+         6.755899637937546,
+         6.632707081735134,
+         6.6502513363957405,
+         6.64041843265295,
+         6.631743162870407
+        ],
+        "repeat_cpu_probe_ms": [
+         21.51372656226158,
+         21.570011973381042,
+         24.982094764709473,
+         25.60545690357685,
+         23.335540667176247
+        ],
+        "host_ms": {
+         "median": 0.027164816856384277,
+         "q1": 0.02669449895620346,
+         "q3": 0.03720168024301529,
+         "min": 0.02628657966852188,
+         "max": 0.03935676068067551,
+         "n": 5
+        },
+        "gpu_ms": {
+         "median": 6.616463899612427,
+         "q1": 6.61520791053772,
+         "q3": 6.6182719469070435,
+         "min": 6.614863872528076,
+         "max": 6.618943929672241,
+         "n": 5
+        },
+        "tokens_per_second": 150.59291972968103,
+        "bytes": {
+         "dense_gb": 0.75184128,
+         "expert_gb": 0.48758784,
+         "total_gb": 1.23942912
+        },
+        "effective_gb_s": 186.6492499787892,
+        "gpu_hold_ms": 20.118070282042027,
+        "syncs_per_step": null,
+        "sync_sites": null,
+        "first_token_id": 7785,
+        "generated_ids": [
+         15,
+         187,
+         187,
+         510,
+         14731,
+         273,
+         6181,
+         310,
+         14029,
+         15,
+         187,
+         187,
+         510,
+         3072,
+         273,
+         6181,
+         310,
+         1475,
+         9963,
+         3041,
+         952,
+         15,
+         187,
+         187,
+         510,
+         3565,
+         3448,
+         273,
+         6181,
+         310,
+         5112,
+         15
+        ],
+        "tokens_match_eager": true
+       },
+       {
+        "layers": 16,
+        "top_k": 8,
+        "mode": "eager",
+        "expert_kernel": "gemv",
+        "host_delay_ms": 0.0,
+        "step_ms": {
+         "median": 15.264932997524738,
+         "q1": 15.247533563524485,
+         "q3": 15.294482000172138,
+         "min": 15.24610910564661,
+         "max": 15.32262284308672,
+         "n": 5
+        },
+        "repeat_step_ms": [
+         15.32262284308672,
+         15.264932997524738,
+         15.266341157257557,
+         15.248958021402359,
+         15.24610910564661
+        ],
+        "repeat_cpu_probe_ms": [
+         23.241786286234856,
+         21.519547328352928,
+         23.42125028371811,
+         21.77850902080536,
+         24.674102663993835
+        ],
+        "host_ms": {
+         "median": 14.986008405685425,
+         "q1": 14.968536794185638,
+         "q3": 15.015234239399433,
+         "min": 14.967101626098156,
+         "max": 15.04321675747633,
+         "n": 5
+        },
+        "gpu_ms": {
+         "median": 4.472832202911377,
+         "q1": 4.4726399183273315,
+         "q3": 4.4752161502838135,
+         "min": 4.472447872161865,
+         "max": 4.475552082061768,
+         "n": 5
+        },
+        "tokens_per_second": 65.5096226208234,
+        "bytes": {
+         "dense_gb": 0.75184128,
+         "expert_gb": 0.48758784,
+         "total_gb": 1.23942912
+        },
+        "effective_gb_s": 81.19453391645924,
+        "gpu_hold_ms": 65.12965027242899,
+        "syncs_per_step": null,
+        "sync_sites": null,
+        "first_token_id": 7785,
+        "generated_ids": [
+         15,
+         187,
+         187,
+         510,
+         14731,
+         273,
+         6181,
+         310,
+         14029,
+         15,
+         187,
+         187,
+         510,
+         3072,
+         273,
+         6181,
+         310,
+         1475,
+         9963,
+         3041,
+         952,
+         15,
+         187,
+         187,
+         510,
+         3565,
+         3448,
+         273,
+         6181,
+         310,
+         5112,
+         15
+        ],
+        "tokens_match_grouped": true
+       },
+       {
+        "layers": 16,
+        "top_k": 8,
+        "mode": "eager",
+        "expert_kernel": "grouped",
+        "host_delay_ms": 0.0,
+        "step_ms": {
+         "median": 16.735299490392208,
+         "q1": 16.62938017398119,
+         "q3": 16.744904685765505,
+         "min": 16.61823969334364,
+         "max": 16.746127046644688,
+         "n": 5
+        },
+        "repeat_step_ms": [
+         16.743682324886322,
+         16.746127046644688,
+         16.735299490392208,
+         16.64052065461874,
+         16.61823969334364
+        ],
+        "repeat_cpu_probe_ms": [
+         21.38630859553814,
+         21.517908200621605,
+         23.751407861709595,
+         21.87114581465721,
+         23.41856248676777
+        ],
+        "host_ms": {
+         "median": 16.429980285465717,
+         "q1": 16.318765934556723,
+         "q3": 16.442372929304838,
+         "min": 16.308595426380634,
+         "max": 16.447467729449272,
+         "n": 5
+        },
+        "gpu_ms": {
+         "median": 7.226207971572876,
+         "q1": 7.220879912376404,
+         "q3": 7.229184150695801,
+         "min": 7.218783855438232,
+         "max": 7.230976104736328,
+         "n": 5
+        },
+        "tokens_per_second": 59.75393512223091,
+        "bytes": {
+         "dense_gb": 0.75184128,
+         "expert_gb": 0.48758784,
+         "total_gb": 1.23942912
+        },
+        "effective_gb_s": 74.06076722508375,
+        "gpu_hold_ms": 69.34240318834782,
+        "syncs_per_step": null,
+        "sync_sites": null,
+        "first_token_id": 7785,
+        "generated_ids": [
+         15,
+         187,
+         187,
+         510,
+         14731,
+         273,
+         6181,
+         310,
+         14029,
+         15,
+         187,
+         187,
+         510,
+         3072,
+         273,
+         6181,
+         310,
+         1475,
+         9963,
+         3041,
+         952,
+         15,
+         187,
+         187,
+         510,
+         3565,
+         3448,
+         273,
+         6181,
+         310,
+         5112,
+         15
+        ]
+       }
+      ]
+     }
+    }
+   ]
+  }
+ ],
+ "explore": [
+  {
+   "label": "explore_threads",
+   "cmd": [
+    "/root/autodl-tmp/llamacpp-vs-deepinfer/llama.cpp-ddf48f85c933c1f438212a02eb21e7b001d2d37d/build/bin/llama-bench",
+    "-m",
+    "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+    "-ngl",
+    "99",
+    "-o",
+    "json",
+    "-p",
+    "0",
+    "-n",
+    "128",
+    "-t",
+    "1,2,4,8,16,64",
+    "-fa",
+    "off,on",
+    "-r",
+    "3"
+   ],
+   "env": {},
+   "returncode": 0,
+   "wall_s": 10.169943809509277,
+   "cpu_probe_ms": [
+    37.48911991715431,
+    51.35779641568661
+   ],
+   "throttled_periods": 0,
+   "throttled_ms": 0.0,
+   "periods": 102,
+   "cpu_s": 10.481121,
+   "llama_bench": [
+    {
+     "build_commit": "unknown",
+     "build_number": 0,
+     "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+     "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+     "backends": "CUDA",
+     "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+     "model_type": "olmoe A1.7B Q4_K - Medium",
+     "model_size": 4211730432,
+     "model_n_params": 6919161856,
+     "n_batch": 2048,
+     "n_ubatch": 512,
+     "n_threads": 1,
+     "cpu_mask": "0x0",
+     "cpu_strict": false,
+     "poll": 50,
+     "type_k": "f16",
+     "type_v": "f16",
+     "n_gpu_layers": 99,
+     "n_cpu_moe": 0,
+     "split_mode": "layer",
+     "main_gpu": 0,
+     "no_kv_offload": false,
+     "flash_attn": 0,
+     "devices": "auto",
+     "tensor_split": "0.00",
+     "tensor_buft_overrides": "none",
+     "load_mode": "auto",
+     "lazy_mode": "auto",
+     "embeddings": false,
+     "no_op_offload": 0,
+     "no_host": false,
+     "repack": true,
+     "fit_target": 0,
+     "fit_min_ctx": 0,
+     "n_prompt": 0,
+     "n_gen": 128,
+     "n_depth": 0,
+     "test_time": "2026-11-01T00:56:04Z",
+     "avg_ns": 234382095,
+     "stddev_ns": 3833480,
+     "avg_ts": 546.213657,
+     "stddev_ts": 8.882989,
+     "samples_ns": [
+      238606380,
+      233415437,
+      231124468
+     ],
+     "samples_ts": [
+      536.448,
+      548.378,
+      553.814
+     ],
+     "median_ts": 548.3784690727203
+    },
+    {
+     "build_commit": "unknown",
+     "build_number": 0,
+     "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+     "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+     "backends": "CUDA",
+     "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+     "model_type": "olmoe A1.7B Q4_K - Medium",
+     "model_size": 4211730432,
+     "model_n_params": 6919161856,
+     "n_batch": 2048,
+     "n_ubatch": 512,
+     "n_threads": 2,
+     "cpu_mask": "0x0",
+     "cpu_strict": false,
+     "poll": 50,
+     "type_k": "f16",
+     "type_v": "f16",
+     "n_gpu_layers": 99,
+     "n_cpu_moe": 0,
+     "split_mode": "layer",
+     "main_gpu": 0,
+     "no_kv_offload": false,
+     "flash_attn": 0,
+     "devices": "auto",
+     "tensor_split": "0.00",
+     "tensor_buft_overrides": "none",
+     "load_mode": "auto",
+     "lazy_mode": "auto",
+     "embeddings": false,
+     "no_op_offload": 0,
+     "no_host": false,
+     "repack": true,
+     "fit_target": 0,
+     "fit_min_ctx": 0,
+     "n_prompt": 0,
+     "n_gen": 128,
+     "n_depth": 0,
+     "test_time": "2026-11-01T00:56:05Z",
+     "avg_ns": 233304250,
+     "stddev_ns": 614746,
+     "avg_ts": 548.642354,
+     "stddev_ts": 1.446766,
+     "samples_ns": [
+      233847047,
+      233429011,
+      232636692
+     ],
+     "samples_ts": [
+      547.366,
+      548.347,
+      550.214
+     ],
+     "median_ts": 548.3465806227488
+    },
+    {
+     "build_commit": "unknown",
+     "build_number": 0,
+     "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+     "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+     "backends": "CUDA",
+     "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+     "model_type": "olmoe A1.7B Q4_K - Medium",
+     "model_size": 4211730432,
+     "model_n_params": 6919161856,
+     "n_batch": 2048,
+     "n_ubatch": 512,
+     "n_threads": 4,
+     "cpu_mask": "0x0",
+     "cpu_strict": false,
+     "poll": 50,
+     "type_k": "f16",
+     "type_v": "f16",
+     "n_gpu_layers": 99,
+     "n_cpu_moe": 0,
+     "split_mode": "layer",
+     "main_gpu": 0,
+     "no_kv_offload": false,
+     "flash_attn": 0,
+     "devices": "auto",
+     "tensor_split": "0.00",
+     "tensor_buft_overrides": "none",
+     "load_mode": "auto",
+     "lazy_mode": "auto",
+     "embeddings": false,
+     "no_op_offload": 0,
+     "no_host": false,
+     "repack": true,
+     "fit_target": 0,
+     "fit_min_ctx": 0,
+     "n_prompt": 0,
+     "n_gen": 128,
+     "n_depth": 0,
+     "test_time": "2026-11-01T00:56:05Z",
+     "avg_ns": 233370153,
+     "stddev_ns": 2190110,
+     "avg_ts": 548.516911,
+     "stddev_ts": 5.119941,
+     "samples_ns": [
+      235898960,
+      232084885,
+      232126614
+     ],
+     "samples_ts": [
+      542.605,
+      551.522,
+      551.423
+     ],
+     "median_ts": 551.4231987203328
+    },
+    {
+     "build_commit": "unknown",
+     "build_number": 0,
+     "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+     "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+     "backends": "CUDA",
+     "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+     "model_type": "olmoe A1.7B Q4_K - Medium",
+     "model_size": 4211730432,
+     "model_n_params": 6919161856,
+     "n_batch": 2048,
+     "n_ubatch": 512,
+     "n_threads": 8,
+     "cpu_mask": "0x0",
+     "cpu_strict": false,
+     "poll": 50,
+     "type_k": "f16",
+     "type_v": "f16",
+     "n_gpu_layers": 99,
+     "n_cpu_moe": 0,
+     "split_mode": "layer",
+     "main_gpu": 0,
+     "no_kv_offload": false,
+     "flash_attn": 0,
+     "devices": "auto",
+     "tensor_split": "0.00",
+     "tensor_buft_overrides": "none",
+     "load_mode": "auto",
+     "lazy_mode": "auto",
+     "embeddings": false,
+     "no_op_offload": 0,
+     "no_host": false,
+     "repack": true,
+     "fit_target": 0,
+     "fit_min_ctx": 0,
+     "n_prompt": 0,
+     "n_gen": 128,
+     "n_depth": 0,
+     "test_time": "2026-11-01T00:56:06Z",
+     "avg_ns": 232299677,
+     "stddev_ns": 1278097,
+     "avg_ts": 551.023472,
+     "stddev_ts": 3.021883,
+     "samples_ns": [
+      233775340,
+      231572553,
+      231551139
+     ],
+     "samples_ts": [
+      547.534,
+      552.743,
+      552.794
+     ],
+     "median_ts": 552.742535079276
+    },
+    {
+     "build_commit": "unknown",
+     "build_number": 0,
+     "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+     "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+     "backends": "CUDA",
+     "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+     "model_type": "olmoe A1.7B Q4_K - Medium",
+     "model_size": 4211730432,
+     "model_n_params": 6919161856,
+     "n_batch": 2048,
+     "n_ubatch": 512,
+     "n_threads": 16,
+     "cpu_mask": "0x0",
+     "cpu_strict": false,
+     "poll": 50,
+     "type_k": "f16",
+     "type_v": "f16",
+     "n_gpu_layers": 99,
+     "n_cpu_moe": 0,
+     "split_mode": "layer",
+     "main_gpu": 0,
+     "no_kv_offload": false,
+     "flash_attn": 0,
+     "devices": "auto",
+     "tensor_split": "0.00",
+     "tensor_buft_overrides": "none",
+     "load_mode": "auto",
+     "lazy_mode": "auto",
+     "embeddings": false,
+     "no_op_offload": 0,
+     "no_host": false,
+     "repack": true,
+     "fit_target": 0,
+     "fit_min_ctx": 0,
+     "n_prompt": 0,
+     "n_gen": 128,
+     "n_depth": 0,
+     "test_time": "2026-11-01T00:56:07Z",
+     "avg_ns": 232243691,
+     "stddev_ns": 1614817,
+     "avg_ts": 551.162918,
+     "stddev_ts": 3.818463,
+     "samples_ns": [
+      234085658,
+      231573250,
+      231072166
+     ],
+     "samples_ts": [
+      546.808,
+      552.741,
+      553.939
+     ],
+     "median_ts": 552.7408714089387
+    },
+    {
+     "build_commit": "unknown",
+     "build_number": 0,
+     "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+     "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+     "backends": "CUDA",
+     "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+     "model_type": "olmoe A1.7B Q4_K - Medium",
+     "model_size": 4211730432,
+     "model_n_params": 6919161856,
+     "n_batch": 2048,
+     "n_ubatch": 512,
+     "n_threads": 64,
+     "cpu_mask": "0x0",
+     "cpu_strict": false,
+     "poll": 50,
+     "type_k": "f16",
+     "type_v": "f16",
+     "n_gpu_layers": 99,
+     "n_cpu_moe": 0,
+     "split_mode": "layer",
+     "main_gpu": 0,
+     "no_kv_offload": false,
+     "flash_attn": 0,
+     "devices": "auto",
+     "tensor_split": "0.00",
+     "tensor_buft_overrides": "none",
+     "load_mode": "auto",
+     "lazy_mode": "auto",
+     "embeddings": false,
+     "no_op_offload": 0,
+     "no_host": false,
+     "repack": true,
+     "fit_target": 0,
+     "fit_min_ctx": 0,
+     "n_prompt": 0,
+     "n_gen": 128,
+     "n_depth": 0,
+     "test_time": "2026-11-01T00:56:07Z",
+     "avg_ns": 228544941,
+     "stddev_ns": 614906,
+     "avg_ts": 560.067601,
+     "stddev_ts": 1.505733,
+     "samples_ns": [
+      229192177,
+      228473705,
+      227968942
+     ],
+     "samples_ts": [
+      558.483,
+      560.24,
+      561.48
+     ],
+     "median_ts": 560.2395251567352
+    },
+    {
+     "build_commit": "unknown",
+     "build_number": 0,
+     "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+     "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+     "backends": "CUDA",
+     "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+     "model_type": "olmoe A1.7B Q4_K - Medium",
+     "model_size": 4211730432,
+     "model_n_params": 6919161856,
+     "n_batch": 2048,
+     "n_ubatch": 512,
+     "n_threads": 1,
+     "cpu_mask": "0x0",
+     "cpu_strict": false,
+     "poll": 50,
+     "type_k": "f16",
+     "type_v": "f16",
+     "n_gpu_layers": 99,
+     "n_cpu_moe": 0,
+     "split_mode": "layer",
+     "main_gpu": 0,
+     "no_kv_offload": false,
+     "flash_attn": 1,
+     "devices": "auto",
+     "tensor_split": "0.00",
+     "tensor_buft_overrides": "none",
+     "load_mode": "auto",
+     "lazy_mode": "auto",
+     "embeddings": false,
+     "no_op_offload": 0,
+     "no_host": false,
+     "repack": true,
+     "fit_target": 0,
+     "fit_min_ctx": 0,
+     "n_prompt": 0,
+     "n_gen": 128,
+     "n_depth": 0,
+     "test_time": "2026-11-01T00:56:08Z",
+     "avg_ns": 221947143,
+     "stddev_ns": 642747,
+     "avg_ts": 576.717105,
+     "stddev_ts": 1.66691,
+     "samples_ns": [
+      222689036,
+      221586109,
+      221566285
+     ],
+     "samples_ts": [
+      574.793,
+      577.654,
+      577.705
+     ],
+     "median_ts": 577.6535387423586
+    },
+    {
+     "build_commit": "unknown",
+     "build_number": 0,
+     "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+     "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+     "backends": "CUDA",
+     "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+     "model_type": "olmoe A1.7B Q4_K - Medium",
+     "model_size": 4211730432,
+     "model_n_params": 6919161856,
+     "n_batch": 2048,
+     "n_ubatch": 512,
+     "n_threads": 2,
+     "cpu_mask": "0x0",
+     "cpu_strict": false,
+     "poll": 50,
+     "type_k": "f16",
+     "type_v": "f16",
+     "n_gpu_layers": 99,
+     "n_cpu_moe": 0,
+     "split_mode": "layer",
+     "main_gpu": 0,
+     "no_kv_offload": false,
+     "flash_attn": 1,
+     "devices": "auto",
+     "tensor_split": "0.00",
+     "tensor_buft_overrides": "none",
+     "load_mode": "auto",
+     "lazy_mode": "auto",
+     "embeddings": false,
+     "no_op_offload": 0,
+     "no_host": false,
+     "repack": true,
+     "fit_target": 0,
+     "fit_min_ctx": 0,
+     "n_prompt": 0,
+     "n_gen": 128,
+     "n_depth": 0,
+     "test_time": "2026-11-01T00:56:09Z",
+     "avg_ns": 222356807,
+     "stddev_ns": 568191,
+     "avg_ts": 575.653872,
+     "stddev_ts": 1.471527,
+     "samples_ns": [
+      222861615,
+      221741779,
+      222467028
+     ],
+     "samples_ts": [
+      574.347,
+      577.248,
+      575.366
+     ],
+     "median_ts": 575.3661616767766
+    },
+    {
+     "build_commit": "unknown",
+     "build_number": 0,
+     "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+     "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+     "backends": "CUDA",
+     "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+     "model_type": "olmoe A1.7B Q4_K - Medium",
+     "model_size": 4211730432,
+     "model_n_params": 6919161856,
+     "n_batch": 2048,
+     "n_ubatch": 512,
+     "n_threads": 4,
+     "cpu_mask": "0x0",
+     "cpu_strict": false,
+     "poll": 50,
+     "type_k": "f16",
+     "type_v": "f16",
+     "n_gpu_layers": 99,
+     "n_cpu_moe": 0,
+     "split_mode": "layer",
+     "main_gpu": 0,
+     "no_kv_offload": false,
+     "flash_attn": 1,
+     "devices": "auto",
+     "tensor_split": "0.00",
+     "tensor_buft_overrides": "none",
+     "load_mode": "auto",
+     "lazy_mode": "auto",
+     "embeddings": false,
+     "no_op_offload": 0,
+     "no_host": false,
+     "repack": true,
+     "fit_target": 0,
+     "fit_min_ctx": 0,
+     "n_prompt": 0,
+     "n_gen": 128,
+     "n_depth": 0,
+     "test_time": "2026-11-01T00:56:10Z",
+     "avg_ns": 222129444,
+     "stddev_ns": 524168,
+     "avg_ts": 576.242713,
+     "stddev_ts": 1.357083,
+     "samples_ns": [
+      222725107,
+      221741072,
+      221922155
+     ],
+     "samples_ts": [
+      574.699,
+      577.25,
+      576.779
+     ],
+     "median_ts": 576.7788258905471
+    },
+    {
+     "build_commit": "unknown",
+     "build_number": 0,
+     "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+     "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+     "backends": "CUDA",
+     "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+     "model_type": "olmoe A1.7B Q4_K - Medium",
+     "model_size": 4211730432,
+     "model_n_params": 6919161856,
+     "n_batch": 2048,
+     "n_ubatch": 512,
+     "n_threads": 8,
+     "cpu_mask": "0x0",
+     "cpu_strict": false,
+     "poll": 50,
+     "type_k": "f16",
+     "type_v": "f16",
+     "n_gpu_layers": 99,
+     "n_cpu_moe": 0,
+     "split_mode": "layer",
+     "main_gpu": 0,
+     "no_kv_offload": false,
+     "flash_attn": 1,
+     "devices": "auto",
+     "tensor_split": "0.00",
+     "tensor_buft_overrides": "none",
+     "load_mode": "auto",
+     "lazy_mode": "auto",
+     "embeddings": false,
+     "no_op_offload": 0,
+     "no_host": false,
+     "repack": true,
+     "fit_target": 0,
+     "fit_min_ctx": 0,
+     "n_prompt": 0,
+     "n_gen": 128,
+     "n_depth": 0,
+     "test_time": "2026-11-01T00:56:10Z",
+     "avg_ns": 222238211,
+     "stddev_ns": 562809,
+     "avg_ts": 575.961014,
+     "stddev_ts": 1.455449,
+     "samples_ns": [
+      222887590,
+      221919886,
+      221907159
+     ],
+     "samples_ts": [
+      574.281,
+      576.785,
+      576.818
+     ],
+     "median_ts": 576.784723113998
+    },
+    {
+     "build_commit": "unknown",
+     "build_number": 0,
+     "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+     "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+     "backends": "CUDA",
+     "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+     "model_type": "olmoe A1.7B Q4_K - Medium",
+     "model_size": 4211730432,
+     "model_n_params": 6919161856,
+     "n_batch": 2048,
+     "n_ubatch": 512,
+     "n_threads": 16,
+     "cpu_mask": "0x0",
+     "cpu_strict": false,
+     "poll": 50,
+     "type_k": "f16",
+     "type_v": "f16",
+     "n_gpu_layers": 99,
+     "n_cpu_moe": 0,
+     "split_mode": "layer",
+     "main_gpu": 0,
+     "no_kv_offload": false,
+     "flash_attn": 1,
+     "devices": "auto",
+     "tensor_split": "0.00",
+     "tensor_buft_overrides": "none",
+     "load_mode": "auto",
+     "lazy_mode": "auto",
+     "embeddings": false,
+     "no_op_offload": 0,
+     "no_host": false,
+     "repack": true,
+     "fit_target": 0,
+     "fit_min_ctx": 0,
+     "n_prompt": 0,
+     "n_gen": 128,
+     "n_depth": 0,
+     "test_time": "2026-11-01T00:56:11Z",
+     "avg_ns": 222238533,
+     "stddev_ns": 571720,
+     "avg_ts": 575.960267,
+     "stddev_ts": 1.481689,
+     "samples_ns": [
+      222810435,
+      222238169,
+      221666995
+     ],
+     "samples_ts": [
+      574.479,
+      575.959,
+      577.443
+     ],
+     "median_ts": 575.9586689179391
+    },
+    {
+     "build_commit": "unknown",
+     "build_number": 0,
+     "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+     "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+     "backends": "CUDA",
+     "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+     "model_type": "olmoe A1.7B Q4_K - Medium",
+     "model_size": 4211730432,
+     "model_n_params": 6919161856,
+     "n_batch": 2048,
+     "n_ubatch": 512,
+     "n_threads": 64,
+     "cpu_mask": "0x0",
+     "cpu_strict": false,
+     "poll": 50,
+     "type_k": "f16",
+     "type_v": "f16",
+     "n_gpu_layers": 99,
+     "n_cpu_moe": 0,
+     "split_mode": "layer",
+     "main_gpu": 0,
+     "no_kv_offload": false,
+     "flash_attn": 1,
+     "devices": "auto",
+     "tensor_split": "0.00",
+     "tensor_buft_overrides": "none",
+     "load_mode": "auto",
+     "lazy_mode": "auto",
+     "embeddings": false,
+     "no_op_offload": 0,
+     "no_host": false,
+     "repack": true,
+     "fit_target": 0,
+     "fit_min_ctx": 0,
+     "n_prompt": 0,
+     "n_gen": 128,
+     "n_depth": 0,
+     "test_time": "2026-11-01T00:56:12Z",
+     "avg_ns": 222222053,
+     "stddev_ns": 599279,
+     "avg_ts": 576.003224,
+     "stddev_ts": 1.550489,
+     "samples_ns": [
+      222912563,
+      221913011,
+      221840586
+     ],
+     "samples_ts": [
+      574.216,
+      576.803,
+      576.991
+     ],
+     "median_ts": 576.8025922553951
+    }
+   ]
+  },
+  {
+   "label": "explore_nograph",
+   "cmd": [
+    "/root/autodl-tmp/llamacpp-vs-deepinfer/llama.cpp-ddf48f85c933c1f438212a02eb21e7b001d2d37d/build/bin/llama-bench",
+    "-m",
+    "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+    "-ngl",
+    "99",
+    "-o",
+    "json",
+    "-p",
+    "0",
+    "-n",
+    "128",
+    "-t",
+    "4,16,64",
+    "-fa",
+    "on",
+    "-r",
+    "3"
+   ],
+   "env": {
+    "GGML_CUDA_DISABLE_GRAPHS": "1"
+   },
+   "returncode": 0,
+   "wall_s": 3.9624722003936768,
+   "cpu_probe_ms": [
+    37.794556468725204,
+    55.595215409994125
+   ],
+   "throttled_periods": 0,
+   "throttled_ms": 0.0,
+   "periods": 39,
+   "cpu_s": 4.067773,
+   "llama_bench": [
+    {
+     "build_commit": "unknown",
+     "build_number": 0,
+     "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+     "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+     "backends": "CUDA",
+     "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+     "model_type": "olmoe A1.7B Q4_K - Medium",
+     "model_size": 4211730432,
+     "model_n_params": 6919161856,
+     "n_batch": 2048,
+     "n_ubatch": 512,
+     "n_threads": 4,
+     "cpu_mask": "0x0",
+     "cpu_strict": false,
+     "poll": 50,
+     "type_k": "f16",
+     "type_v": "f16",
+     "n_gpu_layers": 99,
+     "n_cpu_moe": 0,
+     "split_mode": "layer",
+     "main_gpu": 0,
+     "no_kv_offload": false,
+     "flash_attn": 1,
+     "devices": "auto",
+     "tensor_split": "0.00",
+     "tensor_buft_overrides": "none",
+     "load_mode": "auto",
+     "lazy_mode": "auto",
+     "embeddings": false,
+     "no_op_offload": 0,
+     "no_host": false,
+     "repack": true,
+     "fit_target": 0,
+     "fit_min_ctx": 0,
+     "n_prompt": 0,
+     "n_gen": 128,
+     "n_depth": 0,
+     "test_time": "2026-11-01T00:56:14Z",
+     "avg_ns": 278602839,
+     "stddev_ns": 1111533,
+     "avg_ts": 459.44024,
+     "stddev_ts": 1.82978,
+     "samples_ns": [
+      278291057,
+      279836712,
+      277680750
+     ],
+     "samples_ts": [
+      459.95,
+      457.41,
+      460.961
+     ],
+     "median_ts": 459.9501018101347
+    },
+    {
+     "build_commit": "unknown",
+     "build_number": 0,
+     "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+     "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+     "backends": "CUDA",
+     "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+     "model_type": "olmoe A1.7B Q4_K - Medium",
+     "model_size": 4211730432,
+     "model_n_params": 6919161856,
+     "n_batch": 2048,
+     "n_ubatch": 512,
+     "n_threads": 16,
+     "cpu_mask": "0x0",
+     "cpu_strict": false,
+     "poll": 50,
+     "type_k": "f16",
+     "type_v": "f16",
+     "n_gpu_layers": 99,
+     "n_cpu_moe": 0,
+     "split_mode": "layer",
+     "main_gpu": 0,
+     "no_kv_offload": false,
+     "flash_attn": 1,
+     "devices": "auto",
+     "tensor_split": "0.00",
+     "tensor_buft_overrides": "none",
+     "load_mode": "auto",
+     "lazy_mode": "auto",
+     "embeddings": false,
+     "no_op_offload": 0,
+     "no_host": false,
+     "repack": true,
+     "fit_target": 0,
+     "fit_min_ctx": 0,
+     "n_prompt": 0,
+     "n_gen": 128,
+     "n_depth": 0,
+     "test_time": "2026-11-01T00:56:15Z",
+     "avg_ns": 262727682,
+     "stddev_ns": 12492880,
+     "avg_ts": 487.912824,
+     "stddev_ts": 22.597982,
+     "samples_ns": [
+      277110699,
+      256494645,
+      254577702
+     ],
+     "samples_ts": [
+      461.909,
+      499.036,
+      502.793
+     ],
+     "median_ts": 499.0357595964625
+    },
+    {
+     "build_commit": "unknown",
+     "build_number": 0,
+     "cpu_info": "Intel(R) Xeon(R) Platinum 8352V CPU @ 2.10GHz",
+     "gpu_info": "NVIDIA GeForce RTX 4080 SUPER",
+     "backends": "CUDA",
+     "model_filename": "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+     "model_type": "olmoe A1.7B Q4_K - Medium",
+     "model_size": 4211730432,
+     "model_n_params": 6919161856,
+     "n_batch": 2048,
+     "n_ubatch": 512,
+     "n_threads": 64,
+     "cpu_mask": "0x0",
+     "cpu_strict": false,
+     "poll": 50,
+     "type_k": "f16",
+     "type_v": "f16",
+     "n_gpu_layers": 99,
+     "n_cpu_moe": 0,
+     "split_mode": "layer",
+     "main_gpu": 0,
+     "no_kv_offload": false,
+     "flash_attn": 1,
+     "devices": "auto",
+     "tensor_split": "0.00",
+     "tensor_buft_overrides": "none",
+     "load_mode": "auto",
+     "lazy_mode": "auto",
+     "embeddings": false,
+     "no_op_offload": 0,
+     "no_host": false,
+     "repack": true,
+     "fit_target": 0,
+     "fit_min_ctx": 0,
+     "n_prompt": 0,
+     "n_gen": 128,
+     "n_depth": 0,
+     "test_time": "2026-11-01T00:56:16Z",
+     "avg_ns": 255745434,
+     "stddev_ns": 990531,
+     "avg_ts": 500.502685,
+     "stddev_ts": 1.933961,
+     "samples_ns": [
+      255058116,
+      256880508,
+      255297680
+     ],
+     "samples_ts": [
+      501.846,
+      498.286,
+      501.375
+     ],
+     "median_ts": 501.3754923272315
+    }
+   ]
+  },
+  {
+   "label": "explore_greedy",
+   "cmd": [
+    "/root/autodl-tmp/llamacpp-vs-deepinfer/llama.cpp-ddf48f85c933c1f438212a02eb21e7b001d2d37d/build/bin/llama-completion",
+    "-m",
+    "/root/autodl-tmp/models/OLMoE-1B-7B-0924-Instruct-Q4_K_M.gguf",
+    "-ngl",
+    "99",
+    "-p",
+    "The capital of France is",
+    "-n",
+    "33",
+    "--temp",
+    "0",
+    "--top-k",
+    "1",
+    "--ignore-eos",
+    "-no-cnv",
+    "--verbose-prompt",
+    "--no-display-prompt",
+    "--simple-io",
+    "-t",
+    "16",
+    "-fa",
+    "on",
+    "--seed",
+    "1"
+   ],
+   "env": {},
+   "returncode": 0,
+   "wall_s": 1.8151233196258545,
+   "cpu_probe_ms": [
+    37.641940638422966,
+    53.76153811812401
+   ],
+   "throttled_periods": 0,
+   "throttled_ms": 0.0,
+   "periods": 18,
+   "cpu_s": 1.829605,
+   "eval_ms": 62.37,
+   "eval_runs": 32,
+   "text": " Paris.\n\nThe currency of France is the Euro.\n\nThe population of France is around 67 million people.\n\nThe official language of France is French\n\n",
+   "perf_lines": [
+    "0.01.526.931 I    510 -> 'The'",
+    "0.01.526.932 I   5347 -> ' capital'",
+    "0.01.526.933 I    273 -> ' of'",
+    "0.01.526.933 I   6181 -> ' France'",
+    "0.01.526.934 I    310 -> ' is'",
+    "0.01.603.783 I common_perf_print:    sampling time =       4.79 ms",
+    "0.01.603.786 I common_perf_print:    samplers time =       1.72 ms /    38 tokens",
+    "0.01.603.792 I common_perf_print:        load time =    1162.20 ms",
+    "0.01.603.795 I common_perf_print: prompt eval time =       9.17 ms /     5 tokens (    1.83 ms per token,   545.32 tokens per second)",
+    "0.01.603.797 I common_perf_print:        eval time =      62.37 ms /    32 runs   (    1.95 ms per token,   513.05 tokens per second)",
+    "0.01.603.798 I common_perf_print:       total time =      77.06 ms /    37 tokens",
+    "0.01.603.800 I common_perf_print: unaccounted time =       0.74 ms /   1.0 %      (total - sampling - prompt eval - eval) / (total)",
+    "0.01.603.801 I common_perf_print:    graphs reused =         31",
+    "0.01.603.802 I common_perf_print:   graph reallocs =          0    /     0        (same size) / (changed size)"
+   ]
+  }
+ ],
+ "greedy_top5": {
+  "prompt_ids": [
+   510,
+   5347,
+   273,
+   6181,
+   310
+  ],
+  "llama.cpp": [
+   {
+    "step": 0,
+    "top5": [
+     {
+      "id": 7785,
+      "logit": 14.3018,
+      "text": " Paris"
+     },
+     {
+      "id": 1925,
+      "logit": 11.905,
+      "text": " called"
+     },
+     {
+      "id": 417,
+      "logit": 11.4355,
+      "text": " not"
+     },
+     {
+      "id": 247,
+      "logit": 11.1207,
+      "text": " a"
+     },
+     {
+      "id": 671,
+      "logit": 10.9516,
+      "text": " also"
+     }
+    ]
+   },
+   {
+    "step": 1,
+    "top5": [
+     {
+      "id": 15,
+      "logit": 16.553,
+      "text": "."
+     },
+     {
+      "id": 13,
+      "logit": 16.0555,
+      "text": ","
+     },
+     {
+      "id": 285,
+      "logit": 14.7509,
+      "text": " and"
+     },
+     {
+      "id": 313,
+      "logit": 12.6094,
+      "text": " ("
+     },
+     {
+      "id": 187,
+      "logit": 12.5939,
+      "text": "\\n"
+     }
+    ]
+   },
+   {
+    "step": 2,
+    "top5": [
+     {
+      "id": 187,
+      "logit": 14.7695,
+      "text": "\\n"
+     },
+     {
+      "id": 380,
+      "logit": 14.4126,
+      "text": " The"
+     },
+     {
+      "id": 733,
+      "logit": 13.5964,
+      "text": " It"
+     },
+     {
+      "id": 6181,
+      "logit": 13.3808,
+      "text": " France"
+     },
+     {
+      "id": 7785,
+      "logit": 13.1541,
+      "text": " Paris"
+     }
+    ]
+   },
+   {
+    "step": 3,
+    "top5": [
+     {
+      "id": 187,
+      "logit": 18.3816,
+      "text": "\\n"
+     },
+     {
+      "id": 510,
+      "logit": 16.3058,
+      "text": "The"
+     },
+     {
+      "id": 36062,
+      "logit": 15.0698,
+      "text": "Paris"
+     },
+     {
+      "id": 33639,
+      "logit": 14.2601,
+      "text": "France"
+     },
+     {
+      "id": 1276,
+      "logit": 13.5711,
+      "text": "What"
+     }
+    ]
+   },
+   {
+    "step": 4,
+    "top5": [
+     {
+      "id": 510,
+      "logit": 17.8897,
+      "text": "The"
+     },
+     {
+      "id": 36062,
+      "logit": 17.2488,
+      "text": "Paris"
+     },
+     {
+      "id": 33639,
+      "logit": 16.8072,
+      "text": "France"
+     },
+     {
+      "id": 15614,
+      "logit": 15.8616,
+      "text": "Cap"
+     },
+     {
+      "id": 1276,
+      "logit": 15.654,
+      "text": "What"
+     }
+    ]
+   },
+   {
+    "step": 5,
+    "top5": [
+     {
+      "id": 14731,
+      "logit": 12.762,
+      "text": " currency"
+     },
+     {
+      "id": 3072,
+      "logit": 12.6634,
+      "text": " population"
+     },
+     {
+      "id": 3565,
+      "logit": 11.8983,
+      "text": " official"
+     },
+     {
+      "id": 5347,
+      "logit": 11.7421,
+      "text": " capital"
+     },
+     {
+      "id": 2586,
+      "logit": 11.4422,
+      "text": " country"
+     }
+    ]
+   },
+   {
+    "step": 6,
+    "top5": [
+     {
+      "id": 273,
+      "logit": 18.982,
+      "text": " of"
+     },
+     {
+      "id": 908,
+      "logit": 16.9723,
+      "text": " used"
+     },
+     {
+      "id": 275,
+      "logit": 16.4076,
+      "text": " in"
+     },
+     {
+      "id": 310,
+      "logit": 14.2592,
+      "text": " is"
+     },
+     {
+      "id": 3943,
+      "logit": 11.5801,
+      "text": " unit"
+     }
+    ]
+   },
+   {
+    "step": 7,
+    "top5": [
+     {
+      "id": 6181,
+      "logit": 20.1536,
+      "text": " France"
+     },
+     {
+      "id": 253,
+      "logit": 12.7895,
+      "text": " the"
+     },
+     {
+      "id": 4047,
+      "logit": 12.2365,
+      "text": " Japan"
+     },
+     {
+      "id": 6976,
+      "logit": 12.225,
+      "text": " Australia"
+     },
+     {
+      "id": 9972,
+      "logit": 12.1081,
+      "text": " Italy"
+     }
+    ]
+   },
+   {
+    "step": 8,
+    "top5": [
+     {
+      "id": 310,
+      "logit": 20.9382,
+      "text": " is"
+     },
+     {
+      "id": 13,
+      "logit": 13.4282,
+      "text": ","
+     },
+     {
+      "id": 908,
+      "logit": 12.4023,
+      "text": " used"
+     },
+     {
+      "id": 313,
+      "logit": 12.288,
+      "text": " ("
+     },
+     {
+      "id": 275,
+      "logit": 11.3514,
+      "text": " in"
+     }
+    ]
+   },
+   {
+    "step": 9,
+    "top5": [
+     {
+      "id": 253,
+      "logit": 19.6114,
+      "text": " the"
+     },
+     {
+      "id": 14029,
+      "logit": 19.3089,
+      "text": " Euro"
+     },
+     {
+      "id": 17069,
+      "logit": 16.2843,
+      "text": " euro"
+     },
+     {
+      "id": 32306,
+      "logit": 14.4105,
+      "text": " euros"
+     },
+     {
+      "id": 1925,
+      "logit": 14.2119,
+      "text": " called"
+     }
+    ]
+   },
+   {
+    "step": 10,
+    "top5": [
+     {
+      "id": 14029,
+      "logit": 21.4557,
+      "text": " Euro"
+     },
+     {
+      "id": 17069,
+      "logit": 20.1227,
+      "text": " euro"
+     },
+     {
+      "id": 5284,
+      "logit": 13.5266,
+      "text": " European"
+     },
+     {
+      "id": 32306,
+      "logit": 13.2253,
+      "text": " euros"
+     },
+     {
+      "id": 575,
+      "logit": 12.1421,
+      "text": " "
+     }
+    ]
+   },
+   {
+    "step": 11,
+    "top5": [
+     {
+      "id": 15,
+      "logit": 20.1531,
+      "text": "."
+     },
+     {
+      "id": 313,
+      "logit": 18.1699,
+      "text": " ("
+     },
+     {
+      "id": 13,
+      "logit": 14.4865,
+      "text": ","
+     },
+     {
+      "id": 187,
+      "logit": 14.1267,
+      "text": "\\n"
+     },
+     {
+      "id": 9,
+      "logit": 13.1319,
+      "text": "("
+     }
+    ]
+   },
+   {
+    "step": 12,
+    "top5": [
+     {
+      "id": 187,
+      "logit": 19.3507,
+      "text": "\\n"
+     },
+     {
+      "id": 535,
+      "logit": 14.3802,
+      "text": "\\n\\n"
+     },
+     {
+      "id": 50279,
+      "logit": 13.3984,
+      "text": "<|endoftext|>"
+     },
+     {
+      "id": 380,
+      "logit": 13.3948,
+      "text": " The"
+     },
+     {
+      "id": 9613,
+      "logit": 12.3816,
+      "text": " Before"
+     }
+    ]
+   },
+   {
+    "step": 13,
+    "top5": [
+     {
+      "id": 187,
+      "logit": 21.2963,
+      "text": "\\n"
+     },
+     {
+      "id": 510,
+      "logit": 13.4002,
+      "text": "The"
+     },
+     {
+      "id": 33639,
+      "logit": 13.0872,
+      "text": "France"
+     },
+     {
+      "id": 36062,
+      "logit": 12.8334,
+      "text": "Paris"
+     },
+     {
+      "id": 21258,
+      "logit": 12.1665,
+      "text": "French"
+     }
+    ]
+   },
+   {
+    "step": 14,
+    "top5": [
+     {
+      "id": 510,
+      "logit": 19.7762,
+      "text": "The"
+     },
+     {
+      "id": 33639,
+      "logit": 19.039,
+      "text": "France"
+     },
+     {
+      "id": 36062,
+      "logit": 17.2215,
+      "text": "Paris"
+     },
+     {
+      "id": 4769,
+      "logit": 16.9882,
+      "text": "Time"
+     },
+     {
+      "id": 21258,
+      "logit": 16.2695,
+      "text": "French"
+     }
+    ]
+   },
+   {
+    "step": 15,
+    "top5": [
+     {
+      "id": 3072,
+      "logit": 14.8869,
+      "text": " population"
+     },
+     {
+      "id": 3565,
+      "logit": 13.8409,
+      "text": " official"
+     },
+     {
+      "id": 2586,
+      "logit": 12.5473,
+      "text": " country"
+     },
+     {
+      "id": 5112,
+      "logit": 12.378,
+      "text": " French"
+     },
+     {
+      "id": 3872,
+      "logit": 12.163,
+      "text": " national"
+     }
+    ]
+   },
+   {
+    "step": 16,
+    "top5": [
+     {
+      "id": 273,
+      "logit": 20.8939,
+      "text": " of"
+     },
+     {
+      "id": 310,
+      "logit": 13.4827,
+      "text": " is"
+     },
+     {
+      "id": 6642,
+      "logit": 12.8582,
+      "text": " estimate"
+     },
+     {
+      "id": 275,
+      "logit": 12.6323,
+      "text": " in"
+     },
+     {
+      "id": 1979,
+      "logit": 12.3978,
+      "text": " size"
+     }
+    ]
+   },
+   {
+    "step": 17,
+    "top5": [
+     {
+      "id": 6181,
+      "logit": 20.5746,
+      "text": " France"
+     },
+     {
+      "id": 7785,
+      "logit": 15.1295,
+      "text": " Paris"
+     },
+     {
+      "id": 253,
+      "logit": 13.704,
+      "text": " the"
+     },
+     {
+      "id": 6176,
+      "logit": 11.4534,
+      "text": " Germany"
+     },
+     {
+      "id": 9972,
+      "logit": 11.43,
+      "text": " Italy"
+     }
+    ]
+   },
+   {
+    "step": 18,
+    "top5": [
+     {
+      "id": 310,
+      "logit": 20.6956,
+      "text": " is"
+     },
+     {
+      "id": 347,
+      "logit": 17.7419,
+      "text": " as"
+     },
+     {
+      "id": 275,
+      "logit": 16.6931,
+      "text": " in"
+     },
+     {
+      "id": 369,
+      "logit": 15.7655,
+      "text": " was"
+     },
+     {
+      "id": 13,
+      "logit": 14.9506,
+      "text": ","
+     }
+    ]
+   },
+   {
+    "step": 19,
+    "top5": [
+     {
+      "id": 1475,
+      "logit": 17.0614,
+      "text": " around"
+     },
+     {
+      "id": 5512,
+      "logit": 16.6806,
+      "text": " approximately"
+     },
+     {
+      "id": 9963,
+      "logit": 15.2393,
+      "text": " 67"
+     },
+     {
+      "id": 670,
+      "logit": 15.1592,
+      "text": " about"
+     },
+     {
+      "id": 9523,
+      "logit": 14.1762,
+      "text": " 66"
+     }
+    ]
+   },
+   {
+    "step": 20,
+    "top5": [
+     {
+      "id": 9963,
+      "logit": 19.9759,
+      "text": " 67"
+     },
+     {
+      "id": 9523,
+      "logit": 17.2522,
+      "text": " 66"
+     },
+     {
+      "id": 9934,
+      "logit": 14.4599,
+      "text": " 68"
+     },
+     {
+      "id": 7251,
+      "logit": 14.0375,
+      "text": " 65"
+     },
+     {
+      "id": 6705,
+      "logit": 12.8198,
+      "text": " 64"
+     }
+    ]
+   },
+   {
+    "step": 21,
+    "top5": [
+     {
+      "id": 3041,
+      "logit": 20.7335,
+      "text": " million"
+     },
+     {
+      "id": 15,
+      "logit": 17.8071,
+      "text": "."
+     },
+     {
+      "id": 13,
+      "logit": 15.1219,
+      "text": ","
+     },
+     {
+      "id": 24561,
+      "logit": 14.4195,
+      "text": "million"
+     },
+     {
+      "id": 34211,
+      "logit": 14.3271,
+      "text": " Million"
+     }
+    ]
+   },
+   {
+    "step": 22,
+    "top5": [
+     {
+      "id": 952,
+      "logit": 19.9573,
+      "text": " people"
+     },
+     {
+      "id": 15,
+      "logit": 18.9048,
+      "text": "."
+     },
+     {
+      "id": 347,
+      "logit": 15.8317,
+      "text": " as"
+     },
+     {
+      "id": 313,
+      "logit": 15.1721,
+      "text": " ("
+     },
+     {
+      "id": 13,
+      "logit": 14.9235,
+      "text": ","
+     }
+    ]
+   },
+   {
+    "step": 23,
+    "top5": [
+     {
+      "id": 15,
+      "logit": 20.9299,
+      "text": "."
+     },
+     {
+      "id": 13,
+      "logit": 17.0074,
+      "text": ","
+     },
+     {
+      "id": 347,
+      "logit": 16.1387,
+      "text": " as"
+     },
+     {
+      "id": 313,
+      "logit": 15.8983,
+      "text": " ("
+     },
+     {
+      "id": 285,
+      "logit": 14.129,
+      "text": " and"
+     }
+    ]
+   },
+   {
+    "step": 24,
+    "top5": [
+     {
+      "id": 187,
+      "logit": 20.9331,
+      "text": "\\n"
+     },
+     {
+      "id": 50279,
+      "logit": 14.7174,
+      "text": "<|endoftext|>"
+     },
+     {
+      "id": 535,
+      "logit": 14.5512,
+      "text": "\\n\\n"
+     },
+     {
+      "id": 380,
+      "logit": 13.6812,
+      "text": " The"
+     },
+     {
+      "id": 313,
+      "logit": 13.1215,
+      "text": " ("
+     }
+    ]
+   },
+   {
+    "step": 25,
+    "top5": [
+     {
+      "id": 187,
+      "logit": 22.2252,
+      "text": "\\n"
+     },
+     {
+      "id": 510,
+      "logit": 14.104,
+      "text": "The"
+     },
+     {
+      "id": 33639,
+      "logit": 12.5351,
+      "text": "France"
+     },
+     {
+      "id": 1147,
+      "logit": 11.3746,
+      "text": "It"
+     },
+     {
+      "id": 21258,
+      "logit": 11.282,
+      "text": "French"
+     }
+    ]
+   },
+   {
+    "step": 26,
+    "top5": [
+     {
+      "id": 510,
+      "logit": 20.4055,
+      "text": "The"
+     },
+     {
+      "id": 33639,
+      "logit": 19.7399,
+      "text": "France"
+     },
+     {
+      "id": 36062,
+      "logit": 16.5254,
+      "text": "Paris"
+     },
+     {
+      "id": 6080,
+      "logit": 16.1865,
+      "text": "Some"
+     },
+     {
+      "id": 21258,
+      "logit": 15.5946,
+      "text": "French"
+     }
+    ]
+   },
+   {
+    "step": 27,
+    "top5": [
+     {
+      "id": 3565,
+      "logit": 14.8802,
+      "text": " official"
+     },
+     {
+      "id": 3872,
+      "logit": 13.0785,
+      "text": " national"
+     },
+     {
+      "id": 2586,
+      "logit": 12.7374,
+      "text": " country"
+     },
+     {
+      "id": 5112,
+      "logit": 12.3835,
+      "text": " French"
+     },
+     {
+      "id": 6253,
+      "logit": 12.1269,
+      "text": " largest"
+     }
+    ]
+   },
+   {
+    "step": 28,
+    "top5": [
+     {
+      "id": 3448,
+      "logit": 22.5237,
+      "text": " language"
+     },
+     {
+      "id": 11515,
+      "logit": 17.626,
+      "text": " languages"
+     },
+     {
+      "id": 18847,
+      "logit": 14.4639,
+      "text": " Language"
+     },
+     {
+      "id": 19457,
+      "logit": 13.7438,
+      "text": " lang"
+     },
+     {
+      "id": 285,
+      "logit": 13.2603,
+      "text": " and"
+     }
+    ]
+   },
+   {
+    "step": 29,
+    "top5": [
+     {
+      "id": 273,
+      "logit": 22.1373,
+      "text": " of"
+     },
+     {
+      "id": 13452,
+      "logit": 19.0148,
+      "text": " spoken"
+     },
+     {
+      "id": 310,
+      "logit": 18.305,
+      "text": " is"
+     },
+     {
+      "id": 275,
+      "logit": 16.9387,
+      "text": " in"
+     },
+     {
+      "id": 908,
+      "logit": 12.7787,
+      "text": " used"
+     }
+    ]
+   },
+   {
+    "step": 30,
+    "top5": [
+     {
+      "id": 6181,
+      "logit": 24.156,
+      "text": " France"
+     },
+     {
+      "id": 33639,
+      "logit": 13.6688,
+      "text": "France"
+     },
+     {
+      "id": 5112,
+      "logit": 12.8896,
+      "text": " French"
+     },
+     {
+      "id": 253,
+      "logit": 12.3712,
+      "text": " the"
+     },
+     {
+      "id": 575,
+      "logit": 11.8259,
+      "text": " "
+     }
+    ]
+   },
+   {
+    "step": 31,
+    "top5": [
+     {
+      "id": 310,
+      "logit": 24.8917,
+      "text": " is"
+     },
+     {
+      "id": 261,
+      "logit": 13.7824,
+      "text": "is"
+     },
+     {
+      "id": 13,
+      "logit": 12.9629,
+      "text": ","
+     },
+     {
+      "id": 403,
+      "logit": 12.9236,
+      "text": " are"
+     },
+     {
+      "id": 313,
+      "logit": 11.7304,
+      "text": " ("
+     }
+    ]
+   },
+   {
+    "step": 32,
+    "top5": [
+     {
+      "id": 5112,
+      "logit": 23.3041,
+      "text": " French"
+     },
+     {
+      "id": 21258,
+      "logit": 13.3133,
+      "text": "French"
+     },
+     {
+      "id": 671,
+      "logit": 13.0579,
+      "text": " also"
+     },
+     {
+      "id": 269,
+      "logit": 12.5435,
+      "text": " f"
+     },
+     {
+      "id": 1925,
+      "logit": 12.4177,
+      "text": " called"
+     }
+    ]
+   }
+  ],
+  "deepinfer_gemv": [
+   {
+    "step": 0,
+    "top5": [
+     {
+      "id": 7785,
+      "logit": 14.4297,
+      "text": " Paris"
+     },
+     {
+      "id": 1925,
+      "logit": 11.9297,
+      "text": " called"
+     },
+     {
+      "id": 417,
+      "logit": 11.4766,
+      "text": " not"
+     },
+     {
+      "id": 247,
+      "logit": 11.1406,
+      "text": " a"
+     },
+     {
+      "id": 671,
+      "logit": 10.9844,
+      "text": " also"
+     }
+    ]
+   },
+   {
+    "step": 1,
+    "top5": [
+     {
+      "id": 15,
+      "logit": 16.7031,
+      "text": "."
+     },
+     {
+      "id": 13,
+      "logit": 16.1719,
+      "text": ","
+     },
+     {
+      "id": 285,
+      "logit": 14.9062,
+      "text": " and"
+     },
+     {
+      "id": 313,
+      "logit": 12.6094,
+      "text": " ("
+     },
+     {
+      "id": 187,
+      "logit": 12.5469,
+      "text": "\\n"
+     }
+    ]
+   },
+   {
+    "step": 2,
+    "top5": [
+     {
+      "id": 187,
+      "logit": 14.7734,
+      "text": "\\n"
+     },
+     {
+      "id": 380,
+      "logit": 14.4219,
+      "text": " The"
+     },
+     {
+      "id": 733,
+      "logit": 13.625,
+      "text": " It"
+     },
+     {
+      "id": 6181,
+      "logit": 13.3984,
+      "text": " France"
+     },
+     {
+      "id": 7785,
+      "logit": 13.1172,
+      "text": " Paris"
+     }
+    ]
+   },
+   {
+    "step": 3,
+    "top5": [
+     {
+      "id": 187,
+      "logit": 18.3906,
+      "text": "\\n"
+     },
+     {
+      "id": 510,
+      "logit": 16.3125,
+      "text": "The"
+     },
+     {
+      "id": 36062,
+      "logit": 14.9141,
+      "text": "Paris"
+     },
+     {
+      "id": 33639,
+      "logit": 14.3047,
+      "text": "France"
+     },
+     {
+      "id": 1276,
+      "logit": 13.6484,
+      "text": "What"
+     }
+    ]
+   },
+   {
+    "step": 4,
+    "top5": [
+     {
+      "id": 510,
+      "logit": 17.9375,
+      "text": "The"
+     },
+     {
+      "id": 36062,
+      "logit": 17.2344,
+      "text": "Paris"
+     },
+     {
+      "id": 33639,
+      "logit": 16.8594,
+      "text": "France"
+     },
+     {
+      "id": 15614,
+      "logit": 15.7891,
+      "text": "Cap"
+     },
+     {
+      "id": 1276,
+      "logit": 15.7266,
+      "text": "What"
+     }
+    ]
+   },
+   {
+    "step": 5,
+    "top5": [
+     {
+      "id": 14731,
+      "logit": 12.8359,
+      "text": " currency"
+     },
+     {
+      "id": 3072,
+      "logit": 12.5781,
+      "text": " population"
+     },
+     {
+      "id": 3565,
+      "logit": 12.0312,
+      "text": " official"
+     },
+     {
+      "id": 5347,
+      "logit": 11.5156,
+      "text": " capital"
+     },
+     {
+      "id": 2586,
+      "logit": 11.4219,
+      "text": " country"
+     }
+    ]
+   },
+   {
+    "step": 6,
+    "top5": [
+     {
+      "id": 273,
+      "logit": 19.0312,
+      "text": " of"
+     },
+     {
+      "id": 908,
+      "logit": 17.0312,
+      "text": " used"
+     },
+     {
+      "id": 275,
+      "logit": 16.3906,
+      "text": " in"
+     },
+     {
+      "id": 310,
+      "logit": 14.1797,
+      "text": " is"
+     },
+     {
+      "id": 3943,
+      "logit": 11.6016,
+      "text": " unit"
+     }
+    ]
+   },
+   {
+    "step": 7,
+    "top5": [
+     {
+      "id": 6181,
+      "logit": 20.125,
+      "text": " France"
+     },
+     {
+      "id": 253,
+      "logit": 12.8516,
+      "text": " the"
+     },
+     {
+      "id": 4047,
+      "logit": 12.6172,
+      "text": " Japan"
+     },
+     {
+      "id": 6976,
+      "logit": 12.2812,
+      "text": " Australia"
+     },
+     {
+      "id": 9972,
+      "logit": 12.25,
+      "text": " Italy"
+     }
+    ]
+   },
+   {
+    "step": 8,
+    "top5": [
+     {
+      "id": 310,
+      "logit": 21.0156,
+      "text": " is"
+     },
+     {
+      "id": 13,
+      "logit": 13.4844,
+      "text": ","
+     },
+     {
+      "id": 908,
+      "logit": 12.4688,
+      "text": " used"
+     },
+     {
+      "id": 313,
+      "logit": 12.3281,
+      "text": " ("
+     },
+     {
+      "id": 275,
+      "logit": 11.4219,
+      "text": " in"
+     }
+    ]
+   },
+   {
+    "step": 9,
+    "top5": [
+     {
+      "id": 14029,
+      "logit": 19.7031,
+      "text": " Euro"
+     },
+     {
+      "id": 253,
+      "logit": 19.6719,
+      "text": " the"
+     },
+     {
+      "id": 17069,
+      "logit": 16.4531,
+      "text": " euro"
+     },
+     {
+      "id": 1925,
+      "logit": 14.3672,
+      "text": " called"
+     },
+     {
+      "id": 32306,
+      "logit": 14.3438,
+      "text": " euros"
+     }
+    ]
+   },
+   {
+    "step": 10,
+    "top5": [
+     {
+      "id": 15,
+      "logit": 19.0938,
+      "text": "."
+     },
+     {
+      "id": 313,
+      "logit": 18.6406,
+      "text": " ("
+     },
+     {
+      "id": 84,
+      "logit": 15.6562,
+      "text": "s"
+     },
+     {
+      "id": 9,
+      "logit": 14.4688,
+      "text": "("
+     },
+     {
+      "id": 13,
+      "logit": 13.5078,
+      "text": ","
+     }
+    ]
+   },
+   {
+    "step": 11,
+    "top5": [
+     {
+      "id": 187,
+      "logit": 19.5312,
+      "text": "\\n"
+     },
+     {
+      "id": 535,
+      "logit": 14.7422,
+      "text": "\\n\\n"
+     },
+     {
+      "id": 380,
+      "logit": 14.1719,
+      "text": " The"
+     },
+     {
+      "id": 50279,
+      "logit": 13.4453,
+      "text": "<|endoftext|>"
+     },
+     {
+      "id": 313,
+      "logit": 12.5859,
+      "text": " ("
+     }
+    ]
+   },
+   {
+    "step": 12,
+    "top5": [
+     {
+      "id": 187,
+      "logit": 21.0469,
+      "text": "\\n"
+     },
+     {
+      "id": 510,
+      "logit": 13.8359,
+      "text": "The"
+     },
+     {
+      "id": 36062,
+      "logit": 13.1641,
+      "text": "Paris"
+     },
+     {
+      "id": 33639,
+      "logit": 12.7422,
+      "text": "France"
+     },
+     {
+      "id": 21258,
+      "logit": 12.1641,
+      "text": "French"
+     }
+    ]
+   },
+   {
+    "step": 13,
+    "top5": [
+     {
+      "id": 510,
+      "logit": 19.6406,
+      "text": "The"
+     },
+     {
+      "id": 33639,
+      "logit": 18.5469,
+      "text": "France"
+     },
+     {
+      "id": 4769,
+      "logit": 17.875,
+      "text": "Time"
+     },
+     {
+      "id": 36062,
+      "logit": 16.875,
+      "text": "Paris"
+     },
+     {
+      "id": 21258,
+      "logit": 16.4531,
+      "text": "French"
+     }
+    ]
+   },
+   {
+    "step": 14,
+    "top5": [
+     {
+      "id": 3072,
+      "logit": 14.2109,
+      "text": " population"
+     },
+     {
+      "id": 3565,
+      "logit": 13.1016,
+      "text": " official"
+     },
+     {
+      "id": 3872,
+      "logit": 11.5156,
+      "text": " national"
+     },
+     {
+      "id": 2586,
+      "logit": 11.4922,
+      "text": " country"
+     },
+     {
+      "id": 5112,
+      "logit": 11.3906,
+      "text": " French"
+     }
+    ]
+   },
+   {
+    "step": 15,
+    "top5": [
+     {
+      "id": 273,
+      "logit": 19.625,
+      "text": " of"
+     },
+     {
+      "id": 310,
+      "logit": 12.875,
+      "text": " is"
+     },
+     {
+      "id": 275,
+      "logit": 12.7812,
+      "text": " in"
+     },
+     {
+      "id": 6642,
+      "logit": 12.4609,
+      "text": " estimate"
+     },
+     {
+      "id": 313,
+      "logit": 11.9062,
+      "text": " ("
+     }
+    ]
+   },
+   {
+    "step": 16,
+    "top5": [
+     {
+      "id": 6181,
+      "logit": 19.0,
+      "text": " France"
+     },
+     {
+      "id": 7785,
+      "logit": 14.5781,
+      "text": " Paris"
+     },
+     {
+      "id": 253,
+      "logit": 12.8672,
+      "text": " the"
+     },
+     {
+      "id": 6176,
+      "logit": 10.8672,
+      "text": " Germany"
+     },
+     {
+      "id": 5112,
+      "logit": 10.8594,
+      "text": " French"
+     }
+    ]
+   },
+   {
+    "step": 17,
+    "top5": [
+     {
+      "id": 310,
+      "logit": 19.2812,
+      "text": " is"
+     },
+     {
+      "id": 347,
+      "logit": 17.0156,
+      "text": " as"
+     },
+     {
+      "id": 275,
+      "logit": 15.4375,
+      "text": " in"
+     },
+     {
+      "id": 369,
+      "logit": 14.1094,
+      "text": " was"
+     },
+     {
+      "id": 2556,
+      "logit": 13.7344,
+      "text": " according"
+     }
+    ]
+   },
+   {
+    "step": 18,
+    "top5": [
+     {
+      "id": 1475,
+      "logit": 15.9141,
+      "text": " around"
+     },
+     {
+      "id": 9963,
+      "logit": 15.8906,
+      "text": " 67"
+     },
+     {
+      "id": 5512,
+      "logit": 15.8281,
+      "text": " approximately"
+     },
+     {
+      "id": 9523,
+      "logit": 14.6406,
+      "text": " 66"
+     },
+     {
+      "id": 670,
+      "logit": 14.4531,
+      "text": " about"
+     }
+    ]
+   },
+   {
+    "step": 19,
+    "top5": [
+     {
+      "id": 9963,
+      "logit": 19.9062,
+      "text": " 67"
+     },
+     {
+      "id": 9523,
+      "logit": 16.7969,
+      "text": " 66"
+     },
+     {
+      "id": 9934,
+      "logit": 14.3125,
+      "text": " 68"
+     },
+     {
+      "id": 7251,
+      "logit": 14.1016,
+      "text": " 65"
+     },
+     {
+      "id": 6705,
+      "logit": 13.1719,
+      "text": " 64"
+     }
+    ]
+   },
+   {
+    "step": 20,
+    "top5": [
+     {
+      "id": 3041,
+      "logit": 19.3281,
+      "text": " million"
+     },
+     {
+      "id": 15,
+      "logit": 16.875,
+      "text": "."
+     },
+     {
+      "id": 13,
+      "logit": 14.7109,
+      "text": ","
+     },
+     {
+      "id": 34211,
+      "logit": 13.9766,
+      "text": " Million"
+     },
+     {
+      "id": 9790,
+      "logit": 13.4453,
+      "text": " millions"
+     }
+    ]
+   },
+   {
+    "step": 21,
+    "top5": [
+     {
+      "id": 952,
+      "logit": 18.4375,
+      "text": " people"
+     },
+     {
+      "id": 15,
+      "logit": 17.9531,
+      "text": "."
+     },
+     {
+      "id": 347,
+      "logit": 15.2578,
+      "text": " as"
+     },
+     {
+      "id": 313,
+      "logit": 14.8828,
+      "text": " ("
+     },
+     {
+      "id": 13,
+      "logit": 13.8594,
+      "text": ","
+     }
+    ]
+   },
+   {
+    "step": 22,
+    "top5": [
+     {
+      "id": 15,
+      "logit": 19.6406,
+      "text": "."
+     },
+     {
+      "id": 13,
+      "logit": 15.6875,
+      "text": ","
+     },
+     {
+      "id": 347,
+      "logit": 15.6641,
+      "text": " as"
+     },
+     {
+      "id": 313,
+      "logit": 15.0781,
+      "text": " ("
+     },
+     {
+      "id": 285,
+      "logit": 13.7344,
+      "text": " and"
+     }
+    ]
+   },
+   {
+    "step": 23,
+    "top5": [
+     {
+      "id": 187,
+      "logit": 20.125,
+      "text": "\\n"
+     },
+     {
+      "id": 535,
+      "logit": 14.5547,
+      "text": "\\n\\n"
+     },
+     {
+      "id": 50279,
+      "logit": 13.9062,
+      "text": "<|endoftext|>"
+     },
+     {
+      "id": 380,
+      "logit": 13.8672,
+      "text": " The"
+     },
+     {
+      "id": 313,
+      "logit": 13.6484,
+      "text": " ("
+     }
+    ]
+   },
+   {
+    "step": 24,
+    "top5": [
+     {
+      "id": 187,
+      "logit": 22.125,
+      "text": "\\n"
+     },
+     {
+      "id": 510,
+      "logit": 14.3203,
+      "text": "The"
+     },
+     {
+      "id": 33639,
+      "logit": 12.625,
+      "text": "France"
+     },
+     {
+      "id": 1147,
+      "logit": 12.0469,
+      "text": "It"
+     },
+     {
+      "id": 21258,
+      "logit": 11.8203,
+      "text": "French"
+     }
+    ]
+   },
+   {
+    "step": 25,
+    "top5": [
+     {
+      "id": 510,
+      "logit": 20.4688,
+      "text": "The"
+     },
+     {
+      "id": 33639,
+      "logit": 19.875,
+      "text": "France"
+     },
+     {
+      "id": 36062,
+      "logit": 16.6875,
+      "text": "Paris"
+     },
+     {
+      "id": 21258,
+      "logit": 16.2344,
+      "text": "French"
+     },
+     {
+      "id": 6080,
+      "logit": 16.0469,
+      "text": "Some"
+     }
+    ]
+   },
+   {
+    "step": 26,
+    "top5": [
+     {
+      "id": 3565,
+      "logit": 14.625,
+      "text": " official"
+     },
+     {
+      "id": 3872,
+      "logit": 13.5,
+      "text": " national"
+     },
+     {
+      "id": 2586,
+      "logit": 12.7109,
+      "text": " country"
+     },
+     {
+      "id": 6253,
+      "logit": 12.3906,
+      "text": " largest"
+     },
+     {
+      "id": 5112,
+      "logit": 12.0156,
+      "text": " French"
+     }
+    ]
+   },
+   {
+    "step": 27,
+    "top5": [
+     {
+      "id": 3448,
+      "logit": 22.1406,
+      "text": " language"
+     },
+     {
+      "id": 11515,
+      "logit": 17.3594,
+      "text": " languages"
+     },
+     {
+      "id": 18847,
+      "logit": 13.9609,
+      "text": " Language"
+     },
+     {
+      "id": 285,
+      "logit": 13.7422,
+      "text": " and"
+     },
+     {
+      "id": 19457,
+      "logit": 13.3984,
+      "text": " lang"
+     }
+    ]
+   },
+   {
+    "step": 28,
+    "top5": [
+     {
+      "id": 273,
+      "logit": 21.1875,
+      "text": " of"
+     },
+     {
+      "id": 13452,
+      "logit": 18.8438,
+      "text": " spoken"
+     },
+     {
+      "id": 310,
+      "logit": 17.8125,
+      "text": " is"
+     },
+     {
+      "id": 275,
+      "logit": 16.6406,
+      "text": " in"
+     },
+     {
+      "id": 908,
+      "logit": 12.375,
+      "text": " used"
+     }
+    ]
+   },
+   {
+    "step": 29,
+    "top5": [
+     {
+      "id": 6181,
+      "logit": 23.0938,
+      "text": " France"
+     },
+     {
+      "id": 5112,
+      "logit": 13.0859,
+      "text": " French"
+     },
+     {
+      "id": 33639,
+      "logit": 13.0547,
+      "text": "France"
+     },
+     {
+      "id": 253,
+      "logit": 13.0391,
+      "text": " the"
+     },
+     {
+      "id": 575,
+      "logit": 11.4922,
+      "text": "Âł"
+     }
+    ]
+   },
+   {
+    "step": 30,
+    "top5": [
+     {
+      "id": 310,
+      "logit": 23.4531,
+      "text": " is"
+     },
+     {
+      "id": 261,
+      "logit": 12.8906,
+      "text": "is"
+     },
+     {
+      "id": 13,
+      "logit": 12.5547,
+      "text": ","
+     },
+     {
+      "id": 403,
+      "logit": 11.8672,
+      "text": " are"
+     },
+     {
+      "id": 313,
+      "logit": 10.9453,
+      "text": " ("
+     }
+    ]
+   },
+   {
+    "step": 31,
+    "top5": [
+     {
+      "id": 5112,
+      "logit": 22.5938,
+      "text": " French"
+     },
+     {
+      "id": 671,
+      "logit": 12.9453,
+      "text": " also"
+     },
+     {
+      "id": 269,
+      "logit": 12.4375,
+      "text": " f"
+     },
+     {
+      "id": 21258,
+      "logit": 12.3984,
+      "text": "French"
+     },
+     {
+      "id": 1925,
+      "logit": 11.9531,
+      "text": " called"
+     }
+    ]
+   },
+   {
+    "step": 32,
+    "top5": [
+     {
+      "id": 15,
+      "logit": 21.1094,
+      "text": "."
+     },
+     {
+      "id": 13,
+      "logit": 17.0156,
+      "text": ","
+     },
+     {
+      "id": 285,
+      "logit": 14.2109,
+      "text": " and"
+     },
+     {
+      "id": 187,
+      "logit": 13.8516,
+      "text": "\\n"
+     },
+     {
+      "id": 533,
+      "logit": 13.1797,
+      "text": " but"
+     }
+    ]
+   }
+  ],
+  "deepinfer_grouped": [
+   {
+    "step": 0,
+    "top5": [
+     {
+      "id": 7785,
+      "logit": 14.4219,
+      "text": " Paris"
+     },
+     {
+      "id": 1925,
+      "logit": 11.9297,
+      "text": " called"
+     },
+     {
+      "id": 417,
+      "logit": 11.4688,
+      "text": " not"
+     },
+     {
+      "id": 247,
+      "logit": 11.1406,
+      "text": " a"
+     },
+     {
+      "id": 671,
+      "logit": 10.9844,
+      "text": " also"
+     }
+    ]
+   },
+   {
+    "step": 1,
+    "top5": [
+     {
+      "id": 15,
+      "logit": 16.7031,
+      "text": "."
+     },
+     {
+      "id": 13,
+      "logit": 16.1719,
+      "text": ","
+     },
+     {
+      "id": 285,
+      "logit": 14.9062,
+      "text": " and"
+     },
+     {
+      "id": 313,
+      "logit": 12.6094,
+      "text": " ("
+     },
+     {
+      "id": 187,
+      "logit": 12.5547,
+      "text": "\\n"
+     }
+    ]
+   },
+   {
+    "step": 2,
+    "top5": [
+     {
+      "id": 187,
+      "logit": 14.7812,
+      "text": "\\n"
+     },
+     {
+      "id": 380,
+      "logit": 14.4219,
+      "text": " The"
+     },
+     {
+      "id": 733,
+      "logit": 13.625,
+      "text": " It"
+     },
+     {
+      "id": 6181,
+      "logit": 13.3906,
+      "text": " France"
+     },
+     {
+      "id": 7785,
+      "logit": 13.1172,
+      "text": " Paris"
+     }
+    ]
+   },
+   {
+    "step": 3,
+    "top5": [
+     {
+      "id": 187,
+      "logit": 18.3906,
+      "text": "\\n"
+     },
+     {
+      "id": 510,
+      "logit": 16.3125,
+      "text": "The"
+     },
+     {
+      "id": 36062,
+      "logit": 14.9141,
+      "text": "Paris"
+     },
+     {
+      "id": 33639,
+      "logit": 14.3047,
+      "text": "France"
+     },
+     {
+      "id": 1276,
+      "logit": 13.6484,
+      "text": "What"
+     }
+    ]
+   },
+   {
+    "step": 4,
+    "top5": [
+     {
+      "id": 510,
+      "logit": 17.9531,
+      "text": "The"
+     },
+     {
+      "id": 36062,
+      "logit": 17.2344,
+      "text": "Paris"
+     },
+     {
+      "id": 33639,
+      "logit": 16.8594,
+      "text": "France"
+     },
+     {
+      "id": 15614,
+      "logit": 15.7969,
+      "text": "Cap"
+     },
+     {
+      "id": 1276,
+      "logit": 15.7344,
+      "text": "What"
+     }
+    ]
+   },
+   {
+    "step": 5,
+    "top5": [
+     {
+      "id": 14731,
+      "logit": 12.8359,
+      "text": " currency"
+     },
+     {
+      "id": 3072,
+      "logit": 12.5781,
+      "text": " population"
+     },
+     {
+      "id": 3565,
+      "logit": 12.0312,
+      "text": " official"
+     },
+     {
+      "id": 5347,
+      "logit": 11.5156,
+      "text": " capital"
+     },
+     {
+      "id": 2586,
+      "logit": 11.4219,
+      "text": " country"
+     }
+    ]
+   },
+   {
+    "step": 6,
+    "top5": [
+     {
+      "id": 273,
+      "logit": 19.0312,
+      "text": " of"
+     },
+     {
+      "id": 908,
+      "logit": 17.0312,
+      "text": " used"
+     },
+     {
+      "id": 275,
+      "logit": 16.3906,
+      "text": " in"
+     },
+     {
+      "id": 310,
+      "logit": 14.1797,
+      "text": " is"
+     },
+     {
+      "id": 3943,
+      "logit": 11.6016,
+      "text": " unit"
+     }
+    ]
+   },
+   {
+    "step": 7,
+    "top5": [
+     {
+      "id": 6181,
+      "logit": 20.1094,
+      "text": " France"
+     },
+     {
+      "id": 253,
+      "logit": 12.8438,
+      "text": " the"
+     },
+     {
+      "id": 4047,
+      "logit": 12.625,
+      "text": " Japan"
+     },
+     {
+      "id": 6976,
+      "logit": 12.2812,
+      "text": " Australia"
+     },
+     {
+      "id": 9972,
+      "logit": 12.25,
+      "text": " Italy"
+     }
+    ]
+   },
+   {
+    "step": 8,
+    "top5": [
+     {
+      "id": 310,
+      "logit": 21.0156,
+      "text": " is"
+     },
+     {
+      "id": 13,
+      "logit": 13.4844,
+      "text": ","
+     },
+     {
+      "id": 908,
+      "logit": 12.4688,
+      "text": " used"
+     },
+     {
+      "id": 313,
+      "logit": 12.3281,
+      "text": " ("
+     },
+     {
+      "id": 275,
+      "logit": 11.4141,
+      "text": " in"
+     }
+    ]
+   },
+   {
+    "step": 9,
+    "top5": [
+     {
+      "id": 14029,
+      "logit": 19.6875,
+      "text": " Euro"
+     },
+     {
+      "id": 253,
+      "logit": 19.6719,
+      "text": " the"
+     },
+     {
+      "id": 17069,
+      "logit": 16.4531,
+      "text": " euro"
+     },
+     {
+      "id": 1925,
+      "logit": 14.3594,
+      "text": " called"
+     },
+     {
+      "id": 32306,
+      "logit": 14.3438,
+      "text": " euros"
+     }
+    ]
+   },
+   {
+    "step": 10,
+    "top5": [
+     {
+      "id": 15,
+      "logit": 19.1094,
+      "text": "."
+     },
+     {
+      "id": 313,
+      "logit": 18.6406,
+      "text": " ("
+     },
+     {
+      "id": 84,
+      "logit": 15.5859,
+      "text": "s"
+     },
+     {
+      "id": 9,
+      "logit": 14.4609,
+      "text": "("
+     },
+     {
+      "id": 13,
+      "logit": 13.4922,
+      "text": ","
+     }
+    ]
+   },
+   {
+    "step": 11,
+    "top5": [
+     {
+      "id": 187,
+      "logit": 19.5312,
+      "text": "\\n"
+     },
+     {
+      "id": 535,
+      "logit": 14.75,
+      "text": "\\n\\n"
+     },
+     {
+      "id": 380,
+      "logit": 14.1719,
+      "text": " The"
+     },
+     {
+      "id": 50279,
+      "logit": 13.4297,
+      "text": "<|endoftext|>"
+     },
+     {
+      "id": 313,
+      "logit": 12.5781,
+      "text": " ("
+     }
+    ]
+   },
+   {
+    "step": 12,
+    "top5": [
+     {
+      "id": 187,
+      "logit": 21.0469,
+      "text": "\\n"
+     },
+     {
+      "id": 510,
+      "logit": 13.8516,
+      "text": "The"
+     },
+     {
+      "id": 36062,
+      "logit": 13.1641,
+      "text": "Paris"
+     },
+     {
+      "id": 33639,
+      "logit": 12.75,
+      "text": "France"
+     },
+     {
+      "id": 21258,
+      "logit": 12.1719,
+      "text": "French"
+     }
+    ]
+   },
+   {
+    "step": 13,
+    "top5": [
+     {
+      "id": 510,
+      "logit": 19.625,
+      "text": "The"
+     },
+     {
+      "id": 33639,
+      "logit": 18.5156,
+      "text": "France"
+     },
+     {
+      "id": 4769,
+      "logit": 17.8594,
+      "text": "Time"
+     },
+     {
+      "id": 36062,
+      "logit": 16.8594,
+      "text": "Paris"
+     },
+     {
+      "id": 21258,
+      "logit": 16.4375,
+      "text": "French"
+     }
+    ]
+   },
+   {
+    "step": 14,
+    "top5": [
+     {
+      "id": 3072,
+      "logit": 14.2109,
+      "text": " population"
+     },
+     {
+      "id": 3565,
+      "logit": 13.1016,
+      "text": " official"
+     },
+     {
+      "id": 3872,
+      "logit": 11.5156,
+      "text": " national"
+     },
+     {
+      "id": 2586,
+      "logit": 11.4844,
+      "text": " country"
+     },
+     {
+      "id": 5112,
+      "logit": 11.375,
+      "text": " French"
+     }
+    ]
+   },
+   {
+    "step": 15,
+    "top5": [
+     {
+      "id": 273,
+      "logit": 19.625,
+      "text": " of"
+     },
+     {
+      "id": 310,
+      "logit": 12.8672,
+      "text": " is"
+     },
+     {
+      "id": 275,
+      "logit": 12.7812,
+      "text": " in"
+     },
+     {
+      "id": 6642,
+      "logit": 12.4531,
+      "text": " estimate"
+     },
+     {
+      "id": 313,
+      "logit": 11.8906,
+      "text": " ("
+     }
+    ]
+   },
+   {
+    "step": 16,
+    "top5": [
+     {
+      "id": 6181,
+      "logit": 18.9844,
+      "text": " France"
+     },
+     {
+      "id": 7785,
+      "logit": 14.5703,
+      "text": " Paris"
+     },
+     {
+      "id": 253,
+      "logit": 12.8672,
+      "text": " the"
+     },
+     {
+      "id": 6176,
+      "logit": 10.8594,
+      "text": " Germany"
+     },
+     {
+      "id": 5112,
+      "logit": 10.8594,
+      "text": " French"
+     }
+    ]
+   },
+   {
+    "step": 17,
+    "top5": [
+     {
+      "id": 310,
+      "logit": 19.2812,
+      "text": " is"
+     },
+     {
+      "id": 347,
+      "logit": 17.0156,
+      "text": " as"
+     },
+     {
+      "id": 275,
+      "logit": 15.4297,
+      "text": " in"
+     },
+     {
+      "id": 369,
+      "logit": 14.0938,
+      "text": " was"
+     },
+     {
+      "id": 2556,
+      "logit": 13.7344,
+      "text": " according"
+     }
+    ]
+   },
+   {
+    "step": 18,
+    "top5": [
+     {
+      "id": 1475,
+      "logit": 15.9141,
+      "text": " around"
+     },
+     {
+      "id": 9963,
+      "logit": 15.8906,
+      "text": " 67"
+     },
+     {
+      "id": 5512,
+      "logit": 15.8203,
+      "text": " approximately"
+     },
+     {
+      "id": 9523,
+      "logit": 14.6406,
+      "text": " 66"
+     },
+     {
+      "id": 670,
+      "logit": 14.4531,
+      "text": " about"
+     }
+    ]
+   },
+   {
+    "step": 19,
+    "top5": [
+     {
+      "id": 9963,
+      "logit": 19.9062,
+      "text": " 67"
+     },
+     {
+      "id": 9523,
+      "logit": 16.7969,
+      "text": " 66"
+     },
+     {
+      "id": 9934,
+      "logit": 14.3125,
+      "text": " 68"
+     },
+     {
+      "id": 7251,
+      "logit": 14.1016,
+      "text": " 65"
+     },
+     {
+      "id": 6705,
+      "logit": 13.1719,
+      "text": " 64"
+     }
+    ]
+   },
+   {
+    "step": 20,
+    "top5": [
+     {
+      "id": 3041,
+      "logit": 19.3281,
+      "text": " million"
+     },
+     {
+      "id": 15,
+      "logit": 16.8594,
+      "text": "."
+     },
+     {
+      "id": 13,
+      "logit": 14.7031,
+      "text": ","
+     },
+     {
+      "id": 34211,
+      "logit": 13.9766,
+      "text": " Million"
+     },
+     {
+      "id": 9790,
+      "logit": 13.4609,
+      "text": " millions"
+     }
+    ]
+   },
+   {
+    "step": 21,
+    "top5": [
+     {
+      "id": 952,
+      "logit": 18.4375,
+      "text": " people"
+     },
+     {
+      "id": 15,
+      "logit": 17.9531,
+      "text": "."
+     },
+     {
+      "id": 347,
+      "logit": 15.2578,
+      "text": " as"
+     },
+     {
+      "id": 313,
+      "logit": 14.8828,
+      "text": " ("
+     },
+     {
+      "id": 13,
+      "logit": 13.8594,
+      "text": ","
+     }
+    ]
+   },
+   {
+    "step": 22,
+    "top5": [
+     {
+      "id": 15,
+      "logit": 19.6406,
+      "text": "."
+     },
+     {
+      "id": 13,
+      "logit": 15.6875,
+      "text": ","
+     },
+     {
+      "id": 347,
+      "logit": 15.6641,
+      "text": " as"
+     },
+     {
+      "id": 313,
+      "logit": 15.0781,
+      "text": " ("
+     },
+     {
+      "id": 285,
+      "logit": 13.7344,
+      "text": " and"
+     }
+    ]
+   },
+   {
+    "step": 23,
+    "top5": [
+     {
+      "id": 187,
+      "logit": 20.125,
+      "text": "\\n"
+     },
+     {
+      "id": 535,
+      "logit": 14.5625,
+      "text": "\\n\\n"
+     },
+     {
+      "id": 50279,
+      "logit": 13.9141,
+      "text": "<|endoftext|>"
+     },
+     {
+      "id": 380,
+      "logit": 13.8672,
+      "text": " The"
+     },
+     {
+      "id": 313,
+      "logit": 13.6406,
+      "text": " ("
+     }
+    ]
+   },
+   {
+    "step": 24,
+    "top5": [
+     {
+      "id": 187,
+      "logit": 22.1094,
+      "text": "\\n"
+     },
+     {
+      "id": 510,
+      "logit": 14.3125,
+      "text": "The"
+     },
+     {
+      "id": 33639,
+      "logit": 12.625,
+      "text": "France"
+     },
+     {
+      "id": 1147,
+      "logit": 12.0547,
+      "text": "It"
+     },
+     {
+      "id": 21258,
+      "logit": 11.8125,
+      "text": "French"
+     }
+    ]
+   },
+   {
+    "step": 25,
+    "top5": [
+     {
+      "id": 510,
+      "logit": 20.4531,
+      "text": "The"
+     },
+     {
+      "id": 33639,
+      "logit": 19.8594,
+      "text": "France"
+     },
+     {
+      "id": 36062,
+      "logit": 16.6875,
+      "text": "Paris"
+     },
+     {
+      "id": 21258,
+      "logit": 16.2344,
+      "text": "French"
+     },
+     {
+      "id": 6080,
+      "logit": 16.0312,
+      "text": "Some"
+     }
+    ]
+   },
+   {
+    "step": 26,
+    "top5": [
+     {
+      "id": 3565,
+      "logit": 14.6172,
+      "text": " official"
+     },
+     {
+      "id": 3872,
+      "logit": 13.5,
+      "text": " national"
+     },
+     {
+      "id": 2586,
+      "logit": 12.7031,
+      "text": " country"
+     },
+     {
+      "id": 6253,
+      "logit": 12.3906,
+      "text": " largest"
+     },
+     {
+      "id": 5112,
+      "logit": 12.0156,
+      "text": " French"
+     }
+    ]
+   },
+   {
+    "step": 27,
+    "top5": [
+     {
+      "id": 3448,
+      "logit": 22.2812,
+      "text": " language"
+     },
+     {
+      "id": 11515,
+      "logit": 17.4062,
+      "text": " languages"
+     },
+     {
+      "id": 18847,
+      "logit": 13.9688,
+      "text": " Language"
+     },
+     {
+      "id": 285,
+      "logit": 13.9297,
+      "text": " and"
+     },
+     {
+      "id": 19457,
+      "logit": 13.4062,
+      "text": " lang"
+     }
+    ]
+   },
+   {
+    "step": 28,
+    "top5": [
+     {
+      "id": 273,
+      "logit": 21.2344,
+      "text": " of"
+     },
+     {
+      "id": 13452,
+      "logit": 18.7812,
+      "text": " spoken"
+     },
+     {
+      "id": 310,
+      "logit": 17.8438,
+      "text": " is"
+     },
+     {
+      "id": 275,
+      "logit": 16.625,
+      "text": " in"
+     },
+     {
+      "id": 908,
+      "logit": 12.4922,
+      "text": " used"
+     }
+    ]
+   },
+   {
+    "step": 29,
+    "top5": [
+     {
+      "id": 6181,
+      "logit": 23.0312,
+      "text": " France"
+     },
+     {
+      "id": 5112,
+      "logit": 13.0469,
+      "text": " French"
+     },
+     {
+      "id": 253,
+      "logit": 13.0469,
+      "text": " the"
+     },
+     {
+      "id": 33639,
+      "logit": 13.0312,
+      "text": "France"
+     },
+     {
+      "id": 575,
+      "logit": 11.4609,
+      "text": "Âł"
+     }
+    ]
+   },
+   {
+    "step": 30,
+    "top5": [
+     {
+      "id": 310,
+      "logit": 23.4375,
+      "text": " is"
+     },
+     {
+      "id": 261,
+      "logit": 12.8594,
+      "text": "is"
+     },
+     {
+      "id": 13,
+      "logit": 12.5547,
+      "text": ","
+     },
+     {
+      "id": 403,
+      "logit": 11.875,
+      "text": " are"
+     },
+     {
+      "id": 313,
+      "logit": 10.9062,
+      "text": " ("
+     }
+    ]
+   },
+   {
+    "step": 31,
+    "top5": [
+     {
+      "id": 5112,
+      "logit": 22.5781,
+      "text": " French"
+     },
+     {
+      "id": 671,
+      "logit": 12.8984,
+      "text": " also"
+     },
+     {
+      "id": 269,
+      "logit": 12.4297,
+      "text": " f"
+     },
+     {
+      "id": 21258,
+      "logit": 12.3828,
+      "text": "French"
+     },
+     {
+      "id": 1925,
+      "logit": 11.8984,
+      "text": " called"
+     }
+    ]
+   },
+   {
+    "step": 32,
+    "top5": [
+     {
+      "id": 15,
+      "logit": 21.0938,
+      "text": "."
+     },
+     {
+      "id": 13,
+      "logit": 17.0469,
+      "text": ","
+     },
+     {
+      "id": 285,
+      "logit": 14.2188,
+      "text": " and"
+     },
+     {
+      "id": 187,
+      "logit": 13.8438,
+      "text": "\\n"
+     },
+     {
+      "id": 533,
+      "logit": 13.2422,
+      "text": " but"
+     }
+    ]
+   }
+  ]
+ },
+ "kernel_categories": {
+  "DeepInfer": {
+   "kernels_per_step": 1153,
+   "steps": 143,
+   "busy_us": 4113.944,
+   "span_us": 4163.121,
+   "categories": {
+    "dense GEMV attention": {
+     "us": 908.647,
+     "kernels": 64,
+     "mb": 536.870912,
+     "gb_s": 590.8465135525677
+    },
+    "expert GEMV down": {
+     "us": 630.378,
+     "kernels": 16,
+     "mb": 185.597952,
+     "gb_s": 294.4232698476152
+    },
+    "expert GEMV gate+up": {
+     "us": 602.409,
+     "kernels": 16,
+     "mb": 301.989888,
+     "gb_s": 501.3037454619702
+    },
+    "dense GEMV lm_head": {
+     "us": 295.908,
+     "kernels": 1,
+     "mb": 206.045184,
+     "gb_s": 696.3150168295551
+    },
+    "dtype casts": {
+     "us": 373.055,
+     "kernels": 211
+    },
+    "attention": {
+     "us": 231.554,
+     "kernels": 16
+    },
+    "RoPE": {
+     "us": 302.145,
+     "kernels": 227
+    },
+    "RMSNorm": {
+     "us": 427.46700000000004,
+     "kernels": 390
+    },
+    "KV write": {
+     "us": 59.646,
+     "kernels": 32
+    },
+    "router + top-k + combine": {
+     "us": 177.574,
+     "kernels": 80
+    },
+    "residual add / other": {
+     "us": 42.815999999999995,
+     "kernels": 36
+    },
+    "attention mask": {
+     "us": 63.14099999999999,
+     "kernels": 64
+    }
+   }
+  },
+  "llama.cpp": {
+   "kernels_per_step": 406,
+   "steps": 59,
+   "busy_us": 1660.685,
+   "span_us": 1679.796,
+   "categories": {
+    "expert GEMV gate+up": {
+     "us": 460.451,
+     "kernels": 16,
+     "mb": 301.989888,
+     "gb_s": 655.8567317695042
+    },
+    "dense GEMV attention": {
+     "us": 317.993,
+     "kernels": 64,
+     "mb": 159.645696,
+     "gb_s": 502.0415417949451
+    },
+    "expert GEMV down": {
+     "us": 290.5,
+     "kernels": 16,
+     "mb": 185.597952,
+     "gb_s": 638.8914010327022
+    },
+    "dense GEMV lm_head": {
+     "us": 122.721,
+     "kernels": 1,
+     "mb": 84.51072,
+     "gb_s": 688.6410638765982
+    },
+    "RMSNorm": {
+     "us": 106.819,
+     "kernels": 65
+    },
+    "activation quantize (q8_1)": {
+     "us": 96.635,
+     "kernels": 97
+    },
+    "attention": {
+     "us": 98.785,
+     "kernels": 32
+    },
+    "router + top-k + combine": {
+     "us": 96.965,
+     "kernels": 48
+    },
+    "residual add / other": {
+     "us": 21.41,
+     "kernels": 19
+    },
+    "RoPE": {
+     "us": 32.899,
+     "kernels": 32
+    },
+    "KV write": {
+     "us": 15.392,
+     "kernels": 16
+    }
+   }
+  }
+ },
+ "notes": [
+  "cpu_probe_ms in rounds[].runs[] is taken by the driver process right after it idled; it reads 37-56 ms even when the probe inside the busy benchmark process reads 21-25 ms, so only deepinfer_bench.records[].repeat_cpu_probe_ms identifies the host's slow state.",
+  "Kernel categories come from CUPTI traces with tracing on; DeepInfer's traced busy time is 4.11 ms against 4.02 ms untraced, and llama.cpp's traced tg64 fell to 439 tok/s, so only kernel durations are used from the traces, not end-to-end speed."
+ ]
+}

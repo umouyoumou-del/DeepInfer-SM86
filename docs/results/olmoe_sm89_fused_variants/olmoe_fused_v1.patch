@@ -1,0 +1,390 @@
+# v1: first version: ten kernels per layer (separate ffn RMSNorm, router, top-k, q/k-norm+RoPE, attention)
+# apply to the kept v3 to reproduce the variant measured in section 38
+--- a/deepinfer/moe/olmoe_fused.py
++++ b/deepinfer/moe/olmoe_fused.py
+@@ -1,4 +1,4 @@
+-"""OLMoE decode in seven fused kernels per layer, every weight kept quantised.
++"""OLMoE decode in ten fused kernels per layer, every weight kept quantised.
+ 
+ OLMOE_PORT_PLAN section 37 put the CUDA-graph decoder next to llama.cpp on the
+ 4080 SUPER: 4.04 vs 1.73 ms/token, all of it GPU time.  Per token the graph
+@@ -10,26 +10,22 @@
+ 
+   1. RMSNorm, folding in the previous layer's expert outputs and residual
+   2. q, k and v projections in one launch, reading Q4_K/Q6_K rows directly
+-  3. q/k norm, RoPE, the key/value cache write and attention over the
+-     positions written so far (not a masked full buffer), one block per head
+-  4. output projection, added into the residual stream in place
+-  5. RMSNorm, router logits, softmax and top-k: every block normalises the
+-     hidden state itself and takes one expert's logit; the last block to
+-     finish picks the experts
+-  6. gate/up for every routed expert, one warp per (row, expert)
+-  7. down for every routed expert, one warp per (row, expert)
++  3. q/k norm, RoPE and the key/value cache write
++  4. attention over the positions written so far (not a masked full buffer)
++  5. output projection, added into the residual stream in place
++  6. RMSNorm
++  7. router logits
++  8. softmax and top-k
++  9. gate/up for every routed expert
++ 10. down for every routed expert, one warp per (row, expert)
+ 
+ and the step ends with the LM head, whose GEMV also takes the argmax through a
+ 64-bit ``atomicMax``, and a one-thread kernel that feeds the token back.  The
+ residual stream and all activations stay in fp32; only the cache is fp16.
+ 
+-The GEMVs keep packed_gemv's lane mapping.  The super-block count is a template
+-parameter, so the loop unrolls and every load of a row is issued before the
+-first one is consumed, which packed_gemv's runtime-length loop could not do.
+-Each block stages the activation in shared memory first.  Two variants that
+-looked better on paper measured slower on the 4080 SUPER (OLMOE_PORT_PLAN
+-section 38): issuing the row's loads before staging, and reading the
+-activation through L1 with no staging at all.
++The GEMVs keep packed_gemv's lane mapping, but the super-block loop is a
++template parameter: fully unrolled, every load of a row is issued before the
++first one is consumed, which the runtime-length loop could not do.
+ """
+ 
+ from __future__ import annotations
+@@ -46,7 +42,7 @@
+ 
+ try:
+     import cupy as cp
+-except Exception:  # noqa: BLE001  # pragma: no cover - CuPy can fail to load with a CUDA error, not only ImportError
++except Exception:  # pragma: no cover - CPU-only hosts
+     cp = None
+ 
+ _QTYPES = {"Q4_K": 0, "Q6_K": 1}
+@@ -348,53 +344,56 @@
+     for (int i = threadIdx.x; i < n; i += blockDim.x) normed[i] = hidden[i] * inv * weight[i];
+ }
+ 
+-// One block per head, a multiple of head_dim threads.  q_norm and k_norm span
+-// the whole vector, so every block takes both sums of squares itself (the same
+-// order in every block, so the same result); then it rotates its own head,
+-// writes its key and value at the position and attends over 0..position.
+-// The weighted sum over positions is split between blockDim / head_dim groups.
+-extern "C" __global__ void fz_attend(
++// Block 0: q = rope(rmsnorm(q) * q_norm).  Block 1: the same for k, written to
++// the cache with v.  One thread per rotation pair (i, i + head_dim / 2).
++extern "C" __global__ void fz_qk_rope_kv(
+     const float* __restrict__ qkv, const float* __restrict__ q_norm, const float* __restrict__ k_norm,
+     const float* __restrict__ rope_cos, const float* __restrict__ rope_sin,
+-    const long long* __restrict__ position, __half* __restrict__ k_cache, __half* __restrict__ v_cache,
+-    float* __restrict__ out, int n, int head_dim, int max_len, float eps, float scale)
++    const long long* __restrict__ position, float* __restrict__ q_out,
++    __half* __restrict__ k_cache, __half* __restrict__ v_cache,
++    int n, int head_dim, int max_len, float eps)
++{
++    __shared__ float scratch[32];
++    const int half_dim = head_dim >> 1;
++    const int head = threadIdx.x / half_dim, i = threadIdx.x - head * half_dim;
++    const int a = head * head_dim + i, b = a + half_dim;
++    const int which = blockIdx.x;
++    const float* src = qkv + (size_t)which * n;
++    const float xa = src[a], xb = src[b];
++    const float inv = rsqrtf(fz_block_sum(xa * xa + xb * xb, scratch) / (float)n + eps);
++    const float* w = which ? k_norm : q_norm;
++    const float na = xa * inv * w[a], nb = xb * inv * w[b];
++    const long long pos = *position;
++    const float c = rope_cos[pos * half_dim + i], s = rope_sin[pos * half_dim + i];
++    const float ra = na * c - nb * s, rb = nb * c + na * s;
++    if (which == 0) {
++        q_out[a] = ra;
++        q_out[b] = rb;
++        return;
++    }
++    const size_t base = ((size_t)head * max_len + pos) * head_dim;
++    k_cache[base + i] = __float2half_rn(ra);
++    k_cache[base + i + half_dim] = __float2half_rn(rb);
++    const float* v = qkv + 2 * (size_t)n;
++    v_cache[base + i] = __float2half_rn(v[a]);
++    v_cache[base + i + half_dim] = __float2half_rn(v[b]);
++}
++
++// One block per head, one thread per output dimension; positions 0..position.
++extern "C" __global__ void fz_attention(
++    const float* __restrict__ q, const __half* __restrict__ k_cache, const __half* __restrict__ v_cache,
++    const long long* __restrict__ position, float* __restrict__ out, int head_dim, int max_len, float scale)
+ {
+     extern __shared__ float smem[];
+     __shared__ float scratch[32];
+     float* qs = smem;
+     float* scores = smem + head_dim;
+     const int head = blockIdx.x, t = threadIdx.x;
+-    const float* q = qkv;
+-    const float* k = qkv + n;
+-    const float* v = qkv + 2 * (size_t)n;
+-    float sq = 0.0f, sk = 0.0f;
+-    for (int i = t; i < n; i += blockDim.x) {
+-        const float a = q[i], b = k[i];
+-        sq += a * a;
+-        sk += b * b;
+-    }
+-    const float inv_q = rsqrtf(fz_block_sum(sq, scratch) / (float)n + eps);
+-    const float inv_k = rsqrtf(fz_block_sum(sk, scratch) / (float)n + eps);
+-    const long long pos = *position;
+-    const int half_dim = head_dim >> 1;
+-    const size_t cache_head = (size_t)head * max_len * head_dim;
+-    if (t < half_dim) {
+-        const int a = head * head_dim + t, b = a + half_dim;
+-        const float c = rope_cos[pos * half_dim + t], s = rope_sin[pos * half_dim + t];
+-        const float qa = q[a] * inv_q * q_norm[a], qb = q[b] * inv_q * q_norm[b];
+-        qs[t] = qa * c - qb * s;
+-        qs[t + half_dim] = qb * c + qa * s;
+-        const float ka = k[a] * inv_k * k_norm[a], kb = k[b] * inv_k * k_norm[b];
+-        const size_t at = cache_head + (size_t)pos * head_dim;
+-        k_cache[at + t] = __float2half_rn(ka * c - kb * s);
+-        k_cache[at + t + half_dim] = __float2half_rn(kb * c + ka * s);
+-        v_cache[at + t] = __float2half_rn(v[a]);
+-        v_cache[at + t + half_dim] = __float2half_rn(v[b]);
+-    }
+-    __syncthreads();  // this block's cache row is visible to it from here on
+-    const int len = (int)pos + 1;
++    const int len = (int)(*position) + 1;
++    qs[t] = q[head * head_dim + t];
++    __syncthreads();
+     const int lane = t & 31, warp = t >> 5, warps = blockDim.x >> 5;
+-    const __half* keys = k_cache + cache_head;
++    const __half* keys = k_cache + (size_t)head * max_len * head_dim;
+     for (int j = warp; j < len; j += warps) {
+         const __half* key = keys + (size_t)j * head_dim;
+         float partial = 0.0f;
+@@ -413,63 +412,40 @@
+         total += e;
+     }
+     total = fz_block_sum(total, scratch);
+-    const int groups = blockDim.x / head_dim, d = t % head_dim, group = t / head_dim;
+-    float* partial = scores + max_len;
+-    const __half* values = v_cache + cache_head + d;
++    const __half* values = v_cache + (size_t)head * max_len * head_dim + t;
+     float acc = 0.0f;
+-    for (int j = group; j < len; j += groups) acc += scores[j] * __half2float(values[(size_t)j * head_dim]);
+-    partial[group * head_dim + d] = acc;
+-    __syncthreads();
+-    if (t < head_dim) {
+-        float sum = 0.0f;
+-        for (int g = 0; g < groups; ++g) sum += partial[g * head_dim + t];
+-        out[head * head_dim + t] = sum / total;
+-    }
+-}
+-
+-// RMSNorm, router and top-k in one launch, one block per expert.  Every block
+-// normalises the hidden state itself (8 KB from L2), writes its slice of the
+-// normed vector for the expert kernels and computes its expert's logit.  The
+-// last block to finish takes the softmax over all experts and the top_k
+-// largest probabilities, highest first, un-renormalised (OlmoeTopKRouter).
+-extern "C" __global__ void fz_route(
+-    const float* __restrict__ hidden, const float* __restrict__ norm_weight,
+-    const float* __restrict__ router, float* __restrict__ normed, float* __restrict__ logits,
+-    unsigned int* __restrict__ counter, int n, float eps, int top_k,
++    for (int j = 0; j < len; ++j) acc += scores[j] * __half2float(values[(size_t)j * head_dim]);
++    out[head * head_dim + t] = acc / total;
++}
++
++// logits[e] = router[e] . x; one block per expert
++extern "C" __global__ void fz_router(
++    const float* __restrict__ x, const float* __restrict__ weight, float* __restrict__ logits, int n)
++{
++    __shared__ float scratch[32];
++    const float4* row = reinterpret_cast<const float4*>(weight + (size_t)blockIdx.x * n);
++    const float4* x4 = reinterpret_cast<const float4*>(x);
++    float acc = 0.0f;
++    for (int i = threadIdx.x; i < (n >> 2); i += blockDim.x) {
++        const float4 a = row[i], b = x4[i];
++        acc += a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
++    }
++    acc = fz_block_sum(acc, scratch);
++    if (threadIdx.x == 0) logits[blockIdx.x] = acc;
++}
++
++// One warp: softmax over all experts (<= 64), then the top_k largest
++// probabilities, highest first, un-renormalised (OlmoeTopKRouter).
++extern "C" __global__ void fz_topk(
++    const float* __restrict__ logits, int experts, int top_k,
+     long long* __restrict__ ids, float* __restrict__ weights)
+ {
+-    __shared__ float scratch[32];
+-    __shared__ int last;
+-    const int e = blockIdx.x, experts = gridDim.x;
+-    const float4* h4 = reinterpret_cast<const float4*>(hidden);
+-    const float4* w4 = reinterpret_cast<const float4*>(norm_weight);
+-    const float4* r4 = reinterpret_cast<const float4*>(router + (size_t)e * n);
+-    float squares = 0.0f, dot = 0.0f;
+-    for (int i = threadIdx.x; i < (n >> 2); i += blockDim.x) {
+-        const float4 h = h4[i], w = w4[i], r = r4[i];
+-        squares += h.x * h.x + h.y * h.y + h.z * h.z + h.w * h.w;
+-        dot += r.x * (h.x * w.x) + r.y * (h.y * w.y) + r.z * (h.z * w.z) + r.w * (h.w * w.w);
+-    }
+-    const float inv = rsqrtf(fz_block_sum(squares, scratch) / (float)n + eps);
+-    dot = fz_block_sum(dot, scratch) * inv;
+-    const int chunk = (n + experts - 1) / experts;
+-    const int end = min(n, (e + 1) * chunk);
+-    for (int i = e * chunk + threadIdx.x; i < end; i += blockDim.x) {
+-        normed[i] = hidden[i] * inv * norm_weight[i];
+-    }
+-    if (threadIdx.x == 0) {
+-        logits[e] = dot;
+-        __threadfence();
+-        last = atomicAdd(counter, 1u) == (unsigned int)(experts - 1);
+-    }
+-    __syncthreads();
+-    if (!last || threadIdx.x >= 32) return;
+     const int lane = threadIdx.x;
+-    const float v0 = lane < experts ? __ldcg(logits + lane) : FZ_NEG_INF;
+-    const float v1 = lane + 32 < experts ? __ldcg(logits + lane + 32) : FZ_NEG_INF;
+-    const float top = fz_warp_max(fmaxf(v0, v1));
+-    const float e0 = lane < experts ? expf(v0 - top) : 0.0f;
+-    const float e1 = lane + 32 < experts ? expf(v1 - top) : 0.0f;
++    const float v0 = lane < experts ? logits[lane] : FZ_NEG_INF;
++    const float v1 = lane + 32 < experts ? logits[lane + 32] : FZ_NEG_INF;
++    const float best = fz_warp_max(fmaxf(v0, v1));
++    const float e0 = lane < experts ? expf(v0 - best) : 0.0f;
++    const float e1 = lane + 32 < experts ? expf(v1 - best) : 0.0f;
+     const float total = fz_warp_sum(e0 + e1);
+     float p0 = lane < experts ? e0 / total : -1.0f;
+     float p1 = lane + 32 < experts ? e1 / total : -1.0f;
+@@ -496,7 +472,6 @@
+         if (index == lane) p0 = -1.0f;
+         if (index == lane + 32) p1 = -1.0f;
+     }
+-    if (lane == 0) *counter = 0u;  // ready for the next layer
+ }
+ 
+ // The argmax becomes the next input; history[p] is the token predicted after position p.
+@@ -514,6 +489,8 @@
+ """
+ 
+ _TEMPLATES = ("fz_gemv", "fz_gate_up", "fz_down")
++_PLAIN = ("fz_embed", "fz_rmsnorm", "fz_qk_rope_kv", "fz_attention", "fz_router", "fz_topk",
++          "fz_finish")
+ _MODULE: Any = None
+ _STREAMS: dict[int, Any] = {}
+ 
+@@ -599,7 +576,7 @@
+ 
+ def packed_matrix(index, name: str, device: str = "cuda") -> PackedMatrix:
+     info = index.tensor(name)
+-    raw = np.array(index.read_raw(name), dtype=np.uint8, copy=True)
++    raw = np.ascontiguousarray(np.asarray(index.read_raw(name)))
+     return PackedMatrix(torch.from_numpy(raw).to(device), info.qtype.name,
+                         rows=int(info.dims[1]), cols=int(info.dims[0]))
+ 
+@@ -661,10 +638,10 @@
+     bits = sum(_QTYPES[m.qtype] << i for i, m in enumerate(matrices))
+     out = torch.empty((len(matrices), rows), dtype=torch.float32, device=x.device)
+     key = torch.zeros(1, dtype=torch.int64, device=x.device)
+-    _launch(f"fz_gemv<{cols // 256}>", ((rows + _WARPS - 1) // _WARPS, len(matrices)),
+-            (32 * _WARPS,), (_to_cupy(x.contiguous()), _to_cupy(table), _i32(bits),
+-                             _to_cupy(out), _i32(rows), _i32(0), _to_cupy(key)),
+-            shared=cols * 4)
++    nb = cols // 256
++    _launch(f"fz_gemv<{nb}>", ((rows + _WARPS - 1) // _WARPS, len(matrices)), (32 * _WARPS,),
++            (_to_cupy(x.contiguous()), _to_cupy(table), _i32(bits), _to_cupy(out), _i32(rows),
++             _i32(0), _to_cupy(key)), shared=cols * 4)
+     torch.cuda.current_stream().synchronize()  # table and key are temporaries
+     return out
+ 
+@@ -687,13 +664,11 @@
+         experts = model.layers[0].router.shape[0]
+         if hidden % num_heads or head_dim % 64 or head_dim > 1024 or hidden // 2 > 1024:
+             raise ValueError(f"unsupported hidden {hidden} / heads {num_heads}")
+-        if not 1 <= top_k <= experts <= 64 or hidden % 4:
++        if not 1 <= top_k <= experts <= 64:
+             raise ValueError("top_k <= experts <= 64 is required")
+         for index, layer in enumerate(model.layers):
+             if any((m.rows, m.cols) != (hidden, hidden) for m in (layer.q, layer.k, layer.v, layer.o)):
+                 raise ValueError(f"layer {index}: attention matrices must be {hidden} x {hidden}")
+-            if tuple(layer.router.shape) != (experts, hidden):
+-                raise ValueError(f"layer {index}: router must be {experts} x {hidden}")
+         if model.lm_head.cols != hidden:
+             raise ValueError("the LM head must read the hidden state")
+         self.model, self.num_heads, self.eps, self.top_k = model, num_heads, eps, top_k
+@@ -707,10 +682,9 @@
+         inter = max(layer.inter for layer in model.layers)
+         vocab = model.lm_head.rows
+         self.hidden_state, self.normed = zeros(hidden), zeros(hidden)
+-        self.qkv, self.context = zeros(3, hidden), zeros(hidden)
++        self.qkv, self.query, self.context = zeros(3, hidden), zeros(hidden), zeros(hidden)
+         self.router_logits, self.route_weights = zeros(experts), zeros(top_k)
+         self.expert_ids = zeros(top_k, dtype=torch.int64)
+-        self.route_counter = zeros(1, dtype=torch.int32)
+         self.act, self.moe_out = zeros(top_k, inter), zeros(top_k, hidden)
+         self._logits = zeros(vocab)
+         self.logits = self._logits.view(1, 1, vocab)
+@@ -747,8 +721,6 @@
+         n, hd, k = self.hidden, self.head_dim, self.top_k
+         nb = n // 256
+         warp_grid = (n + _WARPS - 1) // _WARPS
+-        # four groups share an attention head's weighted sum when they fit in a block
+-        attend_threads = hd * max(1, min(4, 1024 // hd))
+         threads = (32 * _WARPS,)
+         eps = _f32(self.eps)
+         plan: list[tuple] = []
+@@ -760,6 +732,33 @@
+             qkv_table, qkv_bits = self._table([layer.q, layer.k, layer.v])
+             o_table, o_bits = self._table([layer.o])
+             keys, values = self.keys[index], self.values[index]
++            plan += [
++                ("fz_rmsnorm", (1,), (1024,),
++                 (c(self.hidden_state), c(self.moe_out), _i32(int(index > 0)), _i32(k),
++                  c(layer.attn_norm), c(self.normed), _i32(n), eps), 0),
++                (f"fz_gemv<{nb}>", (warp_grid, 3), threads,
++                 (c(self.normed), qkv_table, _i32(qkv_bits), c(self.qkv), _i32(n), _i32(0),
++                  c(self.argmax_key)), n * 4),
++                ("fz_qk_rope_kv", (2,), (n // 2,),
++                 (c(self.qkv), c(layer.q_norm), c(layer.k_norm), c(self.rope_cos),
++                  c(self.rope_sin), c(self.position), c(self.query), c(keys), c(values),
++                  _i32(n), _i32(hd), _i32(self.max_len), eps), 0),
++                ("fz_attention", (self.num_heads,), (hd,),
++                 (c(self.query), c(keys), c(values), c(self.position), c(self.context),
++                  _i32(hd), _i32(self.max_len), _f32(1.0 / math.sqrt(hd))),
++                 (hd + self.max_len) * 4),
++                (f"fz_gemv<{nb}>", (warp_grid, 1), threads,
++                 (c(self.context), o_table, _i32(o_bits), c(self.hidden_state), _i32(n),
++                  _i32(1), c(self.argmax_key)), n * 4),
++                ("fz_rmsnorm", (1,), (1024,),
++                 (c(self.hidden_state), c(self.moe_out), _i32(0), _i32(k), c(layer.ffn_norm),
++                  c(self.normed), _i32(n), eps), 0),
++                ("fz_router", (self.experts,), (128,),
++                 (c(self.normed), c(layer.router), c(self.router_logits), _i32(n)), 0),
++                ("fz_topk", (1,), (32,),
++                 (c(self.router_logits), _i32(self.experts), _i32(k), c(self.expert_ids),
++                  c(self.route_weights)), 0),
++            ]
+             _, gate_table, gate_qtype = layer.experts["gate"]
+             _, up_table, up_qtype = layer.experts["up"]
+             _, down_table, down_qtype = layer.experts["down"]
+@@ -770,24 +769,6 @@
+             if inter % 256 or inter // 256 not in _SUPER_BLOCKS:
+                 raise ValueError(f"layer {index}: expert width {inter} is not supported")
+             plan += [
+-                ("fz_rmsnorm", (1,), (1024,),
+-                 (c(self.hidden_state), c(self.moe_out), _i32(int(index > 0)), _i32(k),
+-                  c(layer.attn_norm), c(self.normed), _i32(n), eps), 0),
+-                (f"fz_gemv<{nb}>", (warp_grid, 3), threads,
+-                 (c(self.normed), qkv_table, _i32(qkv_bits), c(self.qkv), _i32(n), _i32(0),
+-                  c(self.argmax_key)), n * 4),
+-                ("fz_attend", (self.num_heads,), (attend_threads,),
+-                 (c(self.qkv), c(layer.q_norm), c(layer.k_norm), c(self.rope_cos),
+-                  c(self.rope_sin), c(self.position), c(keys), c(values), c(self.context),
+-                  _i32(n), _i32(hd), _i32(self.max_len), eps, _f32(1.0 / math.sqrt(hd))),
+-                 (hd + self.max_len + attend_threads) * 4),
+-                (f"fz_gemv<{nb}>", (warp_grid, 1), threads,
+-                 (c(self.context), o_table, _i32(o_bits), c(self.hidden_state), _i32(n),
+-                  _i32(1), c(self.argmax_key)), n * 4),
+-                ("fz_route", (self.experts,), (128,),
+-                 (c(self.hidden_state), c(layer.ffn_norm), c(layer.router), c(self.normed),
+-                  c(self.router_logits), c(self.route_counter), _i32(n), eps, _i32(k),
+-                  c(self.expert_ids), c(self.route_weights)), 0),
+                 (f"fz_gate_up<{nb}>", ((inter + _WARPS - 1) // _WARPS, k), threads,
+                  (c(self.normed), c(self.expert_ids), c(gate_table), c(up_table), c(self.act),
+                   _i32(inter), _i32(_QTYPES[gate_qtype]), _i32(_QTYPES[up_qtype])), n * 4),
+@@ -849,7 +830,6 @@
+ 
+         self.position.zero_()
+         self.argmax_key.zero_()
+-        self.route_counter.zero_()
+         self.used = 0
+ 
+     def step(self, token: torch.Tensor | int | None = None) -> torch.Tensor:
