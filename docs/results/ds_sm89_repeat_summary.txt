@@ -1,0 +1,5 @@
+median 50.2 ms/token (19.94 tok/s) range 47.0-96.2 spread 98.0%
+median 51.9 ms/token (19.27 tok/s) range 48.1-58.9 spread 20.7%
+median 95.1 ms/token (10.52 tok/s) range 77.4-99.6 spread 23.4%
+median 95.1 ms/token (10.52 tok/s) range 77.4-99.6 spread 23.4%
+DS2_DONE
