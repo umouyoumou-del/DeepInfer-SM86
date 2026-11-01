@@ -1,0 +1,8 @@
+haystack tokens: 8000
+with facts: 8062 tokens
+config              prefill | recall
+window=None   sink=None prefill   18s | found 0/5 [] | '\ntopNavTypeId:\ntopNavTypeId:\ntopNavTypeId:\ntopNavTypeId:\ntopNavTypeId:\ntopNavTypeId:'
+window=1024   sink=4    prefill   16s | found 0/5 [] | '\ntopNavTypeId:\ntopNavTypeId:\ntopNavTypeId:\ntopNavTypeId:\ntopNavTypeId:\ntopNavTypeId:'
+---
+window=1024   sink=4    prefill   16s | found 0/5 [] | '\ntopNavTypeId:\ntopNavTypeId:\ntopNavTypeId:\ntopNavTypeId:\ntopNavTypeId:\ntopNavTypeId:'
+NEEDLE_DONE

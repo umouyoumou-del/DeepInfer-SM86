@@ -501,3 +501,74 @@ DeepSeek-V2-Lite 的原生上下文是 160,384，所以 128K 落在原生范围�
 - int8 KV 有量化误差，本文没有测它对生成质量的影响。
 - 128K 的**填充成本**（prefill）没有测——注意力是 O(N²)，
   真实 128K prefill 可能非常慢。
+
+---
+
+## 12. 多事实召回实验：跑通了，但 0/5——原因在 harness，不在架构
+
+### 实验设计
+
+8,062 token 的真实 haystack（仓库文档拼接），5 个唯一码字插在
+10% / 30% / 50% / 70% / 90% 深度，问"列出所有码字"。
+
+| 配置 | prefill | 召回 |
+|---|---:|---:|
+| 全量注意力 | 18 s | **0/5** |
+| window=1024, sink=4 | 16 s | **0/5** |
+
+两者输出都是同一个退化的代码片段：`topicNavTypeId:` 重复。
+
+### 全量注意力也 0/5 = harness 坏了
+
+**这是这次实验最有价值的一条。** 全量注意力下 8K 完全装得下、也看得见，
+本该召回 5/5。它 0/5 说明问题不在窗口近似，而在**我的 prefill 循环**：
+
+```python
+for start in range(0, total, CH):
+    blk = mgr.allocate_tokens(end - start)          # ← 每块新分配
+    v = mgr.make_views([blk], [start], ...)         # ← 只含本块
+```
+
+**每个 chunk 都拿到全新的 block 列表，view 里只有当前 512 个 token 的块。**
+`past_length=start` 只是告诉它"前面有 start 个 token"，但 `block_table`
+里根本没有那些块——所以模型永远只看到最后一个 chunk（512 token），
+输出自然是文档碎片。
+
+**正确做法**：一次性分配整个 prompt 的 blocks，第 i 个 chunk 传
+`blocks[:ceil(end/BLOCK)]`，让 block_table 累积。
+
+### 其余两次 harness 错误（同类）
+
+| 错误 | 表现 |
+|---|---|
+| `tok()` 缺 `return_tensors` | `torch.cat` 报 int |
+| `sink=None` 用 `%d` | 格式化崩在最后一步 |
+
+**一天之内四次 harness 错误**（含之前的 38 GiB OOM 和 scale pool「缺口」）。
+模式完全一致：**我写的旁路测试工具本身没被验证，它的失败被我归因给被测代码。**
+
+### 本轮真正修好的东西
+
+`native_attention` 的 dtype 门限原来只认 fp16：
+
+```python
+views[0].key_pool.dtype == torch.float16      # 旧
+```
+
+所以 **int8 KV 走不了 paged 路径**，会回退到 dense attention 并报
+`Attention weights should be of size (1,16,512,512), but is (1,16,512,8126)`。
+
+已放宽为接受 int8 / fp8_e4m3 / fp8_e5m2，`205 passed`。
+**这是 128K int8 端到端的前提条件，之前一直被这个门限挡着。**
+
+### 结论
+
+| 项 | 状态 |
+|---|---|
+| int8 走 paged 路径 | ✅ 已修（真正的代码缺口） |
+| 多事实召回实验 | ❌ **harness 有 bug，结果无效** |
+| 全量注意力的召回基线 | ❌ 未建立（被 harness 掩盖） |
+| 窗口 vs 全量的对比 | ❌ 无法下结论 |
+
+**下一步必须先修 harness，并用"全量注意力应召回 5/5"作为 harness 的自检。**
+在基线立起来之前，任何窗口配置的召回数字都没有意义。

@@ -3079,7 +3079,13 @@ class DeepSeekV2LiteGGUFRuntime:
             value_dim=value_dim,
             head_dim=max(key_dim, value_dim),
             native_attention=(
-                views[0].key_pool.dtype == torch.float16
+                views[0].key_pool.dtype
+                in (
+                    torch.float16,
+                    torch.int8,
+                    getattr(torch, "float8_e4m3fn", None),
+                    getattr(torch, "float8_e5m2", None),
+                )
                 and getattr(self, "native_paged_attention_enabled", True)
                 and os.environ.get("DEEPINFER_DISABLE_NATIVE_PAGED_MLA") != "1"
             ),
