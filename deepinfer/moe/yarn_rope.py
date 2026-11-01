@@ -1,9 +1,10 @@
 """YaRN frequency scaling, so a model trained at N tokens can attend beyond it.
 
-DeepSeek-V2-Lite declares a 163,840-token context and OLMoE only 4,096; the
-remote ``DeepseekV2RotaryEmbedding`` builds its inverse frequencies from
-``base=10000`` with no scaling at all, so anything past the trained length is
-extrapolation and the model loses coherence.
+OLMoE declares 4,096 tokens and no scaling, so anything past that is
+extrapolation.  DeepSeek-V2's config already declares YaRN (factor 40 over an
+original 4,096) and ``modeling_deepseek`` applies it itself -
+``DeepseekV2YarnRotaryEmbedding`` plus an mscale^2 softmax correction - so the
+runtime leaves those modules alone.  The formula here matches that module.
 
 YaRN interpolates only the low frequencies, which carry long-range information,
 and leaves the high frequencies alone, which is what keeps local order intact:
@@ -36,11 +37,7 @@ def correction_range(
 
     low = math.floor(_correction_index(beta_fast, dim, base, max_position))
     high = math.ceil(_correction_index(beta_slow, dim, base, max_position))
-    low = max(low, 0)
-    high = min(high, dim - 1)
-    if low == high:
-        high += 0.001
-    return int(low), int(high)
+    return max(low, 0), min(high, dim - 1)
 
 
 def ramp(dim: int, *, beta_fast: float, beta_slow: float, base: float,
@@ -56,8 +53,12 @@ def ramp(dim: int, *, beta_fast: float, beta_slow: float, base: float,
     low, high = correction_range(
         dim, base, max_position, beta_fast=beta_fast, beta_slow=beta_slow
     )
-    positions = torch.arange(0, dim, 2, dtype=torch.float32)
-    return torch.clamp((positions - low) / (high - low), 0.0, 1.0)
+    if low == high:
+        high += 0.001  # the reference implementation's singularity guard
+    # indexed by rotary pair (0 .. dim/2-1), as the correction range is; using
+    # the element index 0, 2, 4, ... here would ramp twice as fast
+    pairs = torch.arange(dim // 2, dtype=torch.float32)
+    return torch.clamp((pairs - low) / (high - low), 0.0, 1.0)
 
 
 def scaled_inv_freq(

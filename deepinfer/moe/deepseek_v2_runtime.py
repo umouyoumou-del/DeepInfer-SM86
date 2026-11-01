@@ -1806,12 +1806,14 @@ class DeepSeekV2LiteGGUFRuntime:
         _set_parameter(module, "weight", self._read_weight(name, device=target, dtype=dtype))
 
     def _apply_rope_scaling(self, requested: str | float | None) -> float:
-        """Rewrite every rotary module in place with YaRN, return the mscale.
+        """Rewrite every plain rotary module in place with YaRN, return the mscale.
 
-        Without this the model extrapolates past its trained length: DeepSeek's
-        GGUF declares 163,840 tokens and OLMoE only 4,096, and the remote
-        DeepseekV2RotaryEmbedding builds plain base-10000 frequencies with no
-        scaling, so nothing here is interpolated.
+        For a config that declares no scaling (OLMoE, 4,096 tokens) this is what
+        lets positions past the trained length be interpolated.  DeepSeek-V2's
+        config already declares YaRN and modeling_deepseek builds
+        DeepseekV2YarnRotaryEmbedding (and the mscale^2 softmax correction)
+        itself; those modules are left alone, since rewriting them would only
+        replace the official frequencies.
         """
 
         if requested is None:
@@ -1834,9 +1836,13 @@ class DeepSeekV2LiteGGUFRuntime:
             return 1.0
 
         patched = 0
+        already = 0
         for module in self.model.modules():
             rotary = getattr(module, "rotary_emb", None)
             if rotary is None or not hasattr(rotary, "inv_freq"):
+                continue
+            if "yarn" in type(rotary).__name__.lower():
+                already += 1
                 continue
             patch_rotary(
                 rotary,
@@ -1847,6 +1853,12 @@ class DeepSeekV2LiteGGUFRuntime:
                 seq_len=max(int(self.max_cache), int(original)),
             )
             patched += 1
+        if already and not patched:
+            self._log(
+                "rope scaling: %d rotary modules already apply the model's own YaRN; "
+                "left unchanged" % already
+            )
+            return 1.0
         mscale = 0.1 * __import__("math").log(factor) + 1.0
         self._log(
             "rope scaling: yarn factor %.2f over %d rotary modules "

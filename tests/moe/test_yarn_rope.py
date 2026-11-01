@@ -123,3 +123,33 @@ def test_reads_scaling_from_config() -> None:
         rope_scaling = None
 
     assert yarn_from_config(_Plain()) is None
+
+def _official_deepseek_inv_freq(dim, base, factor, original, beta_fast, beta_slow):
+    """DeepseekV2YarnRotaryEmbedding._set_cos_sin_cache, transcribed."""
+
+    def correction_dim(rotations):
+        return (dim * math.log(original / (rotations * 2 * math.pi))) / (2 * math.log(base))
+
+    low = max(math.floor(correction_dim(beta_fast)), 0)
+    high = min(math.ceil(correction_dim(beta_slow)), dim - 1)
+    if low == high:
+        high += 0.001
+    linear = (torch.arange(dim // 2, dtype=torch.float32) - low) / (high - low)
+    mask = 1.0 - torch.clamp(linear, 0, 1)
+    exponents = torch.arange(0, dim, 2, dtype=torch.float32) / dim
+    extra = 1.0 / (base**exponents)
+    inter = 1.0 / (factor * base**exponents)
+    return inter * (1 - mask) + extra * mask
+
+
+def test_matches_deepseek_v2_official_yarn() -> None:
+    # DeepSeek-V2-Lite / Coder-V2-Lite: rope dim 64, factor 40 over 4096
+    ours = scaled_inv_freq(
+        64, base=10000.0, factor=40.0, beta_fast=32.0, beta_slow=1.0, max_position=4096
+    )
+    official = _official_deepseek_inv_freq(64, 10000.0, 40.0, 4096, 32.0, 1.0)
+    assert torch.allclose(ours, official, rtol=1e-6, atol=0)
+    # the ramp runs over pairs 10..23 there: pair 10 keeps its frequency, 23 is divided
+    plain = 1.0 / (10000.0 ** (torch.arange(0, 64, 2, dtype=torch.float32) / 64))
+    assert float(ours[10] / plain[10]) == pytest.approx(1.0)
+    assert float(ours[23] / plain[23]) == pytest.approx(1.0 / 40.0)
