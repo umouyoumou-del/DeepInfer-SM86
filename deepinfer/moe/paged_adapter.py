@@ -145,14 +145,6 @@ class DeepSeekPagedCache(Cache):
             if cuda_paged_mla_quant_supported(
                 query_states, view.key_pool, view.value_pool
             ):
-                if self.sliding_window is not None or self.attention_sink is not None:
-                    # the quantised kernel predates window/sink support; falling
-                    # back keeps a bounded-cost request correct rather than
-                    # silently reverting it to full attention over the history
-                    raise RuntimeError(
-                        "sliding_window/attention_sink need the fp16 fused path; "
-                        "set DEEPINFER_DISABLE_CUDA_PAGED_MLA_KVQUANT=1 or drop them"
-                    )
                 return paged_mla_attend_quantized(
                     query_states,
                     view.key_pool,
@@ -165,6 +157,8 @@ class DeepSeekPagedCache(Cache):
                     scale=float(scale),
                     key_scale_pool=view.key_scale_pool,
                     value_scale_pool=view.value_scale_pool,
+                    sliding_window=self.sliding_window,
+                    attention_sink=self.attention_sink,
                     key_dim=self.key_dim,
                     value_dim=self.value_dim,
                 )

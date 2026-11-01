@@ -86,7 +86,9 @@ extern "C" __global__ void dp_paged_mla_attend_quant(
     int key_dim,
     int value_dim,
     int mode,
-    float scale)
+    float scale,
+    int window_size,
+    int sink_size)
 {
     const int warp = threadIdx.x >> 5;
     const int lane = threadIdx.x & 31;
@@ -115,7 +117,12 @@ extern "C" __global__ void dp_paged_mla_attend_quant(
     float acc1 = 0.0f;
     float acc2 = 0.0f;
     float acc3 = 0.0f;
+    // Attention sink plus sliding window, same rule as the fp16 kernel: keep
+    // the first sink_size tokens and the most recent window_size, skip between.
     for (long long token = 0; token < limit; ++token) {
+        if (window_size > 0 && token >= sink_size && token < limit - window_size) {
+            continue;
+        }
         const long long block_index = token / block_size;
         const long long offset = token - block_index * block_size;
         const long long block =
@@ -231,9 +238,19 @@ def paged_mla_attend_quantized(
     value_scale_pool: torch.Tensor | None = None,
     key_dim: int = 192,
     value_dim: int = 128,
+    sliding_window: int | None = None,
+    attention_sink: int | None = None,
 ) -> torch.Tensor:
-    """Paged MLA over INT8/FP8 storage without dense dequantization."""
+    """Paged MLA over INT8/FP8 storage without dense dequantization.
 
+    ``sliding_window`` and ``attention_sink`` bound the decode cost the same way
+    as the fp16 kernel; both ``None`` is full attention.
+    """
+
+    window_size = 0 if sliding_window is None else int(sliding_window)
+    sink_size = 0 if attention_sink is None else int(attention_sink)
+    if window_size < 0 or sink_size < 0:
+        raise ValueError("sliding_window and attention_sink must be non-negative")
     if not cuda_paged_mla_quant_supported(query, key_pool, value_pool):
         raise RuntimeError("quantized paged MLA requires INT8/FP8 pools")
     if key_pool.dtype == torch.int8:
@@ -284,6 +301,8 @@ def paged_mla_attend_quantized(
             int(value_dim),
             int(mode),
             cp.float32(scale),
+            int(window_size),
+            int(sink_size),
         ),
     )
     return output
