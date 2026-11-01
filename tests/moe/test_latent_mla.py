@@ -264,14 +264,14 @@ def test_host_tier_reads_back_what_was_written(kv_dtype: str) -> None:
 
 
 class _Attention:
-    num_heads = 4
     qk_nope_head_dim = 128
     qk_rope_head_dim = 64
     v_head_dim = 128
     softmax_scale = 192**-0.5
 
-    def __init__(self, device: str) -> None:
-        self.kv_b_proj = torch.nn.Linear(512, 4 * 256, bias=False).to(device).half()
+    def __init__(self, device: str, heads: int = 4) -> None:
+        self.num_heads = heads
+        self.kv_b_proj = torch.nn.Linear(512, heads * 256, bias=False).to(device).half()
         torch.nn.init.normal_(self.kv_b_proj.weight, std=0.05)
 
 
@@ -300,9 +300,9 @@ def _naive(attention, latent, pe_raw, q_nope, q_pe_raw, query_positions, positio
     return torch.stack(outs)
 
 
-def _setup(device: str, n: int, seed: int = 0):
+def _setup(device: str, n: int, seed: int = 0, heads: int = 4):
     torch.manual_seed(seed)
-    attention = _Attention(device)
+    attention = _Attention(device, heads)
     weights = MLAWeights.from_attention(attention)
     inv_freq = 1.0 / (10000 ** (torch.arange(0, 64, 2, dtype=torch.float32) / 64))
     rope = LatentRope(inv_freq)
@@ -362,4 +362,31 @@ def test_decode_attention_matches_the_definition(positions, fused: bool) -> None
     run = decode_attention if fused else decode_attention_reference
     ours = run(weights, cache, 0, q_nope[0], q_pe_raw[0], n - 1, positions=positions, rope=rope)
     expected = _naive(attention, latent, pe_raw, q_nope, q_pe_raw, [n - 1], positions, rope)[0]
+    assert torch.allclose(ours.float(), expected, atol=1e-2, rtol=1e-2)
+
+
+@pytest.mark.skipif(not CUDA, reason="needs CUDA")
+@pytest.mark.parametrize("fused", [False, True], ids=["reference", "fused"])
+def test_one_shared_latent_gives_the_per_head_attention_at_the_model_shape(fused: bool) -> None:
+    """DeepSeek-V2-Lite's shape: 16 heads, kv_b (4096, 512) like blk.N.attn_kv_b.
+
+    Every head's K and V are a different projection of the latent, yet caching the one
+    512 + 64 latent per token (not 16 per-head copies) gives the per-head attention: the
+    up-projections fold into the query and the output instead of into the cache.
+    """
+    if fused:
+        pytest.importorskip("triton")
+    n, heads = 150, 16
+    attention, weights, rope, latent, pe_raw = _setup("cuda", n, seed=2, heads=heads)
+    assert tuple(attention.kv_b_proj.weight.shape) == (4096, 512)
+    positions = DualChunkPositions.plain()
+    cache = LatentKVCache(num_layers=1, capacity=n, kv_dtype="fp16", device="cuda")
+    pe = rope.apply(pe_raw, positions.key_positions(torch.arange(n, device="cuda")))
+    cache.write(0, 0, latent, pe)
+    q_nope = torch.randn(1, heads, 128, device="cuda").half()
+    q_pe_raw = torch.randn(1, heads, 64, device="cuda").half()
+    run = decode_attention if fused else decode_attention_reference
+    ours = run(weights, cache, 0, q_nope[0], q_pe_raw[0], n - 1, positions=positions, rope=rope)
+    expected = _naive(attention, latent, pe_raw, q_nope, q_pe_raw, [n - 1], positions, rope)[0]
+    assert ours.shape == (heads, 128)
     assert torch.allclose(ours.float(), expected, atol=1e-2, rtol=1e-2)
