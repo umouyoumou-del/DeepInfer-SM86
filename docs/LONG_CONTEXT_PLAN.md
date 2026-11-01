@@ -3,6 +3,7 @@
 > **2026-11-01 复核**：下面"严重更正"本身也过度修正了——逐头 K/V 是*展开*形式，MLA 要缓存的是
 > 共享 latent（30.4 KiB/token fp16、17.3 KiB/token fp8），1M 装得下；§6、§7、§10、§11 的 tok/s
 > 都是单层内核计时。完整复核与新实测见 `docs/LONG_CONTEXT_1M.md`。
+> §13（同日晚）用整模型实测确认：128K int8 window 4096 一层内核 9.0 ms，整步 520 ms/token = 1.92 tok/s。
 
 > ## ⚠️ 严重更正（本节早期版本是错的）
 >
@@ -572,3 +573,92 @@ views[0].key_pool.dtype == torch.float16      # 旧
 
 **下一步必须先修 harness，并用"全量注意力应召回 5/5"作为 harness 的自检。**
 在基线立起来之前，任何窗口配置的召回数字都没有意义。
+
+---
+
+## 13. harness 修好之后：自检、基线、深度曲线与整模型 decode（2026-11-01 晚，复核）
+
+### 修法
+
+`scripts/needle_paged.py`：一个序列只分配一次 block 列表（prompt + 答案），每个 prefill chunk、
+每个 decode step 都传同一个列表与真实 `past_length`——§12 的诊断是对的，这里照做。
+另加 `dense:full`：模型自带注意力 + transformers `DynamicCache`，不经过任何 paged 代码，作参考实现。
+
+### 两道自检（都过）
+
+| 自检 | 结果 |
+|---|---|
+| 分块不变性：2K 前缀一次 prefill vs 512 分块 | NLL 3.0092 vs 3.0093，最后 argmax 相同，top-1 98.7% |
+| 同一前缀用 §12 的旧分配方式 | **NLL 8.38**——这道自检抓得住原 bug |
+| paged fp16 全量 vs dense | 文档 NLL +0.0006，top-1 98.6%，生成的回答逐字相同 |
+
+top-1 不是 100%：fp16 下分块方式不同、MoE 路由在近似并列时翻转，都会换掉少数位置的 argmax；
+两道自检的门限（NLL 差 < 0.02 nat、top-1 ≥ 0.97）取的就是这个噪声水平，旧 bug 差几个 nat。
+
+### "列出全部码字"：dense 也 0/5
+
+§12 的任务原样重跑（5 句 "The secret codeword is X." + 一个问题要全部列出）：
+
+| 配置 | 召回 | 回答 |
+|---|---:|---|
+| dense 全量 | 0/5 | `1. DeepInfer 2. SM86 3. RTX 4. 305…` |
+| paged fp16 全量 | 0/5 | 同上，逐字相同（文档 NLL −0.0008，top-1 98.4%） |
+| paged int8 全量 | 0/5 | 同上 |
+
+**§12 的 0/5 一半是 harness，一半是任务：** 修好后 paged 与 dense 完全一致，但这个模型在 8K 技术文档里
+做不了"列出全部"。"全量必须 5/5"因此不能当 harness 的自检；自检应比"paged 与参考实现一致"，模型能力单独报。
+数据：`docs/results/needle_paged/8k_list.json`。
+
+### 逐个提问：召回 vs 深度（8K，V2-Lite-Chat）
+
+5 道门各一个码字（"The codeword for the east gate is MORROW."），文档只 prefill 一次，每个问题从文档末尾分支：
+
+| 配置 | 10% | 30% | 50% | 70% | 90% | 召回 | 文档 NLL 差 | top-1 一致 | prefill | decode ms/token |
+|---|---|---|---|---|---|---:|---:|---:|---:|---:|
+| dense 全量 | ✅ | ✗ VESSEL | ✅ | ✅ | ✅ | 4/5 | — | — | 15.1 s | 41.8 |
+| paged fp16 全量 | ✅ | ✗ VESSEL | ✅ | ✅ | ✅ | 4/5 | +0.0006 | 98.6% | 18.3 s | 160.6 |
+| paged int8 全量 | ✅ | ✗ KESTREL | ✅ | ✅ | ✅ | 4/5 | +0.0046 | 93.5% | 25.3 s | 417.7 |
+| int8 window 4096 + sink 4 | ✗ TALLOW | ✗ VESSEL | ✅ | ✅ | ✅ | 3/5 | +0.0146 | 90.8% | 22.5 s | 234.7 |
+| int8 window 1024 + sink 4 | ✗ NORTHGATE | ✗ GATE_EAST | ✗ SOUTH | ✗ GATEWEST | ✅ | 1/5 | +0.146 | 80.7% | 16.8 s | 106.9 |
+
+- 30% 那一问 dense 也错（答成另一道门的码字）：混淆，不是丢失。
+- 窗口只召回窗口里的事实，窗口外的被编造的码字顶替（NORTHGATE、GATE_EAST）。
+- int8 KV：困惑度 +0.46%，但 6.5% 的位置 top-1 换了；fp16 paged 只有 1.4%。
+- **paged 路径本身慢**：同一进程 8K，dense decode 41.8 ms/token，paged fp16 160.6，int8 417.7。
+
+数据：`docs/results/needle_paged/8k_each.json`。
+
+### 整模型 decode vs 一层内核（`scripts/bench_paged_decode.py`）
+
+pool 内容不影响成本（内核照样读每个被寻址的槽），所以不必真的 prefill 128K；预热 3 步后取 10 步中位数。
+
+| 配置 | 模型本体 | int8 pool | 一层注意力内核 | 整模型 ms/token | tok/s |
+|---|---:|---:|---:|---:|---:|
+| 112K，专家驻留，短上下文对照（past 256） | 11.14 GiB | 17.92 GiB | — | 128.6 | 7.8 |
+| 112K，专家驻留，window 4096 + sink 4 | | | 8.49 ms | 390.3 | 2.56 |
+| 112K，专家驻留，window 8192 + sink 4 | | | 13.45 ms | 612.5 | 1.63 |
+| 112K，专家驻留，window 16384 + sink 4 | | | 37.54 ms | 1,085.1 | 0.92 |
+| 112K，专家驻留，全量 | | | 241.5 ms | 6,594.9 | 0.15 |
+| 128K，专家流式，短上下文对照 | 2.16 GiB | 20.47 GiB | — | 211.3 | 4.7 |
+| 128K，专家流式，window 4096 + sink 4 | | | 9.00 ms | 520.1 | 1.92 |
+| 128K，专家流式，全量 | | | 276.2 ms | 7,617.3 | 0.13 |
+
+- §11 的"window 4096：9.2 ms、108.78 tok/s"= 1000 ÷ 一层内核时间；整步要 27 层再加 MoE。
+- 128K int8 + 专家全部驻留放不下：模型本体实测 11.14 GiB（不是 9 GiB），加 20.47 GiB pool 超过 31.47。
+  只有专家改为流式（2.16 GiB）才放得下，剩 8.48 GiB。
+- int8 一层读 4,100 个 key（16 头 × (192 + 192) B ≈ 25 MB）要 8.5 ms，约 3 GB/s，离 736 GB/s 约 250 倍；
+  §11"离下限 10 倍"是拿一层的时间比 27 层的字节。
+
+数据：`docs/results/paged_decode/112k_int8_resident.json`、`128k_int8_streamed.json`。
+
+### 这改变了什么
+
+| §11 的主张 | 复核后 |
+|---|---|
+| 128K，单卡，无分层 | int8 放得下，但专家要流式；专家驻留到 112K |
+| 108 tok/s decode | 整模型 1.92 tok/s（128K，专家流式）/ 2.56 tok/s（112K，专家驻留） |
+| 不需要 YaRN | config 是 `yarn`、factor 40 × 4096 = 163,840：YaRN 就是模型自己的位置编码 |
+| KV 量化到 int8 可用 | 可用：8K 召回不变；NLL +0.46%，top-1 换 6.5% |
+| 端到端真实文本 | ✅ 跑通，并与 dense 参考逐字一致 |
+
+下一步见 `docs/HANDOFF.md` §8：paged MLA 内核与 serve 路径换 latent 池是两件最大的事。
