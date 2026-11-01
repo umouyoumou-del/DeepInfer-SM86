@@ -1,0 +1,9 @@
+/root/autodl-tmp/DeepInfer-SM86/deepinfer/moe/olmoe_packed.py:59: UserWarning: The given NumPy array is not writable, and PyTorch does not support non-writable tensors. This means writing to this tensor will result in undefined behavior. You may want to copy the array to protect its data or make it writable before converting it to a tensor. This type of warning will be suppressed for the rest of this program. (Triggered internally at ../torch/csrc/utils/tensor_numpy.cpp:206.)
+pp64       11.61 ms     5511.5 tok/s  (min 11.54, max 11.79 ms, 5 runs)
+pp128      11.69 ms    10952.5 tok/s  (min 11.68, max 11.71 ms, 5 runs)
+pp256      15.26 ms    16774.3 tok/s  (min 15.20, max 15.65 ms, 5 runs)
+pp512      22.23 ms    23027.2 tok/s  (min 22.10, max 22.78 ms, 5 runs)
+prefill then decode vs stepping: tokens identical
+prefill then decode vs stepping: tokens identical
+  prefilled: [7785, 15, 187, 187, 510, 14731, 273, 6181, 310, 14029, 15, 187, 187, 510, 3072, 273]
+PF_DONE

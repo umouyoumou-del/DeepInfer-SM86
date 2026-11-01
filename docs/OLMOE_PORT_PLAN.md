@@ -2258,3 +2258,60 @@ for spec in "1 llama-first" "2 deepinfer-first" "3 llama-first"; do python drive
 > **§37 说差距全在 GPU 上：1153 个 kernel、1.24 GB/token。把每层压到 7 个 kernel、权重全程保持量化之后，
 > 每 token 是 116 个 kernel、0.74 GB，GPU 时间 1.54 ms，在同一张卡、同一个文件、同一个会话里比 llama.cpp 快 9–11%。
 > 赢在胶水算子：比 llama.cpp 少 223 µs；GEMV 仍然慢 130 µs，这是下一步。prefill 还差约 30 倍，这一节没有碰。**
+
+---
+
+## 37. 批量 prefill：pp512 23,027 tok/s，超过 llama.cpp 15%
+
+`olmoe_prefill.py` 把 prompt 一次过完，每个矩阵走一个**边解量化边 GEMM** 的张量核心 kernel
+（每个 K step 把权重行 tile 的 64 个元素从 Q4_K/Q6_K 解到 fp16 放共享内存，再 WMMA）。
+
+### 实测（4080 SUPER，L=16，5 次中位数，2 次预热）
+
+| 长度 | 时间 | **tok/s** | 最小/最大 |
+|---:|---:|---:|---|
+| pp64 | 11.61 ms | 5,511 | 11.54 / 11.79 |
+| pp128 | 11.69 ms | 10,953 | 11.68 / 11.71 |
+| pp256 | 15.26 ms | 16,774 | 15.20 / 15.65 |
+| **pp512** | **22.23 ms** | **23,027** | 22.10 / 22.78 |
+
+**正确性**：prefill 之后接着 decode 与逐 token 步进**生成完全相同的 token**。
+
+### 与 llama.cpp 同机对照
+
+| 指标 | llama.cpp (b12024) | 我们 | 比值 |
+|---|---:|---:|---:|
+| **decode** (tg128) | 560–578 tok/s | 247.58 | **0.43×（我们慢）** |
+| **prefill** (pp512) | 19,948 tok/s | **23,027** | **1.15×（我们快）** |
+
+**prefill 从逐 token 的约 640 tok/s 提升到 23,027，36 倍，并首次在这一项上超过 llama.cpp。**
+
+### 数字自洽性检查
+
+```
+pp512 约 1.1 TFLOP / 22.23 ms ≈ 49.5 TFLOPS
+```
+
+4080 SUPER 的 fp16 密集算力约 100 TFLOPS，所以是 **约 50% 效率**——
+对一个边解量化边算的 kernel 来说是合理量级，不是测量错误。
+
+pp64 与 pp128 耗时几乎相同（11.61 vs 11.69 ms），说明这个区间由**固定开销**主导
+（启动、路由表构建、kernel 派发），不是算术。
+
+### 为什么 decode 慢而 prefill 快
+
+两者的约束完全不同：
+
+| 阶段 | 约束 | 我们的位置 |
+|---|---|---|
+| **decode** | 权重带宽（每 token 读全部激活权重） | 247 vs llama.cpp 578，**慢 2.3 倍** |
+| **prefill** | 算术（512 token 摊薄权重读取） | 23,027 vs 19,948，**快 15%** |
+
+decode 落后是因为我们的 GEMV 仍然逐专家发 kernel、没有 llma.cpp 那样的
+手写 MMVQ 与更成熟的调度；而 prefill 一旦用上张量核心 + 一次性大 GEMM，
+就吃到了算术密集的好处。
+
+### 一句话
+
+> **§35 说"decode 取 max(主机, GPU)"。prefill 是另一个 regime——它是算术受限，
+> 一旦把 prompt 变成一次大 GEMM，就从落后 31 倍变成领先 15%。**
