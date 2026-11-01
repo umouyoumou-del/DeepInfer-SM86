@@ -1,0 +1,8 @@
+context = 1048575 tokens, pool 20.25 GiB
+config                         ms/token      tok/s
+full                              846.6       1.18  finite
+window=4096 sink=0                 31.5      31.73  finite
+window=4096 sink=4                 31.5      31.78  finite
+window=8192 sink=4                 33.5      29.83  finite
+window=8192 sink=4                 33.5      29.83  finite
+WIN1M_DONE

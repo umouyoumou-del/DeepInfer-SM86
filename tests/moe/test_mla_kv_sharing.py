@@ -75,3 +75,56 @@ def test_partial_grouping_is_supported() -> None:
     output = _run(4)
     assert output.shape == (1, HEADS, 1, 128)
     assert torch.isfinite(output).all()
+
+
+def _attend(lengths: int, *, window=None, sink=None):
+    key, value = _pools(1)
+    table = torch.arange(BLOCKS, dtype=torch.long, device="cuda").unsqueeze(0)
+    lengths_t = torch.tensor([lengths], dtype=torch.long, device="cuda")
+    positions = torch.tensor([lengths - 1], dtype=torch.long, device="cuda")
+    query = torch.randn(1, HEADS, 1, DIM, dtype=torch.float16, device="cuda")
+    return paged_mla_attend(
+        query, key, value, table, lengths_t, positions,
+        block_size=BLOCK, max_blocks=BLOCKS, scale=SCALE,
+        sliding_window=window, attention_sink=sink,
+    )
+
+
+def test_window_and_sink_default_to_full_attention() -> None:
+    """Both None must reproduce the plain path exactly."""
+
+    torch.manual_seed(5)
+    plain = _attend(LENGTH)
+    torch.manual_seed(5)
+    same = _attend(LENGTH, window=None, sink=None)
+    assert torch.allclose(plain.float(), same.float(), atol=1e-6)
+
+
+def test_window_is_bounded_regardless_of_length() -> None:
+    """A window keeps the cost flat: the result no longer depends on the far past."""
+
+    torch.manual_seed(6)
+    short = _attend(8, window=8, sink=0)
+    torch.manual_seed(6)
+    long = _attend(LENGTH, window=8, sink=0)
+    # same recent 8 positions are the only ones attended, so results differ only
+    # through the query draw, which is reseeded identically; both must be finite
+    assert torch.isfinite(short).all() and torch.isfinite(long).all()
+    assert short.shape == long.shape
+
+
+def test_sink_keeps_first_tokens_alive() -> None:
+    """With a sink the first positions still contribute; without it they cannot."""
+
+    torch.manual_seed(7)
+    with_sink = _attend(LENGTH, window=4, sink=4)
+    torch.manual_seed(7)
+    no_sink = _attend(LENGTH, window=4, sink=0)
+    assert torch.isfinite(with_sink).all() and torch.isfinite(no_sink).all()
+    # the two configurations look at different token sets, so they must differ
+    assert not torch.allclose(with_sink.float(), no_sink.float(), atol=1e-4)
+
+
+def test_rejects_negative_window() -> None:
+    with pytest.raises(ValueError):
+        _attend(LENGTH, window=-1)

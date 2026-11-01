@@ -43,7 +43,9 @@ extern "C" __global__ void dp_paged_mla_attend(
     int q_len,
     int block_size,
     int max_blocks,
-    float scale)
+    float scale,
+    int window_size,
+    int sink_size)
 {
     const int warp = threadIdx.x >> 5;
     const int lane = threadIdx.x & 31;
@@ -82,7 +84,14 @@ extern "C" __global__ void dp_paged_mla_attend(
     float acc2 = 0.0f;
     float acc3 = 0.0f;
 
+    // Attention sink plus sliding window: keep the first sink_size tokens
+    // permanently (softmax otherwise dumps excess mass on them as the history
+    // grows) and only the most recent window_size beyond that.  Both zero
+    // means full attention, which is what the code did before.
     for (long long token = 0; token < limit; ++token) {
+        if (window_size > 0 && token >= sink_size && token < limit - window_size) {
+            continue;
+        }
         const long long block_index = token / block_size;
         const long long offset = token - block_index * block_size;
         const long long block =
@@ -172,8 +181,16 @@ def paged_mla_attend(
     block_size: int,
     max_blocks: int,
     scale: float,
+    sliding_window: int | None = None,
+    attention_sink: int | None = None,
 ) -> torch.Tensor:
-    """Return [B, H, Q, 128] FP16 attention output."""
+    """Return [B, H, Q, 128] FP16 attention output.
+
+    ``sliding_window`` keeps only the most recent N positions and
+    ``attention_sink`` additionally keeps the first N, which together bound the
+    cost of a decode step regardless of how long the history is.  Both ``None``
+    is full attention.
+    """
 
     if not cuda_paged_mla_supported(query, key_pool, value_pool):
         raise RuntimeError("fused paged MLA kernel requires FP16 MLA tensors")
@@ -186,6 +203,11 @@ def paged_mla_attend(
         raise ValueError("block_table must be [B,max_blocks]")
     if valid_lengths.numel() != batch or positions.numel() != batch * q_len:
         raise ValueError("valid_lengths/positions shape mismatch")
+    window_size = 0 if sliding_window is None else int(sliding_window)
+    sink_size = 0 if attention_sink is None else int(attention_sink)
+    if window_size < 0 or sink_size < 0:
+        raise ValueError("sliding_window and attention_sink must be non-negative")
+
     query = query.contiguous()
     key_pool = key_pool.contiguous()
     value_pool = value_pool.contiguous()
@@ -217,6 +239,8 @@ def paged_mla_attend(
             int(block_size),
             int(max_blocks),
             cp.float32(scale),
+            int(window_size),
+            int(sink_size),
         ),
     )
     return output
@@ -243,7 +267,9 @@ extern "C" __global__ void dp_paged_mla_attend_cta(
     int q_len,
     int block_size,
     int max_blocks,
-    float scale)
+    float scale,
+    int window_size,
+    int sink_size)
 {
     const int query_index = blockIdx.x;
     if (query_index >= total_queries) return;
@@ -376,6 +402,11 @@ def paged_mla_attend_cta(
         raise ValueError("block_table must be [B,max_blocks]")
     if valid_lengths.numel() != batch or positions.numel() != batch * q_len:
         raise ValueError("valid_lengths/positions shape mismatch")
+    window_size = 0 if sliding_window is None else int(sliding_window)
+    sink_size = 0 if attention_sink is None else int(attention_sink)
+    if window_size < 0 or sink_size < 0:
+        raise ValueError("sliding_window and attention_sink must be non-negative")
+
     query = query.contiguous()
     key_pool = key_pool.contiguous()
     value_pool = value_pool.contiguous()
@@ -406,6 +437,8 @@ def paged_mla_attend_cta(
             int(block_size),
             int(max_blocks),
             cp.float32(scale),
+            int(window_size),
+            int(sink_size),
         ),
     )
     return output
@@ -432,7 +465,9 @@ extern "C" __global__ void dp_paged_mla_attend_scalar(
     int q_len,
     int block_size,
     int max_blocks,
-    float scale)
+    float scale,
+    int window_size,
+    int sink_size)
 {
     const int warp = threadIdx.x >> 5;
     const int lane = threadIdx.x & 31;
@@ -458,7 +493,14 @@ extern "C" __global__ void dp_paged_mla_attend_scalar(
     float acc1 = 0.0f;
     float acc2 = 0.0f;
     float acc3 = 0.0f;
+    // Attention sink plus sliding window: keep the first sink_size tokens
+    // permanently (softmax otherwise dumps excess mass on them as the history
+    // grows) and only the most recent window_size beyond that.  Both zero
+    // means full attention, which is what the code did before.
     for (long long token = 0; token < limit; ++token) {
+        if (window_size > 0 && token >= sink_size && token < limit - window_size) {
+            continue;
+        }
         const long long block_index = token / block_size;
         const long long offset = token - block_index * block_size;
         const long long block =
@@ -535,6 +577,11 @@ def paged_mla_attend_scalar(
         raise ValueError("block_table must be [B,max_blocks]")
     if valid_lengths.numel() != batch or positions.numel() != batch * q_len:
         raise ValueError("valid_lengths/positions shape mismatch")
+    window_size = 0 if sliding_window is None else int(sliding_window)
+    sink_size = 0 if attention_sink is None else int(attention_sink)
+    if window_size < 0 or sink_size < 0:
+        raise ValueError("sliding_window and attention_sink must be non-negative")
+
     query = query.contiguous()
     key_pool = key_pool.contiguous()
     value_pool = value_pool.contiguous()
@@ -565,6 +612,8 @@ def paged_mla_attend_scalar(
             int(block_size),
             int(max_blocks),
             cp.float32(scale),
+            int(window_size),
+            int(sink_size),
         ),
     )
     return output
