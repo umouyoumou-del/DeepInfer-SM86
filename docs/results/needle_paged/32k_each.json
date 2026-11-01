@@ -1,0 +1,452 @@
+{
+ "harness": "scripts/needle_paged.py",
+ "model": "DeepSeek-V2-Lite-Chat-Q4_K_M.gguf",
+ "gpu": "NVIDIA GeForce RTX 4080 SUPER",
+ "torch": "2.5.1+cu124",
+ "task": "each",
+ "haystack_tokens": 32000,
+ "document_tokens": 32077,
+ "context_tokens": 32081,
+ "format": "tokenizer chat template",
+ "facts": [
+  {
+   "depth": 0.1,
+   "word": "KESTREL",
+   "text": "\n\nThe codeword for the north gate is KESTREL.\n\n",
+   "question": "What is the codeword for the north gate? Answer with the codeword only.",
+   "token_offset": 3200
+  },
+  {
+   "depth": 0.3,
+   "word": "MORROW",
+   "text": "\n\nThe codeword for the east gate is MORROW.\n\n",
+   "question": "What is the codeword for the east gate? Answer with the codeword only.",
+   "token_offset": 9616
+  },
+  {
+   "depth": 0.5,
+   "word": "TALLOW",
+   "text": "\n\nThe codeword for the south gate is TALLOW.\n\n",
+   "question": "What is the codeword for the south gate? Answer with the codeword only.",
+   "token_offset": 16031
+  },
+  {
+   "depth": 0.7,
+   "word": "VESSEL",
+   "text": "\n\nThe codeword for the west gate is VESSEL.\n\n",
+   "question": "What is the codeword for the west gate? Answer with the codeword only.",
+   "token_offset": 22446
+  },
+  {
+   "depth": 0.9,
+   "word": "HARROW",
+   "text": "\n\nThe codeword for the central gate is HARROW.\n\n",
+   "question": "What is the codeword for the central gate? Answer with the codeword only.",
+   "token_offset": 28862
+  }
+ ],
+ "chunk": 512,
+ "self_check": {
+  "reference": {
+   "nll_delta": 0.0,
+   "top1_agreement": 0.9863,
+   "same_answers": true,
+   "ok": true
+  }
+ },
+ "runs": [
+  {
+   "name": "dense:full",
+   "kv": "dense",
+   "window": null,
+   "sink": null,
+   "pool_gib": 0.0,
+   "prefill_s": 68.96,
+   "answers": [
+    {
+     "question": "What is the codeword for the north gate? Answer with the codeword only.",
+     "answer": " The codeword for the north gate is TALLOW.",
+     "tail_prefill_s": 0.231,
+     "decode_ms_per_token": 105.2,
+     "depth": 0.1,
+     "expected": "KESTREL",
+     "correct": false
+    },
+    {
+     "question": "What is the codeword for the east gate? Answer with the codeword only.",
+     "answer": " The codeword for the east gate is MORROW.",
+     "tail_prefill_s": 0.182,
+     "decode_ms_per_token": 81.7,
+     "depth": 0.3,
+     "expected": "MORROW",
+     "correct": true
+    },
+    {
+     "question": "What is the codeword for the south gate? Answer with the codeword only.",
+     "answer": " The codeword for the south gate is TALLOW.",
+     "tail_prefill_s": 0.18,
+     "decode_ms_per_token": 80.5,
+     "depth": 0.5,
+     "expected": "TALLOW",
+     "correct": true
+    },
+    {
+     "question": "What is the codeword for the west gate? Answer with the codeword only.",
+     "answer": " The codeword for the west gate is VESSEL.",
+     "tail_prefill_s": 0.181,
+     "decode_ms_per_token": 81.1,
+     "depth": 0.7,
+     "expected": "VESSEL",
+     "correct": true
+    },
+    {
+     "question": "What is the codeword for the central gate? Answer with the codeword only.",
+     "answer": " The codeword for the central gate is HARROW.",
+     "tail_prefill_s": 0.179,
+     "decode_ms_per_token": 80.7,
+     "depth": 0.9,
+     "expected": "HARROW",
+     "correct": true
+    }
+   ],
+   "found": [
+    "MORROW",
+    "TALLOW",
+    "VESSEL",
+    "HARROW"
+   ],
+   "recall": "4/5",
+   "doc_nll_mean": 1.8842,
+   "doc_nll_by_decile": [
+    2.8262,
+    2.6545,
+    2.0212,
+    1.6361,
+    1.6009,
+    1.3789,
+    1.1394,
+    1.4886,
+    1.7052,
+    2.391
+   ],
+   "decode_ms_per_token": 85.8
+  },
+  {
+   "name": "fp16:full",
+   "kv": "fp16",
+   "window": null,
+   "sink": null,
+   "pool_gib": 9.942,
+   "prefill_s": 116.66,
+   "answers": [
+    {
+     "question": "What is the codeword for the north gate? Answer with the codeword only.",
+     "answer": " The codeword for the north gate is TALLOW.",
+     "tail_prefill_s": 0.722,
+     "decode_ms_per_token": 601.9,
+     "depth": 0.1,
+     "expected": "KESTREL",
+     "correct": false
+    },
+    {
+     "question": "What is the codeword for the east gate? Answer with the codeword only.",
+     "answer": " The codeword for the east gate is MORROW.",
+     "tail_prefill_s": 0.729,
+     "decode_ms_per_token": 597.0,
+     "depth": 0.3,
+     "expected": "MORROW",
+     "correct": true
+    },
+    {
+     "question": "What is the codeword for the south gate? Answer with the codeword only.",
+     "answer": " The codeword for the south gate is TALLOW.",
+     "tail_prefill_s": 0.716,
+     "decode_ms_per_token": 596.1,
+     "depth": 0.5,
+     "expected": "TALLOW",
+     "correct": true
+    },
+    {
+     "question": "What is the codeword for the west gate? Answer with the codeword only.",
+     "answer": " The codeword for the west gate is VESSEL.",
+     "tail_prefill_s": 0.719,
+     "decode_ms_per_token": 598.7,
+     "depth": 0.7,
+     "expected": "VESSEL",
+     "correct": true
+    },
+    {
+     "question": "What is the codeword for the central gate? Answer with the codeword only.",
+     "answer": " The codeword for the central gate is HARROW.",
+     "tail_prefill_s": 0.717,
+     "decode_ms_per_token": 595.4,
+     "depth": 0.9,
+     "expected": "HARROW",
+     "correct": true
+    }
+   ],
+   "found": [
+    "MORROW",
+    "TALLOW",
+    "VESSEL",
+    "HARROW"
+   ],
+   "recall": "4/5",
+   "doc_nll_mean": 1.8842,
+   "doc_nll_by_decile": [
+    2.8255,
+    2.6542,
+    2.0205,
+    1.6359,
+    1.6043,
+    1.3787,
+    1.1395,
+    1.4868,
+    1.7057,
+    2.3913
+   ],
+   "decode_ms_per_token": 597.8,
+   "vs": "dense:full",
+   "doc_nll_delta": 0.0,
+   "doc_top1_agreement": 0.9863
+  },
+  {
+   "name": "int8:full",
+   "kv": "int8",
+   "window": null,
+   "sink": null,
+   "pool_gib": 5.023,
+   "prefill_s": 225.66,
+   "answers": [
+    {
+     "question": "What is the codeword for the north gate? Answer with the codeword only.",
+     "answer": " The codeword for the north gate is KESTREL.",
+     "tail_prefill_s": 1.917,
+     "decode_ms_per_token": 1747.0,
+     "depth": 0.1,
+     "expected": "KESTREL",
+     "correct": true
+    },
+    {
+     "question": "What is the codeword for the east gate? Answer with the codeword only.",
+     "answer": " The codeword for the east gate is TALLOW.",
+     "tail_prefill_s": 1.918,
+     "decode_ms_per_token": 1735.9,
+     "depth": 0.3,
+     "expected": "MORROW",
+     "correct": false
+    },
+    {
+     "question": "What is the codeword for the south gate? Answer with the codeword only.",
+     "answer": " The codeword for the south gate is TALLOW.",
+     "tail_prefill_s": 1.913,
+     "decode_ms_per_token": 1729.3,
+     "depth": 0.5,
+     "expected": "TALLOW",
+     "correct": true
+    },
+    {
+     "question": "What is the codeword for the west gate? Answer with the codeword only.",
+     "answer": " The codeword for the west gate is VESSEL.",
+     "tail_prefill_s": 1.922,
+     "decode_ms_per_token": 1740.3,
+     "depth": 0.7,
+     "expected": "VESSEL",
+     "correct": true
+    },
+    {
+     "question": "What is the codeword for the central gate? Answer with the codeword only.",
+     "answer": " The codeword for the central gate is HARROW.",
+     "tail_prefill_s": 1.913,
+     "decode_ms_per_token": 1728.9,
+     "depth": 0.9,
+     "expected": "HARROW",
+     "correct": true
+    }
+   ],
+   "found": [
+    "KESTREL",
+    "TALLOW",
+    "VESSEL",
+    "HARROW"
+   ],
+   "recall": "4/5",
+   "doc_nll_mean": 1.8876,
+   "doc_nll_by_decile": [
+    2.8288,
+    2.6607,
+    2.0257,
+    1.6389,
+    1.603,
+    1.3909,
+    1.1401,
+    1.4894,
+    1.7047,
+    2.3942
+   ],
+   "decode_ms_per_token": 1736.3,
+   "vs": "dense:full",
+   "doc_nll_delta": 0.0034,
+   "doc_top1_agreement": 0.9506
+  },
+  {
+   "name": "int8:w4096s4",
+   "kv": "int8",
+   "window": 4096,
+   "sink": 4,
+   "pool_gib": 5.023,
+   "prefill_s": 99.93,
+   "answers": [
+    {
+     "question": "What is the codeword for the north gate? Answer with the codeword only.",
+     "answer": " The codeword for the north gate is HAMBURG.",
+     "tail_prefill_s": 0.384,
+     "decode_ms_per_token": 289.2,
+     "depth": 0.1,
+     "expected": "KESTREL",
+     "correct": false
+    },
+    {
+     "question": "What is the codeword for the east gate? Answer with the codeword only.",
+     "answer": " The codeword for the east gate is DULING.",
+     "tail_prefill_s": 0.386,
+     "decode_ms_per_token": 287.1,
+     "depth": 0.3,
+     "expected": "MORROW",
+     "correct": false
+    },
+    {
+     "question": "What is the codeword for the south gate? Answer with the codeword only.",
+     "answer": " The codeword for the south gate is HAMBURG.",
+     "tail_prefill_s": 0.389,
+     "decode_ms_per_token": 288.9,
+     "depth": 0.5,
+     "expected": "TALLOW",
+     "correct": false
+    },
+    {
+     "question": "What is the codeword for the west gate? Answer with the codeword only.",
+     "answer": " The codeword for the west gate is HASTE.",
+     "tail_prefill_s": 0.382,
+     "decode_ms_per_token": 286.9,
+     "depth": 0.7,
+     "expected": "VESSEL",
+     "correct": false
+    },
+    {
+     "question": "What is the codeword for the central gate? Answer with the codeword only.",
+     "answer": " The codeword for the central gate is HARROW.",
+     "tail_prefill_s": 0.384,
+     "decode_ms_per_token": 285.2,
+     "depth": 0.9,
+     "expected": "HARROW",
+     "correct": true
+    }
+   ],
+   "found": [
+    "HARROW"
+   ],
+   "recall": "1/5",
+   "doc_nll_mean": 2.0882,
+   "doc_nll_by_decile": [
+    2.8288,
+    2.6825,
+    2.0366,
+    1.7703,
+    1.8181,
+    1.5463,
+    1.8428,
+    1.8323,
+    2.0109,
+    2.5134
+   ],
+   "decode_ms_per_token": 287.5,
+   "vs": "dense:full",
+   "doc_nll_delta": 0.204,
+   "doc_top1_agreement": 0.8486
+  },
+  {
+   "name": "int8:w16384s4",
+   "kv": "int8",
+   "window": 16384,
+   "sink": 4,
+   "pool_gib": 5.023,
+   "prefill_s": 185.84,
+   "answers": [
+    {
+     "question": "What is the codeword for the north gate? Answer with the codeword only.",
+     "answer": " The codeword for the north gate is NORTHGATE.",
+     "tail_prefill_s": 1.061,
+     "decode_ms_per_token": 938.5,
+     "depth": 0.1,
+     "expected": "KESTREL",
+     "correct": false
+    },
+    {
+     "question": "What is the codeword for the east gate? Answer with the codeword only.",
+     "answer": " The codeword for the east gate is GATE.",
+     "tail_prefill_s": 1.071,
+     "decode_ms_per_token": 932.1,
+     "depth": 0.3,
+     "expected": "MORROW",
+     "correct": false
+    },
+    {
+     "question": "What is the codeword for the south gate? Answer with the codeword only.",
+     "answer": " The codeword for the south gate is TALLOW.",
+     "tail_prefill_s": 1.067,
+     "decode_ms_per_token": 921.3,
+     "depth": 0.5,
+     "expected": "TALLOW",
+     "correct": true
+    },
+    {
+     "question": "What is the codeword for the west gate? Answer with the codeword only.",
+     "answer": " The codeword for the west gate is HARROW.",
+     "tail_prefill_s": 1.057,
+     "decode_ms_per_token": 922.8,
+     "depth": 0.7,
+     "expected": "VESSEL",
+     "correct": false
+    },
+    {
+     "question": "What is the codeword for the central gate? Answer with the codeword only.",
+     "answer": " The codeword for the central gate is HARROW.",
+     "tail_prefill_s": 1.062,
+     "decode_ms_per_token": 923.2,
+     "depth": 0.9,
+     "expected": "HARROW",
+     "correct": true
+    }
+   ],
+   "found": [
+    "TALLOW",
+    "HARROW"
+   ],
+   "recall": "2/5",
+   "doc_nll_mean": 1.8998,
+   "doc_nll_by_decile": [
+    2.8288,
+    2.6607,
+    2.0257,
+    1.6389,
+    1.603,
+    1.3917,
+    1.124,
+    1.5169,
+    1.7513,
+    2.457
+   ],
+   "decode_ms_per_token": 927.6,
+   "vs": "dense:full",
+   "doc_nll_delta": 0.0156,
+   "doc_top1_agreement": 0.9309
+  }
+ ],
+ "harness_ok": true,
+ "full_attention_recall": {
+  "dense:full": "4/5",
+  "fp16:full": "4/5",
+  "int8:full": "4/5"
+ }
+}
