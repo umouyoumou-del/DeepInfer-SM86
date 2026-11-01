@@ -40,6 +40,8 @@ class DeepSeekPagedCache(Cache):
         value_dim: int,
         head_dim: int,
         native_attention: bool = True,
+        sliding_window: int | None = None,
+        attention_sink: int | None = None,
     ) -> None:
         super().__init__()
         if not views:
@@ -54,6 +56,10 @@ class DeepSeekPagedCache(Cache):
         self.value_dim = int(value_dim)
         self.head_dim = int(head_dim)
         self.native_attention = bool(native_attention)
+        # Bounded decode cost: keep the first `attention_sink` tokens and
+        # the most recent `sliding_window`, skip everything between.
+        self.sliding_window = None if sliding_window is None else int(sliding_window)
+        self.attention_sink = None if attention_sink is None else int(attention_sink)
 
     def get_usable_length(
         self, new_seq_length: int, layer_idx: int | None = 0
@@ -139,6 +145,14 @@ class DeepSeekPagedCache(Cache):
             if cuda_paged_mla_quant_supported(
                 query_states, view.key_pool, view.value_pool
             ):
+                if self.sliding_window is not None or self.attention_sink is not None:
+                    # the quantised kernel predates window/sink support; falling
+                    # back keeps a bounded-cost request correct rather than
+                    # silently reverting it to full attention over the history
+                    raise RuntimeError(
+                        "sliding_window/attention_sink need the fp16 fused path; "
+                        "set DEEPINFER_DISABLE_CUDA_PAGED_MLA_KVQUANT=1 or drop them"
+                    )
                 return paged_mla_attend_quantized(
                     query_states,
                     view.key_pool,
@@ -172,6 +186,8 @@ class DeepSeekPagedCache(Cache):
                     positions,
                     block_size=int(view.block_size),
                     max_blocks=int(view.block_table.shape[1]),
+                    sliding_window=self.sliding_window,
+                    attention_sink=self.attention_sink,
                     scale=float(scale),
                 )
         block_size = int(view.block_size)
