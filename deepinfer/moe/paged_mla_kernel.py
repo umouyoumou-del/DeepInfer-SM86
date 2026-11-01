@@ -390,6 +390,8 @@ def paged_mla_attend_cta(
     block_size: int,
     max_blocks: int,
     scale: float,
+    sliding_window: int | None = None,
+    attention_sink: int | None = None,
 ) -> torch.Tensor:
     """CTA-per-query variant: four warps split the key range."""
 
@@ -567,6 +569,8 @@ def paged_mla_attend_scalar(
     block_size: int,
     max_blocks: int,
     scale: float,
+    sliding_window: int | None = None,
+    attention_sink: int | None = None,
 ) -> torch.Tensor:
     if not cuda_paged_mla_supported(query, key_pool, value_pool):
         raise RuntimeError("fused paged MLA kernel requires FP16 MLA tensors")
