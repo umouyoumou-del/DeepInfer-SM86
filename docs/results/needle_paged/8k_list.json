@@ -1,0 +1,167 @@
+{
+ "harness": "scripts/needle_paged.py",
+ "model": "DeepSeek-V2-Lite-Chat-Q4_K_M.gguf",
+ "gpu": "NVIDIA GeForce RTX 4080 SUPER",
+ "torch": "2.5.1+cu124",
+ "task": "list",
+ "haystack_tokens": 8000,
+ "document_tokens": 8062,
+ "context_tokens": 8066,
+ "format": "tokenizer chat template",
+ "facts": [
+  {
+   "depth": 0.1,
+   "word": "KESTREL",
+   "text": "\n\nThe secret codeword is KESTREL.\n\n",
+   "question": "List every secret codeword that appeared in the document above, in order. Output only the words.",
+   "token_offset": 800
+  },
+  {
+   "depth": 0.3,
+   "word": "MORROW",
+   "text": "\n\nThe secret codeword is MORROW.\n\n",
+   "question": "List every secret codeword that appeared in the document above, in order. Output only the words.",
+   "token_offset": 2413
+  },
+  {
+   "depth": 0.5,
+   "word": "TALLOW",
+   "text": "\n\nThe secret codeword is TALLOW.\n\n",
+   "question": "List every secret codeword that appeared in the document above, in order. Output only the words.",
+   "token_offset": 4025
+  },
+  {
+   "depth": 0.7,
+   "word": "VESSEL",
+   "text": "\n\nThe secret codeword is VESSEL.\n\n",
+   "question": "List every secret codeword that appeared in the document above, in order. Output only the words.",
+   "token_offset": 5637
+  },
+  {
+   "depth": 0.9,
+   "word": "HARROW",
+   "text": "\n\nThe secret codeword is HARROW.\n\n",
+   "question": "List every secret codeword that appeared in the document above, in order. Output only the words.",
+   "token_offset": 7250
+  }
+ ],
+ "chunk": 512,
+ "self_check": {
+  "reference": {
+   "nll_delta": -0.0008,
+   "top1_agreement": 0.9835,
+   "same_answers": true,
+   "ok": true
+  }
+ },
+ "runs": [
+  {
+   "name": "dense:full",
+   "kv": "dense",
+   "window": null,
+   "sink": null,
+   "pool_gib": 0.0,
+   "prefill_s": 15.54,
+   "answers": [
+    {
+     "question": "List every secret codeword that appeared in the document above, in order. Output only the words.",
+     "answer": " 1. DeepInfer\n2. SM86\n3. RTX\n4. 305",
+     "tail_prefill_s": 0.153,
+     "decode_ms_per_token": 61.4
+    }
+   ],
+   "found": [],
+   "recall": "0/5",
+   "doc_nll_mean": 2.6199,
+   "doc_nll_by_decile": [
+    2.996,
+    3.0602,
+    2.8551,
+    2.4884,
+    2.9792,
+    2.9013,
+    2.4167,
+    2.3179,
+    1.9897,
+    2.1954
+   ],
+   "decode_ms_per_token": 61.4
+  },
+  {
+   "name": "fp16:full",
+   "kv": "fp16",
+   "window": null,
+   "sink": null,
+   "pool_gib": 2.526,
+   "prefill_s": 18.35,
+   "answers": [
+    {
+     "question": "List every secret codeword that appeared in the document above, in order. Output only the words.",
+     "answer": " 1. DeepInfer\n2. SM86\n3. RTX\n4. 305",
+     "tail_prefill_s": 0.286,
+     "decode_ms_per_token": 231.6
+    }
+   ],
+   "found": [],
+   "recall": "0/5",
+   "doc_nll_mean": 2.6191,
+   "doc_nll_by_decile": [
+    2.9967,
+    3.0559,
+    2.8563,
+    2.4848,
+    2.9782,
+    2.9023,
+    2.413,
+    2.3173,
+    1.9896,
+    2.1976
+   ],
+   "decode_ms_per_token": 231.6,
+   "vs": "dense:full",
+   "doc_nll_delta": -0.0008,
+   "doc_top1_agreement": 0.9835
+  },
+  {
+   "name": "int8:full",
+   "kv": "int8",
+   "window": null,
+   "sink": null,
+   "pool_gib": 1.276,
+   "prefill_s": 25.37,
+   "answers": [
+    {
+     "question": "List every secret codeword that appeared in the document above, in order. Output only the words.",
+     "answer": " 1. DeepInfer\n2. SM86\n3. RTX\n4. 305",
+     "tail_prefill_s": 0.599,
+     "decode_ms_per_token": 540.9
+    }
+   ],
+   "found": [],
+   "recall": "0/5",
+   "doc_nll_mean": 2.6228,
+   "doc_nll_by_decile": [
+    2.9979,
+    3.045,
+    2.8634,
+    2.4829,
+    2.9881,
+    2.9172,
+    2.4129,
+    2.3305,
+    1.9875,
+    2.2031
+   ],
+   "decode_ms_per_token": 540.9,
+   "vs": "dense:full",
+   "doc_nll_delta": 0.0029,
+   "doc_top1_agreement": 0.9371
+  }
+ ],
+ "harness_ok": true,
+ "full_attention_recall": {
+  "dense:full": "0/5",
+  "fp16:full": "0/5",
+  "int8:full": "0/5"
+ }
+}
