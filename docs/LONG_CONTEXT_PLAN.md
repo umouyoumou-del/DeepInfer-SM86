@@ -662,3 +662,53 @@ pool 内容不影响成本（内核照样读每个被寻址的槽），所以不
 | 端到端真实文本 | ✅ 跑通，并与 dense 参考逐字一致 |
 
 下一步见 `docs/HANDOFF.md` §8：paged MLA 内核与 serve 路径换 latent 池是两件最大的事。
+
+---
+
+## 14. 32K 曲线，以及 split-K 的 paged decode 内核（2026-11-01 晚）
+
+### 32K（Chat 的训练长度）
+
+同一个 harness、同样的五问，文档 32,077 token（`docs/results/needle_paged/32k_each.json`）：
+dense / paged fp16 / paged int8 全量都是 4/5（dense 与 fp16 都把 10% 那题答成 TALLOW，int8 错的是 30%），
+paged fp16 对 dense 的文档 NLL 差 0.0000、top-1 98.6%、回答逐字相同；window 16384 → 2/5，window 4096 → 1/5，
+窗口外的码字被编造的词顶替（NORTHGATE、HAMBURG）。表见 `docs/HANDOFF.md` §5.4。
+
+### 为什么原来的 paged decode 慢
+
+`paged_mla_quant` 与 `paged_mla_kernel` 的单遍内核给每个 (batch, head, query) 一个 warp，按顺序走完全部历史；
+带窗口时也是从 token 0 开始循环、对中间段 `continue`。decode 每层只有 16 个 query（16 头 × 1），全卡 16 个 warp，
+每个 key 都是一次依赖链（读 K → warp 归约 → exp → 读 V），延迟完全藏不住：一层读 25 MB 用 8.5 ms，约 3 GB/s。
+int8 比 fp16 还慢（逐字节读 + 每个 key 一次 scale）。这不是 fp16 内核独有的问题。
+
+### split-K（`deepinfer/moe/paged_mla_split.py`）
+
+每个 query 只遍历要看的 key（前 sink 个 + 最后 window 个，或全部），切成若干段；一个 CTA（4 个 warp）
+处理一段，query 留在寄存器里，写出 (max, sum, 128 维累加)；第二个内核把各段合并。段数按约每个 SM 8 个 CTA、
+每段 32–512 个 key 来定。q_len ≤ 16（decode）时走它，prefill 仍走原内核；`DEEPINFER_PAGED_MLA_SPLIT=0` 可关。
+
+| 一层注意力内核（int8） | 原 | split-K | 加速 |
+|---|---:|---:|---:|
+| 112K，window 4096 + sink 4 | 8.49 ms | 0.229 ms | 37× |
+| 112K，window 16384 + sink 4 | 37.5 ms | 0.403 ms | 93× |
+| 112K，全量 | 241.5 ms | 2.34 ms（约 250 GB/s） | 103× |
+| 128K，全量 | 276.2 ms | 2.76 ms | 100× |
+
+| 整模型 decode | 原 | split-K |
+|---|---:|---:|
+| 128K int8 专家流式，window 4096 | 520 ms（1.92 tok/s） | 185 ms（5.41 tok/s） |
+| 128K int8 专家流式，全量 | 7,617 ms（0.13 tok/s） | 221 ms（4.53 tok/s） |
+| 112K int8 专家驻留，全量 | 6,595 ms（0.15 tok/s） | 119 ms（8.43 tok/s） |
+| 8K fp16 全量（同一进程 dense 42 ms） | 160.6 ms | 50.6 ms |
+| 8K int8 全量 | 417.7 ms | 51.4 ms |
+
+正确性：`tests/moe/test_paged_mla_split.py` 对逐查询的直接定义（fp16 / int8 / fp8 × 全量 / 窗口 × 1–2 个 query ×
+短 / 5000 key），服务器全量测试 331 passed；端到端 8K 重跑（`8k_each_split.json`）两道自检都过，25 个回答、召回、
+NLL 与换内核前逐字相同。
+
+### 剩下的
+
+- **prefill 仍慢**：32K int8 226 s、fp16 117 s，dense 69 s。prefill chunk 有 512 个 query，原内核并行度够，
+  但每个 warp 仍顺序走全部历史；同样的切分（或 prefill 走 flash、再把 K/V 写进页）是下一步。
+- decode 的主要成本已不在注意力：128K 专家流式时短上下文也要 212 ms，那是专家搬运。
+- 机器有 CPU 慢态，整步计时会在 65 与 103 ms 之间跳；比较内核以一层时间为准。
