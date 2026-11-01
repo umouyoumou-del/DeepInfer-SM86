@@ -80,6 +80,21 @@ engine。当前重点是：
 > engine-core 原型，不是官方 engine 接入。上表是旧有单请求 / 固定槽位路径的
 > 实测。
 
+### 2M 上下文、全量召回（2026-11-01，RTX 4080 SUPER 32 GB）
+
+DeepSeek-Coder-V2-Lite-Instruct Q4_K_M（训练到 128K，未做任何训练）：
+
+| 上下文 | KV（MLA latent fp8） | 编码 | 9 根真实文本里的针 |
+|---:|---|---:|---:|
+| 1,048,576 | 17.3 GiB，全在显存 | 8.9 min | **9/9** |
+| 2,097,152 | 34.6 GiB，1.51M 显存 + 0.58M 主机内存 | 20.2 min | **9/9** |
+
+缓存 MLA 的共享 latent（每 token 17.3 KiB，而不是展开后的 324 KiB）、DCA 位置映射、
+有界编码（每 token 只看前 96K，prefill 线性），提问时用模型自己的注意力在整个库上定位、
+再把定位到的原文放进短上下文作答；KV 库可存盘，1M 重新加载 13.8 s。
+问题直接对 1M 个 key 做全量注意力只有 1–2/9——细节、更正与边界见
+[`docs/LONG_CONTEXT_1M.md`](docs/LONG_CONTEXT_1M.md)。
+
 ### DeepSeek-V2-Lite Q4_K_M 原生 MoE（2026-10-28）
 
 目标不是把 15.7B 参数全部塞进 4 GB，而是让 DeepInfer 自己的执行层在

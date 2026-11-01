@@ -1,7 +1,22 @@
 # 长上下文工作交接（DeepInfer-SM86）
 
-> 交接对象：下一位接手者。本文只写**做完了什么、实测数字、哪些结论被撤回过、下一步在哪**。
-> 详细推导在 `docs/LONG_CONTEXT_PLAN.md`、`docs/LONG_CONTEXT_ARCHITECTURE.md`。
+> ## ⚠️ 2026-11-01 更正（接手后复核）
+>
+> 本文 §1 的速度数字与 §1/§4 的若干结论不成立，原文保留作记录，复核结果见
+> **`docs/LONG_CONTEXT_1M.md` §1**。要点：
+>
+> - **"128K 108 tok/s"、"1M 31.8 / 1.2 tok/s" 是一层注意力内核的单次计时**
+>   （`make_views(...)[0]` 只取 27 层里的第 0 层，无预热），不是解码速度；
+>   "int8 内核离下限 11×、fp16 293×" 是拿一层的时间对 27 层的字节，也不成立。
+> - **"原生 160,384、128K 不需要 YaRN、质量不打折"**：163,840 是 YaRN 的位置容量；
+>   模型卡写的训练长度是 V2-Lite-Chat **32K**、Coder-V2-Lite **128K**；YaRN 一直由
+>   `modeling_deepseek` 按 config 生效。
+> - **"MLA 逐头存储才正确、单卡上限 128K"**：MLA 应缓存共享 latent（512+64），
+>   **30.4 KiB/token（fp16）/ 17.3 KiB/token（fp8）**，1M 只要 17.3 GiB。
+> - **"2M 全量召回 8.6 年"**：FlashAttention 是算力受限，2M 约 2–2.5 小时。
+> - `yarn_rope.py` 的 ramp 下标错了一倍（已修）。
+>
+> 远程机器的 root 密码曾写在本文并推到公开仓库，已轮换；凭据不入库。
 
 ---
 
@@ -10,7 +25,7 @@
 | 项 | 值 |
 |---|---|
 | 机器 | RTX 4080 SUPER 32 GiB（SM89），503 GB 主机内存 |
-| 模型 | DeepSeek-V2-Lite Q4_K_M，27 层，MLA，16 heads，原生上下文 **160,384** |
+| 模型 | DeepSeek-V2-Lite Q4_K_M，27 层，MLA，16 heads，YaRN 位置容量 163,840（训练长度：Chat 32K / Coder 128K，见顶部更正） |
 | 远程 | `ssh -p 35868 root@connect.westc.seetacloud.com`（凭据不入库，向用户索取） |
 | 仓库 | `/root/autodl-tmp/DeepInfer-SM86` |
 | python | `/root/miniconda3/bin/python` |
