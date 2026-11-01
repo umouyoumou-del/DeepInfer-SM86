@@ -1,0 +1,454 @@
+{
+ "tokens": 262144,
+ "seed": 11,
+ "rows": [
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for crimson falcon?",
+   "ranks": {
+    "sum": [
+     29
+    ],
+    "max": [
+     3
+    ],
+    "sum-contrast": [
+     10
+    ],
+    "max-contrast": [
+     0
+    ]
+   }
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for crimson otter?",
+   "ranks": {
+    "sum": [
+     74
+    ],
+    "max": [
+     20
+    ],
+    "sum-contrast": [
+     21
+    ],
+    "max-contrast": [
+     6
+    ]
+   }
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for silver falcon?",
+   "ranks": {
+    "sum": [
+     42
+    ],
+    "max": [
+     6
+    ],
+    "sum-contrast": [
+     14
+    ],
+    "max-contrast": [
+     2
+    ]
+   }
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for silver otter?",
+   "ranks": {
+    "sum": [
+     1
+    ],
+    "max": [
+     1
+    ],
+    "sum-contrast": [
+     0
+    ],
+    "max-contrast": [
+     0
+    ]
+   }
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for amber lynx?",
+   "ranks": {
+    "sum": [
+     33
+    ],
+    "max": [
+     3
+    ],
+    "sum-contrast": [
+     10
+    ],
+    "max-contrast": [
+     1
+    ]
+   }
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for amber heron?",
+   "ranks": {
+    "sum": [
+     33
+    ],
+    "max": [
+     3
+    ],
+    "sum-contrast": [
+     9
+    ],
+    "max-contrast": [
+     0
+    ]
+   }
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for cobalt lynx?",
+   "ranks": {
+    "sum": [
+     68
+    ],
+    "max": [
+     5
+    ],
+    "sum-contrast": [
+     22
+    ],
+    "max-contrast": [
+     1
+    ]
+   }
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for cobalt heron?",
+   "ranks": {
+    "sum": [
+     18
+    ],
+    "max": [
+     3
+    ],
+    "sum-contrast": [
+     5
+    ],
+    "max-contrast": [
+     1
+    ]
+   }
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for ivory mantis?",
+   "ranks": {
+    "sum": [
+     102
+    ],
+    "max": [
+     5
+    ],
+    "sum-contrast": [
+     26
+    ],
+    "max-contrast": [
+     3
+    ]
+   }
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for ivory panther?",
+   "ranks": {
+    "sum": [
+     26
+    ],
+    "max": [
+     3
+    ],
+    "sum-contrast": [
+     9
+    ],
+    "max-contrast": [
+     0
+    ]
+   }
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for jade mantis?",
+   "ranks": {
+    "sum": [
+     34
+    ],
+    "max": [
+     3
+    ],
+    "sum-contrast": [
+     9
+    ],
+    "max-contrast": [
+     1
+    ]
+   }
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for jade panther?",
+   "ranks": {
+    "sum": [
+     10
+    ],
+    "max": [
+     3
+    ],
+    "sum-contrast": [
+     3
+    ],
+    "max-contrast": [
+     0
+    ]
+   }
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for scarlet ibis?",
+   "ranks": {
+    "sum": [
+     30
+    ],
+    "max": [
+     3
+    ],
+    "sum-contrast": [
+     7
+    ],
+    "max-contrast": [
+     0
+    ]
+   }
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for scarlet badger?",
+   "ranks": {
+    "sum": [
+     27
+    ],
+    "max": [
+     5
+    ],
+    "sum-contrast": [
+     7
+    ],
+    "max-contrast": [
+     2
+    ]
+   }
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for onyx ibis?",
+   "ranks": {
+    "sum": [
+     10
+    ],
+    "max": [
+     3
+    ],
+    "sum-contrast": [
+     3
+    ],
+    "max-contrast": [
+     0
+    ]
+   }
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for onyx badger?",
+   "ranks": {
+    "sum": [
+     32
+    ],
+    "max": [
+     5
+    ],
+    "sum-contrast": [
+     8
+    ],
+    "max-contrast": [
+     2
+    ]
+   }
+  },
+  {
+   "kind": "MV",
+   "question": "What are all the special magic numbers for golden viper?",
+   "ranks": {
+    "sum": [
+     11,
+     1,
+     9,
+     4
+    ],
+    "max": [
+     3,
+     1,
+     7,
+     14
+    ],
+    "sum-contrast": [
+     3,
+     0,
+     4,
+     2
+    ],
+    "max-contrast": [
+     1,
+     0,
+     7,
+     8
+    ]
+   }
+  },
+  {
+   "kind": "MQ",
+   "question": "What are the special magic numbers for crimson falcon, amber heron, jade mantis and onyx badger?",
+   "ranks": {
+    "sum": [
+     47,
+     40,
+     50,
+     35
+    ],
+    "max": [
+     4,
+     5,
+     8,
+     12
+    ],
+    "sum-contrast": [
+     15,
+     11,
+     14,
+     7
+    ],
+    "max-contrast": [
+     3,
+     1,
+     4,
+     7
+    ]
+   }
+  },
+  {
+   "kind": "VT",
+   "question": "Which variables are assigned the value 14673, either directly or through a chain of assignments such as VAR B = VAR A?",
+   "ranks": {
+    "sum": [
+     21,
+     75,
+     126,
+     142,
+     288
+    ],
+    "max": [
+     2,
+     6,
+     31,
+     36,
+     105
+    ],
+    "sum-contrast": [
+     3,
+     13,
+     34,
+     79,
+     233
+    ],
+    "max-contrast": [
+     0,
+     2,
+     8,
+     65,
+     86
+    ]
+   }
+  },
+  {
+   "kind": "2H",
+   "question": "What is the employee badge number of the person who holds the vault key of the Orrin observatory?",
+   "ranks": {
+    "sum": [
+     3,
+     10
+    ],
+    "max": [
+     1,
+     6
+    ],
+    "sum-contrast": [
+     0,
+     7
+    ],
+    "max-contrast": [
+     0,
+     2
+    ]
+   }
+  },
+  {
+   "kind": "2H",
+   "question": "Which combination opens the personal safe of the architect who designed the Teal Harbor lighthouse?",
+   "ranks": {
+    "sum": [
+     28,
+     75
+    ],
+    "max": [
+     2,
+     25
+    ],
+    "sum-contrast": [
+     5,
+     15
+    ],
+    "max-contrast": [
+     1,
+     7
+    ]
+   }
+  }
+ ],
+ "summary": {
+  "sum": {
+   "top32": "16/33",
+   "top64": "25/33",
+   "top128": "31/33"
+  },
+  "max": {
+   "top32": "31/33",
+   "top64": "32/33",
+   "top128": "33/33"
+  },
+  "sum-contrast": {
+   "top32": "30/33",
+   "top64": "31/33",
+   "top128": "32/33"
+  },
+  "max-contrast": {
+   "top32": "31/33",
+   "top64": "31/33",
+   "top128": "33/33"
+  }
+ }
+}

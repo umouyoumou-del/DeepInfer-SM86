@@ -1,0 +1,3354 @@
+{
+ "model": "coder",
+ "tokens": 262144,
+ "document_sha256": "689a294dc7cf747542e4a44f5dca0a96bfe66bd12f03dbd9d1ecfbad6481bd9d",
+ "positions": "dca",
+ "trained": 131072,
+ "kv": "fp8",
+ "encode_window": 98304,
+ "gpu_tokens": 262400,
+ "experts": "pinned",
+ "prefill_seconds": 117.2,
+ "top": 32,
+ "follow_top": 16,
+ "rounds": 6,
+ "neighbors": 1,
+ "seed": 11,
+ "summary": {
+  "single": {
+   "questions_full": "11/21",
+   "items": "15/31",
+   "by_kind": {
+    "MK": "9/16",
+    "MV": "1/1",
+    "MQ": "0/1",
+    "VT": "0/1",
+    "2H": "1/2"
+   }
+  },
+  "iterative": {
+   "questions_full": "14/21",
+   "items": "21/31",
+   "by_kind": {
+    "MK": "13/16",
+    "MV": "0/1",
+    "MQ": "0/1",
+    "VT": "0/1",
+    "2H": "1/2"
+   }
+  }
+ },
+ "needles": [
+  {
+   "text": "The special magic number for crimson falcon is: 8589669.",
+   "group": "MK",
+   "depth": 0.6768,
+   "position": 177439,
+   "length": 21
+  },
+  {
+   "text": "The special magic number for crimson otter is: 8812311.",
+   "group": "MK",
+   "depth": 0.4747,
+   "position": 124448,
+   "length": 21
+  },
+  {
+   "text": "The special magic number for silver falcon is: 8580488.",
+   "group": "MK",
+   "depth": 0.6516,
+   "position": 170819,
+   "length": 21
+  },
+  {
+   "text": "The special magic number for silver otter is: 9520162.",
+   "group": "MK",
+   "depth": 0.9547,
+   "position": 250268,
+   "length": 21
+  },
+  {
+   "text": "The special magic number for amber lynx is: 4186027.",
+   "group": "MK",
+   "depth": 0.7274,
+   "position": 190680,
+   "length": 22
+  },
+  {
+   "text": "The special magic number for amber heron is: 4098086.",
+   "group": "MK",
+   "depth": 0.8537,
+   "position": 223772,
+   "length": 21
+  },
+  {
+   "text": "The special magic number for cobalt lynx is: 9588401.",
+   "group": "MK",
+   "depth": 0.7526,
+   "position": 197302,
+   "length": 22
+  },
+  {
+   "text": "The special magic number for cobalt heron is: 8981982.",
+   "group": "MK",
+   "depth": 0.2474,
+   "position": 64839,
+   "length": 21
+  },
+  {
+   "text": "The special magic number for ivory mantis is: 4123476.",
+   "group": "MK",
+   "depth": 0.8284,
+   "position": 217144,
+   "length": 21
+  },
+  {
+   "text": "The special magic number for ivory panther is: 2579129.",
+   "group": "MK",
+   "depth": 0.2726,
+   "position": 71461,
+   "length": 21
+  },
+  {
+   "text": "The special magic number for jade mantis is: 8492589.",
+   "group": "MK",
+   "depth": 0.4242,
+   "position": 111205,
+   "length": 21
+  },
+  {
+   "text": "The special magic number for jade panther is: 6090228.",
+   "group": "MK",
+   "depth": 0.0705,
+   "position": 18483,
+   "length": 21
+  },
+  {
+   "text": "The special magic number for scarlet ibis is: 3378927.",
+   "group": "MK",
+   "depth": 0.2979,
+   "position": 78083,
+   "length": 21
+  },
+  {
+   "text": "The special magic number for scarlet badger is: 2521199.",
+   "group": "MK",
+   "depth": 0.6011,
+   "position": 157573,
+   "length": 21
+  },
+  {
+   "text": "The special magic number for onyx ibis is: 1702635.",
+   "group": "MK",
+   "depth": 0.2221,
+   "position": 58223,
+   "length": 22
+  },
+  {
+   "text": "The special magic number for onyx badger is: 7646461.",
+   "group": "MK",
+   "depth": 0.5253,
+   "position": 137711,
+   "length": 22
+  },
+  {
+   "text": "One of the special magic numbers for golden viper is: 8599992.",
+   "group": "MV",
+   "depth": 0.1716,
+   "position": 44969,
+   "length": 23
+  },
+  {
+   "text": "One of the special magic numbers for golden viper is: 3642312.",
+   "group": "MV",
+   "depth": 0.98,
+   "position": 256909,
+   "length": 23
+  },
+  {
+   "text": "One of the special magic numbers for golden viper is: 1251670.",
+   "group": "MV",
+   "depth": 0.8789,
+   "position": 230415,
+   "length": 23
+  },
+  {
+   "text": "One of the special magic numbers for golden viper is: 9864766.",
+   "group": "MV",
+   "depth": 0.3989,
+   "position": 104563,
+   "length": 23
+  },
+  {
+   "text": "One of the special magic numbers for golden walrus is: 2059731.",
+   "group": "MV-near",
+   "depth": 0.3737,
+   "position": 97954,
+   "length": 23
+  },
+  {
+   "text": "One of the special magic numbers for azure viper is: 1999101.",
+   "group": "MV-near",
+   "depth": 0.0453,
+   "position": 11868,
+   "length": 23
+  },
+  {
+   "text": "VAR GHTAY = 14673",
+   "group": "VT",
+   "depth": 0.1211,
+   "position": 31760,
+   "length": 13
+  },
+  {
+   "text": "VAR OKOSG = VAR GHTAY",
+   "group": "VT",
+   "depth": 0.1968,
+   "position": 51589,
+   "length": 11
+  },
+  {
+   "text": "VAR QHUJP = VAR OKOSG",
+   "group": "VT",
+   "depth": 0.5758,
+   "position": 150950,
+   "length": 11
+  },
+  {
+   "text": "VAR AVCOU = VAR QHUJP",
+   "group": "VT",
+   "depth": 0.7021,
+   "position": 184056,
+   "length": 11
+  },
+  {
+   "text": "VAR INRCW = VAR AVCOU",
+   "group": "VT",
+   "depth": 0.8032,
+   "position": 210542,
+   "length": 11
+  },
+  {
+   "text": "VAR KYHQJ = 43291",
+   "group": "VT-decoy",
+   "depth": 0.0958,
+   "position": 25116,
+   "length": 13
+  },
+  {
+   "text": "VAR ACSYD = VAR KYHQJ",
+   "group": "VT-decoy",
+   "depth": 0.3484,
+   "position": 91330,
+   "length": 11
+  },
+  {
+   "text": "VAR MDJMC = VAR ACSYD",
+   "group": "VT-decoy",
+   "depth": 0.6263,
+   "position": 164191,
+   "length": 11
+  },
+  {
+   "text": "VAR AVAGG = VAR MDJMC",
+   "group": "VT-decoy",
+   "depth": 0.7779,
+   "position": 203938,
+   "length": 10
+  },
+  {
+   "text": "The vault key of the Orrin observatory is held by Kaila Brenn.",
+   "group": "2H",
+   "depth": 0.02,
+   "position": 5231,
+   "length": 21
+  },
+  {
+   "text": "The employee badge number of Kaila Brenn is 1877827.",
+   "group": "2H",
+   "depth": 0.9042,
+   "position": 237020,
+   "length": 22
+  },
+  {
+   "text": "The employee badge number of Talia Rusk is 8885078.",
+   "group": "2H-decoy",
+   "depth": 0.5,
+   "position": 131083,
+   "length": 21
+  },
+  {
+   "text": "The employee badge number of Joren Vale is 7299227.",
+   "group": "2H-decoy",
+   "depth": 0.1463,
+   "position": 38348,
+   "length": 20
+  },
+  {
+   "text": "The Teal Harbor lighthouse was designed by the architect Marek Ostrov.",
+   "group": "2H",
+   "depth": 0.5505,
+   "position": 144332,
+   "length": 17
+  },
+  {
+   "text": "The personal safe of Marek Ostrov opens with the combination 7667674.",
+   "group": "2H",
+   "depth": 0.4495,
+   "position": 117844,
+   "length": 23
+  },
+  {
+   "text": "The personal safe of Ilse Varga opens with the combination 8042931.",
+   "group": "2H-decoy",
+   "depth": 0.3232,
+   "position": 84719,
+   "length": 23
+  },
+  {
+   "text": "The personal safe of Tomas Reed opens with the combination 2225380.",
+   "group": "2H-decoy",
+   "depth": 0.9295,
+   "position": 243655,
+   "length": 22
+  }
+ ],
+ "results": [
+  {
+   "mode": "single",
+   "kind": "MK",
+   "question": "What is the special magic number for crimson falcon?",
+   "expected": [
+    "8589669"
+   ],
+   "answer": "The special magic number for crimson falcon is: 8589669.",
+   "hits": [
+    "8589669"
+   ],
+   "extras": [],
+   "forbidden": [],
+   "full": true,
+   "located": [
+    true
+   ],
+   "seconds": 7.5,
+   "rounds": null,
+   "quotes": null,
+   "trace": null,
+   "reread_tokens": 4736
+  },
+  {
+   "mode": "single",
+   "kind": "MK",
+   "question": "What is the special magic number for crimson otter?",
+   "expected": [
+    "8812311"
+   ],
+   "answer": "The special magic number for crimson otter is: 9520162.",
+   "hits": [],
+   "extras": [
+    "9520162"
+   ],
+   "forbidden": [],
+   "full": false,
+   "located": [
+    false
+   ],
+   "seconds": 7.5,
+   "rounds": null,
+   "quotes": null,
+   "trace": null,
+   "reread_tokens": 4736
+  },
+  {
+   "mode": "single",
+   "kind": "MK",
+   "question": "What is the special magic number for silver falcon?",
+   "expected": [
+    "8580488"
+   ],
+   "answer": "The special magic number for silver falcon is: 9520162.",
+   "hits": [],
+   "extras": [
+    "9520162"
+   ],
+   "forbidden": [],
+   "full": false,
+   "located": [
+    false
+   ],
+   "seconds": 7.9,
+   "rounds": null,
+   "quotes": null,
+   "trace": null,
+   "reread_tokens": 4736
+  },
+  {
+   "mode": "single",
+   "kind": "MK",
+   "question": "What is the special magic number for silver otter?",
+   "expected": [
+    "9520162"
+   ],
+   "answer": "The special magic number for silver otter is: 9520162.",
+   "hits": [
+    "9520162"
+   ],
+   "extras": [],
+   "forbidden": [],
+   "full": true,
+   "located": [
+    true
+   ],
+   "seconds": 6.7,
+   "rounds": null,
+   "quotes": null,
+   "trace": null,
+   "reread_tokens": 4736
+  },
+  {
+   "mode": "single",
+   "kind": "MK",
+   "question": "What is the special magic number for amber lynx?",
+   "expected": [
+    "4186027"
+   ],
+   "answer": "The special magic number for amber lynx is: 9520162.",
+   "hits": [],
+   "extras": [
+    "9520162"
+   ],
+   "forbidden": [],
+   "full": false,
+   "located": [
+    false
+   ],
+   "seconds": 6.9,
+   "rounds": null,
+   "quotes": null,
+   "trace": null,
+   "reread_tokens": 4736
+  },
+  {
+   "mode": "single",
+   "kind": "MK",
+   "question": "What is the special magic number for amber heron?",
+   "expected": [
+    "4098086"
+   ],
+   "answer": "The special magic number for amber heron is: 8981982.",
+   "hits": [],
+   "extras": [
+    "8981982"
+   ],
+   "forbidden": [],
+   "full": false,
+   "located": [
+    false
+   ],
+   "seconds": 6.7,
+   "rounds": null,
+   "quotes": null,
+   "trace": null,
+   "reread_tokens": 4928
+  },
+  {
+   "mode": "single",
+   "kind": "MK",
+   "question": "What is the special magic number for cobalt lynx?",
+   "expected": [
+    "9588401"
+   ],
+   "answer": "The special magic number for cobalt lynx is: 8981982.",
+   "hits": [],
+   "extras": [
+    "8981982"
+   ],
+   "forbidden": [],
+   "full": false,
+   "located": [
+    false
+   ],
+   "seconds": 7.1,
+   "rounds": null,
+   "quotes": null,
+   "trace": null,
+   "reread_tokens": 4928
+  },
+  {
+   "mode": "single",
+   "kind": "MK",
+   "question": "What is the special magic number for cobalt heron?",
+   "expected": [
+    "8981982"
+   ],
+   "answer": "The special magic number for cobalt heron is: 8981982.",
+   "hits": [
+    "8981982"
+   ],
+   "extras": [],
+   "forbidden": [],
+   "full": true,
+   "located": [
+    true
+   ],
+   "seconds": 8.9,
+   "rounds": null,
+   "quotes": null,
+   "trace": null,
+   "reread_tokens": 4736
+  },
+  {
+   "mode": "single",
+   "kind": "MK",
+   "question": "What is the special magic number for ivory mantis?",
+   "expected": [
+    "4123476"
+   ],
+   "answer": "The special magic number for ivory mantis is: 9520162.",
+   "hits": [],
+   "extras": [
+    "9520162"
+   ],
+   "forbidden": [],
+   "full": false,
+   "located": [
+    false
+   ],
+   "seconds": 6.8,
+   "rounds": null,
+   "quotes": null,
+   "trace": null,
+   "reread_tokens": 4736
+  },
+  {
+   "mode": "single",
+   "kind": "MK",
+   "question": "What is the special magic number for ivory panther?",
+   "expected": [
+    "2579129"
+   ],
+   "answer": "The special magic number for ivory panther is: 2579129.",
+   "hits": [
+    "2579129"
+   ],
+   "extras": [],
+   "forbidden": [],
+   "full": true,
+   "located": [
+    true
+   ],
+   "seconds": 6.8,
+   "rounds": null,
+   "quotes": null,
+   "trace": null,
+   "reread_tokens": 4736
+  },
+  {
+   "mode": "single",
+   "kind": "MK",
+   "question": "What is the special magic number for jade mantis?",
+   "expected": [
+    "8492589"
+   ],
+   "answer": "The special magic number for jade mantis is: 6090228.",
+   "hits": [],
+   "extras": [
+    "6090228"
+   ],
+   "forbidden": [],
+   "full": false,
+   "located": [
+    false
+   ],
+   "seconds": 6.9,
+   "rounds": null,
+   "quotes": null,
+   "trace": null,
+   "reread_tokens": 4736
+  },
+  {
+   "mode": "single",
+   "kind": "MK",
+   "question": "What is the special magic number for jade panther?",
+   "expected": [
+    "6090228"
+   ],
+   "answer": "The special magic number for jade panther is: 6090228.",
+   "hits": [
+    "6090228"
+   ],
+   "extras": [],
+   "forbidden": [],
+   "full": true,
+   "located": [
+    true
+   ],
+   "seconds": 7.0,
+   "rounds": null,
+   "quotes": null,
+   "trace": null,
+   "reread_tokens": 4736
+  },
+  {
+   "mode": "single",
+   "kind": "MK",
+   "question": "What is the special magic number for scarlet ibis?",
+   "expected": [
+    "3378927"
+   ],
+   "answer": "The special magic number for scarlet ibis is: 3378927.",
+   "hits": [
+    "3378927"
+   ],
+   "extras": [],
+   "forbidden": [],
+   "full": true,
+   "located": [
+    true
+   ],
+   "seconds": 9.6,
+   "rounds": null,
+   "quotes": null,
+   "trace": null,
+   "reread_tokens": 4736
+  },
+  {
+   "mode": "single",
+   "kind": "MK",
+   "question": "What is the special magic number for scarlet badger?",
+   "expected": [
+    "2521199"
+   ],
+   "answer": "The special magic number for scarlet badger is: 2521199.",
+   "hits": [
+    "2521199"
+   ],
+   "extras": [],
+   "forbidden": [],
+   "full": true,
+   "located": [
+    true
+   ],
+   "seconds": 6.8,
+   "rounds": null,
+   "quotes": null,
+   "trace": null,
+   "reread_tokens": 4928
+  },
+  {
+   "mode": "single",
+   "kind": "MK",
+   "question": "What is the special magic number for onyx ibis?",
+   "expected": [
+    "1702635"
+   ],
+   "answer": "The special magic number for onyx ibis is: 1702635.",
+   "hits": [
+    "1702635"
+   ],
+   "extras": [],
+   "forbidden": [],
+   "full": true,
+   "located": [
+    true
+   ],
+   "seconds": 6.9,
+   "rounds": null,
+   "quotes": null,
+   "trace": null,
+   "reread_tokens": 4736
+  },
+  {
+   "mode": "single",
+   "kind": "MK",
+   "question": "What is the special magic number for onyx badger?",
+   "expected": [
+    "7646461"
+   ],
+   "answer": "The special magic number for onyx badger is: 7646461.",
+   "hits": [
+    "7646461"
+   ],
+   "extras": [],
+   "forbidden": [],
+   "full": true,
+   "located": [
+    true
+   ],
+   "seconds": 7.0,
+   "rounds": null,
+   "quotes": null,
+   "trace": null,
+   "reread_tokens": 4736
+  },
+  {
+   "mode": "single",
+   "kind": "MV",
+   "question": "What are all the special magic numbers for golden viper?",
+   "expected": [
+    "8599992",
+    "3642312",
+    "1251670",
+    "9864766"
+   ],
+   "answer": "The special magic numbers for golden viper are: 8599992, 1251670, 3642312, and 9864766.",
+   "hits": [
+    "8599992",
+    "3642312",
+    "1251670",
+    "9864766"
+   ],
+   "extras": [],
+   "forbidden": [],
+   "full": true,
+   "located": [
+    true,
+    true,
+    true,
+    true
+   ],
+   "seconds": 9.4,
+   "rounds": null,
+   "quotes": null,
+   "trace": null,
+   "reread_tokens": 4736
+  },
+  {
+   "mode": "single",
+   "kind": "MQ",
+   "question": "What are the special magic numbers for crimson falcon, amber heron, jade mantis and onyx badger?",
+   "expected": [
+    "8589669",
+    "4098086",
+    "8492589",
+    "7646461"
+   ],
+   "answer": "crimson falcon: 134217728\namber heron: 134217728\njade mantis: 134217728\nonyx badger: 134217728",
+   "hits": [],
+   "extras": [],
+   "forbidden": [],
+   "full": false,
+   "located": [
+    false,
+    false,
+    false,
+    false
+   ],
+   "seconds": 14.4,
+   "rounds": null,
+   "quotes": null,
+   "trace": null,
+   "reread_tokens": 4800
+  },
+  {
+   "mode": "single",
+   "kind": "VT",
+   "question": "Which variables are assigned the value 14673, either directly or through a chain of assignments such as VAR B = VAR A?",
+   "expected": [
+    "GHTAY",
+    "OKOSG",
+    "QHUJP",
+    "AVCOU",
+    "INRCW"
+   ],
+   "answer": "The value 14673 is assigned to the variable `GHTAY` directly in the provided text. There are no other variables assigned this value through a chain of assignments.\n\nHere is the list of variables assigned the value 14673:\n\n- `GHTAY`",
+   "hits": [
+    "GHTAY"
+   ],
+   "extras": [],
+   "forbidden": [],
+   "full": false,
+   "located": [
+    true,
+    false,
+    false,
+    false,
+    false
+   ],
+   "seconds": 11.9,
+   "rounds": null,
+   "quotes": null,
+   "trace": null,
+   "reread_tokens": 4288
+  },
+  {
+   "mode": "single",
+   "kind": "2H",
+   "question": "What is the employee badge number of the person who holds the vault key of the Orrin observatory?",
+   "expected": [
+    "1877827"
+   ],
+   "answer": "The employee badge number of the person who holds the vault key of the Orrin observatory is 1877827.",
+   "hits": [
+    "1877827"
+   ],
+   "extras": [],
+   "forbidden": [],
+   "full": true,
+   "located": [
+    true,
+    true
+   ],
+   "seconds": 8.9,
+   "rounds": null,
+   "quotes": null,
+   "trace": null,
+   "reread_tokens": 4608
+  },
+  {
+   "mode": "single",
+   "kind": "2H",
+   "question": "Which combination opens the personal safe of the architect who designed the Teal Harbor lighthouse?",
+   "expected": [
+    "7667674"
+   ],
+   "answer": "The combination that opens the personal safe of the architect who designed the Teal Harbor lighthouse is 2225380.",
+   "hits": [],
+   "extras": [
+    "2225380"
+   ],
+   "forbidden": [],
+   "full": false,
+   "located": [
+    true,
+    false
+   ],
+   "seconds": 11.4,
+   "rounds": null,
+   "quotes": null,
+   "trace": null,
+   "reread_tokens": 4416
+  },
+  {
+   "mode": "iterative",
+   "kind": "MK",
+   "question": "What is the special magic number for crimson falcon?",
+   "expected": [
+    "8589669"
+   ],
+   "answer": "The special magic number for crimson falcon is: 8589669.",
+   "hits": [
+    "8589669"
+   ],
+   "extras": [],
+   "forbidden": [],
+   "full": true,
+   "located": [
+    true
+   ],
+   "seconds": 17.1,
+   "rounds": 2,
+   "quotes": [
+    "8589669"
+   ],
+   "trace": [
+    {
+     "round": 1,
+     "new_blocks": [
+      15,
+      185,
+      599,
+      702,
+      909,
+      1530,
+      1633,
+      2772,
+      3600,
+      3703,
+      3807,
+      3910,
+      3921,
+      3922,
+      4014,
+      4026,
+      4040,
+      4048,
+      4053,
+      4063,
+      4081,
+      4083,
+      4084,
+      4085,
+      4086,
+      4088,
+      4089,
+      4091,
+      4092,
+      4093,
+      4094,
+      4095
+     ],
+     "added": [
+      "8589669"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 2,
+     "new_blocks": [
+      288,
+      1013,
+      1116,
+      1323,
+      2462,
+      2669,
+      3884,
+      3923,
+      3925,
+      3936,
+      4056,
+      4060,
+      4075,
+      4078,
+      4080,
+      4087
+     ],
+     "added": [],
+     "dropped": []
+    }
+   ],
+   "reread_tokens": 7232
+  },
+  {
+   "mode": "iterative",
+   "kind": "MK",
+   "question": "What is the special magic number for crimson otter?",
+   "expected": [
+    "8812311"
+   ],
+   "answer": "The special magic number for crimson otter is: 2521199.",
+   "hits": [],
+   "extras": [
+    "2521199"
+   ],
+   "forbidden": [],
+   "full": false,
+   "located": [
+    false
+   ],
+   "seconds": 26.1,
+   "rounds": 3,
+   "quotes": [
+    "9520162",
+    "2521199"
+   ],
+   "trace": [
+    {
+     "round": 1,
+     "new_blocks": [
+      15,
+      599,
+      702,
+      909,
+      1013,
+      1530,
+      1633,
+      3600,
+      3703,
+      3807,
+      3910,
+      3921,
+      3922,
+      4014,
+      4026,
+      4040,
+      4048,
+      4053,
+      4056,
+      4063,
+      4081,
+      4083,
+      4084,
+      4085,
+      4086,
+      4088,
+      4089,
+      4091,
+      4092,
+      4093,
+      4094,
+      4095
+     ],
+     "added": [
+      "9520162"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 2,
+     "new_blocks": [
+      288,
+      1116,
+      2462,
+      2772,
+      3884,
+      3923,
+      3925,
+      3936,
+      4041,
+      4057,
+      4060,
+      4065,
+      4075,
+      4078,
+      4080,
+      4087
+     ],
+     "added": [
+      "2521199"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 3,
+     "new_blocks": [
+      185,
+      496,
+      3786,
+      3918,
+      3926,
+      3932,
+      3939,
+      3940,
+      4032,
+      4035,
+      4049,
+      4055,
+      4059,
+      4061,
+      4082,
+      4090
+     ],
+     "added": [],
+     "dropped": []
+    }
+   ],
+   "reread_tokens": 8640
+  },
+  {
+   "mode": "iterative",
+   "kind": "MK",
+   "question": "What is the special magic number for silver falcon?",
+   "expected": [
+    "8580488"
+   ],
+   "answer": "The special magic number for silver falcon is: 8580488.",
+   "hits": [
+    "8580488"
+   ],
+   "extras": [],
+   "forbidden": [],
+   "full": true,
+   "located": [
+    true
+   ],
+   "seconds": 22.9,
+   "rounds": 3,
+   "quotes": [
+    "9520162",
+    "8580488"
+   ],
+   "trace": [
+    {
+     "round": 1,
+     "new_blocks": [
+      15,
+      288,
+      599,
+      702,
+      909,
+      1530,
+      1633,
+      3600,
+      3703,
+      3807,
+      3910,
+      3921,
+      3922,
+      4014,
+      4026,
+      4040,
+      4048,
+      4053,
+      4056,
+      4063,
+      4081,
+      4083,
+      4084,
+      4085,
+      4086,
+      4088,
+      4089,
+      4091,
+      4092,
+      4093,
+      4094,
+      4095
+     ],
+     "added": [
+      "9520162"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 2,
+     "new_blocks": [
+      1013,
+      1116,
+      2462,
+      2669,
+      2772,
+      3884,
+      3923,
+      3925,
+      3936,
+      4057,
+      4060,
+      4065,
+      4075,
+      4078,
+      4080,
+      4087
+     ],
+     "added": [
+      "8580488"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 3,
+     "new_blocks": [
+      185,
+      496,
+      1323,
+      1737,
+      2151,
+      3786,
+      3918,
+      3924,
+      3926,
+      3932,
+      3939,
+      4041,
+      4049,
+      4055,
+      4082,
+      4090
+     ],
+     "added": [],
+     "dropped": []
+    }
+   ],
+   "reread_tokens": 8960
+  },
+  {
+   "mode": "iterative",
+   "kind": "MK",
+   "question": "What is the special magic number for silver otter?",
+   "expected": [
+    "9520162"
+   ],
+   "answer": "The special magic number for silver otter is: 9520162.",
+   "hits": [
+    "9520162"
+   ],
+   "extras": [],
+   "forbidden": [],
+   "full": true,
+   "located": [
+    true
+   ],
+   "seconds": 19.5,
+   "rounds": 2,
+   "quotes": [
+    "9520162"
+   ],
+   "trace": [
+    {
+     "round": 1,
+     "new_blocks": [
+      15,
+      599,
+      702,
+      909,
+      1013,
+      1530,
+      1633,
+      3600,
+      3703,
+      3807,
+      3910,
+      3921,
+      3922,
+      4014,
+      4026,
+      4040,
+      4048,
+      4053,
+      4056,
+      4063,
+      4081,
+      4083,
+      4084,
+      4085,
+      4086,
+      4088,
+      4089,
+      4091,
+      4092,
+      4093,
+      4094,
+      4095
+     ],
+     "added": [
+      "9520162"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 2,
+     "new_blocks": [
+      288,
+      2462,
+      3884,
+      3923,
+      3925,
+      3936,
+      4032,
+      4041,
+      4055,
+      4057,
+      4060,
+      4065,
+      4075,
+      4078,
+      4080,
+      4087
+     ],
+     "added": [],
+     "dropped": []
+    }
+   ],
+   "reread_tokens": 6720
+  },
+  {
+   "mode": "iterative",
+   "kind": "MK",
+   "question": "What is the special magic number for amber lynx?",
+   "expected": [
+    "4186027"
+   ],
+   "answer": "The special magic number for amber lynx is: 4186027.",
+   "hits": [
+    "4186027"
+   ],
+   "extras": [],
+   "forbidden": [],
+   "full": true,
+   "located": [
+    true
+   ],
+   "seconds": 23.1,
+   "rounds": 3,
+   "quotes": [
+    "1702635",
+    "4186027"
+   ],
+   "trace": [
+    {
+     "round": 1,
+     "new_blocks": [
+      15,
+      288,
+      599,
+      702,
+      909,
+      1530,
+      1633,
+      3600,
+      3703,
+      3807,
+      3910,
+      3921,
+      3922,
+      4014,
+      4026,
+      4040,
+      4048,
+      4053,
+      4056,
+      4063,
+      4081,
+      4083,
+      4084,
+      4085,
+      4086,
+      4088,
+      4089,
+      4091,
+      4092,
+      4093,
+      4094,
+      4095
+     ],
+     "added": [
+      "1702635"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 2,
+     "new_blocks": [
+      185,
+      1013,
+      1116,
+      2462,
+      2979,
+      3496,
+      3884,
+      3918,
+      3923,
+      3925,
+      4057,
+      4060,
+      4075,
+      4078,
+      4080,
+      4087
+     ],
+     "added": [
+      "4186027"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 3,
+     "new_blocks": [
+      496,
+      1323,
+      2151,
+      3786,
+      3924,
+      3926,
+      3932,
+      3936,
+      3939,
+      3940,
+      4041,
+      4049,
+      4055,
+      4065,
+      4082,
+      4090
+     ],
+     "added": [],
+     "dropped": []
+    }
+   ],
+   "reread_tokens": 8832
+  },
+  {
+   "mode": "iterative",
+   "kind": "MK",
+   "question": "What is the special magic number for amber heron?",
+   "expected": [
+    "4098086"
+   ],
+   "answer": "The special magic number for amber heron is: 4098086.",
+   "hits": [
+    "4098086"
+   ],
+   "extras": [],
+   "forbidden": [],
+   "full": true,
+   "located": [
+    true
+   ],
+   "seconds": 53.0,
+   "rounds": 4,
+   "quotes": [
+    "9520162",
+    "4098086",
+    "1702635",
+    "8981982",
+    "4186027",
+    "8580488",
+    "2579129",
+    "3642312",
+    "2521199",
+    "8599992",
+    "1251670",
+    "2059731",
+    "8042931",
+    "2225380",
+    "3642312",
+    "1877827",
+    "2579129",
+    "9864766",
+    "2059731"
+   ],
+   "trace": [
+    {
+     "round": 1,
+     "new_blocks": [
+      15,
+      288,
+      599,
+      702,
+      909,
+      1013,
+      1530,
+      1633,
+      3600,
+      3703,
+      3807,
+      3910,
+      3921,
+      3922,
+      4014,
+      4026,
+      4040,
+      4048,
+      4053,
+      4056,
+      4063,
+      4081,
+      4083,
+      4085,
+      4086,
+      4088,
+      4089,
+      4091,
+      4092,
+      4093,
+      4094,
+      4095
+     ],
+     "added": [
+      "9520162"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 2,
+     "new_blocks": [
+      2462,
+      3496,
+      3884,
+      3918,
+      3923,
+      3925,
+      3936,
+      4032,
+      4057,
+      4060,
+      4065,
+      4075,
+      4078,
+      4080,
+      4084,
+      4087
+     ],
+     "added": [
+      "4098086"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 3,
+     "new_blocks": [
+      496,
+      1116,
+      1323,
+      2669,
+      2979,
+      3786,
+      3924,
+      3926,
+      3932,
+      3939,
+      4035,
+      4041,
+      4049,
+      4055,
+      4082,
+      4090
+     ],
+     "added": [
+      "1702635",
+      "8981982",
+      "4186027",
+      "8580488",
+      "2579129",
+      "3642312",
+      "2521199",
+      "8599992",
+      "1251670",
+      "2059731",
+      "8042931",
+      "2225380",
+      "3642312",
+      "1877827",
+      "2579129",
+      "9864766",
+      "2059731"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 4,
+     "new_blocks": [
+      3883,
+      3885,
+      3920,
+      3938,
+      4027,
+      4028,
+      4042,
+      4043,
+      4050,
+      4058,
+      4059,
+      4061,
+      4062,
+      4064,
+      4072,
+      4079
+     ],
+     "added": [],
+     "dropped": []
+    }
+   ],
+   "reread_tokens": 9600
+  },
+  {
+   "mode": "iterative",
+   "kind": "MK",
+   "question": "What is the special magic number for cobalt lynx?",
+   "expected": [
+    "9588401"
+   ],
+   "answer": "The special magic number for cobalt lynx is: 8981982.",
+   "hits": [],
+   "extras": [
+    "8981982"
+   ],
+   "forbidden": [],
+   "full": false,
+   "located": [
+    false
+   ],
+   "seconds": 34.8,
+   "rounds": 2,
+   "quotes": [
+    "1702635",
+    "8981982",
+    "9520162",
+    "3642312",
+    "1251670",
+    "9864766",
+    "2059731",
+    "3642312",
+    "1251670",
+    "9864766",
+    "2059731",
+    "3642312",
+    "1251670",
+    "9864766",
+    "2059731",
+    "3642312",
+    "1251670",
+    "9864766",
+    "2059731",
+    "3642312"
+   ],
+   "trace": [
+    {
+     "round": 1,
+     "new_blocks": [
+      15,
+      185,
+      288,
+      599,
+      702,
+      909,
+      1013,
+      1530,
+      1633,
+      3600,
+      3703,
+      3807,
+      3910,
+      3921,
+      3922,
+      4014,
+      4026,
+      4040,
+      4048,
+      4053,
+      4056,
+      4081,
+      4083,
+      4085,
+      4086,
+      4088,
+      4089,
+      4091,
+      4092,
+      4093,
+      4094,
+      4095
+     ],
+     "added": [
+      "1702635",
+      "8981982",
+      "9520162",
+      "3642312",
+      "1251670",
+      "9864766",
+      "2059731",
+      "3642312",
+      "1251670",
+      "9864766",
+      "2059731",
+      "3642312",
+      "1251670",
+      "9864766",
+      "2059731",
+      "3642312",
+      "1251670",
+      "9864766",
+      "2059731",
+      "3642312"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 2,
+     "new_blocks": [
+      3884,
+      3885,
+      3923,
+      3925,
+      3936,
+      3939,
+      4049,
+      4057,
+      4058,
+      4060,
+      4065,
+      4075,
+      4082,
+      4084,
+      4087,
+      4090
+     ],
+     "added": [],
+     "dropped": []
+    }
+   ],
+   "reread_tokens": 6464
+  },
+  {
+   "mode": "iterative",
+   "kind": "MK",
+   "question": "What is the special magic number for cobalt heron?",
+   "expected": [
+    "8981982"
+   ],
+   "answer": "The special magic number for cobalt heron is: 8981982.",
+   "hits": [
+    "8981982"
+   ],
+   "extras": [],
+   "forbidden": [],
+   "full": true,
+   "located": [
+    true
+   ],
+   "seconds": 20.9,
+   "rounds": 2,
+   "quotes": [
+    "1702635",
+    "8981982",
+    "9864766",
+    "1251670",
+    "3642312",
+    "9520162"
+   ],
+   "trace": [
+    {
+     "round": 1,
+     "new_blocks": [
+      15,
+      288,
+      599,
+      702,
+      909,
+      1013,
+      1530,
+      1633,
+      3600,
+      3703,
+      3807,
+      3910,
+      3921,
+      3922,
+      4014,
+      4026,
+      4040,
+      4048,
+      4053,
+      4056,
+      4081,
+      4083,
+      4084,
+      4085,
+      4086,
+      4088,
+      4089,
+      4091,
+      4092,
+      4093,
+      4094,
+      4095
+     ],
+     "added": [
+      "1702635",
+      "8981982",
+      "9864766",
+      "1251670",
+      "3642312",
+      "9520162"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 2,
+     "new_blocks": [
+      185,
+      1116,
+      2462,
+      3884,
+      3918,
+      3923,
+      3925,
+      4049,
+      4057,
+      4060,
+      4063,
+      4075,
+      4078,
+      4080,
+      4082,
+      4087
+     ],
+     "added": [],
+     "dropped": []
+    }
+   ],
+   "reread_tokens": 6784
+  },
+  {
+   "mode": "iterative",
+   "kind": "MK",
+   "question": "What is the special magic number for ivory mantis?",
+   "expected": [
+    "4123476"
+   ],
+   "answer": "The special magic number for ivory mantis is: 2579129.",
+   "hits": [],
+   "extras": [
+    "2579129"
+   ],
+   "forbidden": [],
+   "full": false,
+   "located": [
+    false
+   ],
+   "seconds": 29.8,
+   "rounds": 3,
+   "quotes": [
+    "1702635",
+    "9864766",
+    "1251670",
+    "9520162",
+    "3642312",
+    "2579129"
+   ],
+   "trace": [
+    {
+     "round": 1,
+     "new_blocks": [
+      15,
+      288,
+      599,
+      702,
+      909,
+      1530,
+      1633,
+      3600,
+      3703,
+      3807,
+      3910,
+      3921,
+      3922,
+      4014,
+      4026,
+      4040,
+      4048,
+      4053,
+      4056,
+      4063,
+      4081,
+      4083,
+      4084,
+      4085,
+      4086,
+      4088,
+      4089,
+      4091,
+      4092,
+      4093,
+      4094,
+      4095
+     ],
+     "added": [
+      "1702635",
+      "9864766",
+      "1251670",
+      "9520162",
+      "3642312"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 2,
+     "new_blocks": [
+      1116,
+      2462,
+      3884,
+      3918,
+      3923,
+      3924,
+      3925,
+      3939,
+      4049,
+      4057,
+      4060,
+      4075,
+      4078,
+      4080,
+      4082,
+      4087
+     ],
+     "added": [
+      "2579129"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 3,
+     "new_blocks": [
+      496,
+      1013,
+      2151,
+      3786,
+      3920,
+      3926,
+      3932,
+      3936,
+      3938,
+      4027,
+      4041,
+      4059,
+      4061,
+      4064,
+      4065,
+      4090
+     ],
+     "added": [],
+     "dropped": []
+    }
+   ],
+   "reread_tokens": 8064
+  },
+  {
+   "mode": "iterative",
+   "kind": "MK",
+   "question": "What is the special magic number for ivory panther?",
+   "expected": [
+    "2579129"
+   ],
+   "answer": "The special magic number for ivory panther is: 2579129.",
+   "hits": [
+    "2579129"
+   ],
+   "extras": [],
+   "forbidden": [],
+   "full": true,
+   "located": [
+    true
+   ],
+   "seconds": 18.9,
+   "rounds": 2,
+   "quotes": [
+    "2579129"
+   ],
+   "trace": [
+    {
+     "round": 1,
+     "new_blocks": [
+      15,
+      288,
+      599,
+      702,
+      909,
+      1013,
+      1116,
+      1530,
+      1633,
+      3600,
+      3703,
+      3807,
+      3910,
+      3921,
+      3922,
+      4014,
+      4026,
+      4040,
+      4048,
+      4053,
+      4081,
+      4083,
+      4084,
+      4085,
+      4086,
+      4088,
+      4089,
+      4091,
+      4092,
+      4093,
+      4094,
+      4095
+     ],
+     "added": [
+      "2579129"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 2,
+     "new_blocks": [
+      185,
+      496,
+      1323,
+      2151,
+      2462,
+      3884,
+      3923,
+      3925,
+      3936,
+      4056,
+      4060,
+      4063,
+      4075,
+      4078,
+      4080,
+      4087
+     ],
+     "added": [],
+     "dropped": []
+    }
+   ],
+   "reread_tokens": 7232
+  },
+  {
+   "mode": "iterative",
+   "kind": "MK",
+   "question": "What is the special magic number for jade mantis?",
+   "expected": [
+    "8492589"
+   ],
+   "answer": "The special magic number for jade mantis is: 8492589.",
+   "hits": [
+    "8492589"
+   ],
+   "extras": [],
+   "forbidden": [],
+   "full": true,
+   "located": [
+    true
+   ],
+   "seconds": 22.3,
+   "rounds": 3,
+   "quotes": [
+    "1702635",
+    "8492589"
+   ],
+   "trace": [
+    {
+     "round": 1,
+     "new_blocks": [
+      15,
+      288,
+      599,
+      702,
+      909,
+      1013,
+      1530,
+      1633,
+      3600,
+      3703,
+      3807,
+      3910,
+      3921,
+      3922,
+      4014,
+      4026,
+      4040,
+      4048,
+      4053,
+      4056,
+      4081,
+      4083,
+      4084,
+      4085,
+      4086,
+      4088,
+      4089,
+      4091,
+      4092,
+      4093,
+      4094,
+      4095
+     ],
+     "added": [
+      "1702635"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 2,
+     "new_blocks": [
+      185,
+      1116,
+      1323,
+      1737,
+      2151,
+      2462,
+      2669,
+      3884,
+      3923,
+      3925,
+      4057,
+      4060,
+      4063,
+      4075,
+      4080,
+      4087
+     ],
+     "added": [
+      "8492589"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 3,
+     "new_blocks": [
+      496,
+      2772,
+      3786,
+      3918,
+      3924,
+      3926,
+      3932,
+      3936,
+      3939,
+      4041,
+      4049,
+      4055,
+      4065,
+      4078,
+      4082,
+      4090
+     ],
+     "added": [],
+     "dropped": []
+    }
+   ],
+   "reread_tokens": 8960
+  },
+  {
+   "mode": "iterative",
+   "kind": "MK",
+   "question": "What is the special magic number for jade panther?",
+   "expected": [
+    "6090228"
+   ],
+   "answer": "The special magic number for jade panther is: 6090228.",
+   "hits": [
+    "6090228"
+   ],
+   "extras": [],
+   "forbidden": [],
+   "full": true,
+   "located": [
+    true
+   ],
+   "seconds": 31.2,
+   "rounds": 2,
+   "quotes": [
+    "1999101",
+    "6090228",
+    "8599992",
+    "1702635",
+    "9520162",
+    "3642312",
+    "2059731",
+    "1251670",
+    "421542",
+    "122.085589",
+    "2225380",
+    "9864766",
+    "9520162",
+    "3642312",
+    "8981982",
+    "1877827",
+    "1999101",
+    "6090228",
+    "8599992"
+   ],
+   "trace": [
+    {
+     "round": 1,
+     "new_blocks": [
+      15,
+      185,
+      288,
+      599,
+      702,
+      909,
+      1013,
+      1530,
+      1633,
+      3600,
+      3703,
+      3807,
+      3910,
+      3921,
+      3922,
+      4014,
+      4026,
+      4048,
+      4053,
+      4056,
+      4081,
+      4083,
+      4084,
+      4085,
+      4086,
+      4088,
+      4089,
+      4091,
+      4092,
+      4093,
+      4094,
+      4095
+     ],
+     "added": [
+      "1999101",
+      "6090228",
+      "8599992",
+      "1702635",
+      "9520162",
+      "3642312",
+      "2059731",
+      "1251670",
+      "421542",
+      "122.085589",
+      "2225380",
+      "9864766",
+      "9520162",
+      "3642312",
+      "8981982",
+      "1877827",
+      "1999101",
+      "6090228",
+      "8599992"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 2,
+     "new_blocks": [
+      1116,
+      3884,
+      3918,
+      3923,
+      3924,
+      3925,
+      3936,
+      4049,
+      4057,
+      4060,
+      4065,
+      4075,
+      4080,
+      4082,
+      4087,
+      4090
+     ],
+     "added": [],
+     "dropped": []
+    }
+   ],
+   "reread_tokens": 6464
+  },
+  {
+   "mode": "iterative",
+   "kind": "MK",
+   "question": "What is the special magic number for scarlet ibis?",
+   "expected": [
+    "3378927"
+   ],
+   "answer": "The special magic number for scarlet ibis is: 3378927.",
+   "hits": [
+    "3378927"
+   ],
+   "extras": [],
+   "forbidden": [],
+   "full": true,
+   "located": [
+    true
+   ],
+   "seconds": 17.0,
+   "rounds": 2,
+   "quotes": [
+    "3378927"
+   ],
+   "trace": [
+    {
+     "round": 1,
+     "new_blocks": [
+      15,
+      599,
+      702,
+      909,
+      1220,
+      1530,
+      1633,
+      3600,
+      3703,
+      3807,
+      3910,
+      3921,
+      3922,
+      4014,
+      4026,
+      4040,
+      4048,
+      4053,
+      4056,
+      4063,
+      4081,
+      4083,
+      4084,
+      4085,
+      4086,
+      4088,
+      4089,
+      4091,
+      4092,
+      4093,
+      4094,
+      4095
+     ],
+     "added": [
+      "3378927"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 2,
+     "new_blocks": [
+      288,
+      1013,
+      1116,
+      2462,
+      3884,
+      3918,
+      3923,
+      3925,
+      3936,
+      4057,
+      4060,
+      4065,
+      4075,
+      4078,
+      4080,
+      4087
+     ],
+     "added": [],
+     "dropped": []
+    }
+   ],
+   "reread_tokens": 7040
+  },
+  {
+   "mode": "iterative",
+   "kind": "MK",
+   "question": "What is the special magic number for scarlet badger?",
+   "expected": [
+    "2521199"
+   ],
+   "answer": "The special magic number for scarlet badger is: 2521199.",
+   "hits": [
+    "2521199"
+   ],
+   "extras": [],
+   "forbidden": [],
+   "full": true,
+   "located": [
+    true
+   ],
+   "seconds": 18.6,
+   "rounds": 2,
+   "quotes": [
+    "2521199"
+   ],
+   "trace": [
+    {
+     "round": 1,
+     "new_blocks": [
+      15,
+      288,
+      599,
+      702,
+      909,
+      1013,
+      1633,
+      2462,
+      3600,
+      3703,
+      3807,
+      3910,
+      3921,
+      3922,
+      4014,
+      4026,
+      4040,
+      4048,
+      4053,
+      4056,
+      4063,
+      4081,
+      4083,
+      4085,
+      4086,
+      4088,
+      4089,
+      4091,
+      4092,
+      4093,
+      4094,
+      4095
+     ],
+     "added": [
+      "2521199"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 2,
+     "new_blocks": [
+      185,
+      496,
+      1116,
+      1530,
+      3884,
+      3923,
+      3925,
+      3936,
+      4057,
+      4060,
+      4065,
+      4075,
+      4078,
+      4080,
+      4084,
+      4087
+     ],
+     "added": [],
+     "dropped": []
+    }
+   ],
+   "reread_tokens": 7040
+  },
+  {
+   "mode": "iterative",
+   "kind": "MK",
+   "question": "What is the special magic number for onyx ibis?",
+   "expected": [
+    "1702635"
+   ],
+   "answer": "The special magic number for onyx ibis is: 1702635.",
+   "hits": [
+    "1702635"
+   ],
+   "extras": [],
+   "forbidden": [],
+   "full": true,
+   "located": [
+    true
+   ],
+   "seconds": 41.4,
+   "rounds": 3,
+   "quotes": [
+    "421542",
+    "122.085589",
+    "b'2005-05-26-10458.68",
+    "857713",
+    "122.544543",
+    "2005-05-26-10458.68",
+    "2005-05-26-10458.68",
+    "2005-05-26-10458.68",
+    "2005-05-26-10458.68",
+    "1702635"
+   ],
+   "trace": [
+    {
+     "round": 1,
+     "new_blocks": [
+      15,
+      288,
+      599,
+      702,
+      909,
+      1530,
+      1633,
+      3600,
+      3703,
+      3807,
+      3910,
+      3921,
+      3922,
+      4014,
+      4026,
+      4040,
+      4048,
+      4053,
+      4056,
+      4063,
+      4081,
+      4083,
+      4084,
+      4085,
+      4086,
+      4088,
+      4089,
+      4091,
+      4092,
+      4093,
+      4094,
+      4095
+     ],
+     "added": [
+      "421542",
+      "122.085589",
+      "b'2005-05-26-10458.68",
+      "857713",
+      "122.544543",
+      "2005-05-26-10458.68",
+      "2005-05-26-10458.68",
+      "2005-05-26-10458.68",
+      "2005-05-26-10458.68"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 2,
+     "new_blocks": [
+      3884,
+      3900,
+      3918,
+      3923,
+      3924,
+      3925,
+      3939,
+      4049,
+      4057,
+      4060,
+      4065,
+      4075,
+      4080,
+      4082,
+      4087,
+      4090
+     ],
+     "added": [
+      "1702635"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 3,
+     "new_blocks": [
+      3883,
+      3885,
+      3899,
+      3920,
+      3936,
+      4009,
+      4016,
+      4027,
+      4042,
+      4043,
+      4050,
+      4061,
+      4062,
+      4064,
+      4072,
+      4078
+     ],
+     "added": [],
+     "dropped": []
+    }
+   ],
+   "reread_tokens": 7744
+  },
+  {
+   "mode": "iterative",
+   "kind": "MK",
+   "question": "What is the special magic number for onyx badger?",
+   "expected": [
+    "7646461"
+   ],
+   "answer": "The special magic number for onyx badger is: 7646461",
+   "hits": [
+    "7646461"
+   ],
+   "extras": [],
+   "forbidden": [],
+   "full": true,
+   "located": [
+    true
+   ],
+   "seconds": 26.1,
+   "rounds": 3,
+   "quotes": [
+    "7646461",
+    "1702635"
+   ],
+   "trace": [
+    {
+     "round": 1,
+     "new_blocks": [
+      15,
+      288,
+      599,
+      702,
+      909,
+      1530,
+      1633,
+      2151,
+      3600,
+      3703,
+      3807,
+      3910,
+      3921,
+      3922,
+      4014,
+      4026,
+      4040,
+      4048,
+      4053,
+      4056,
+      4081,
+      4083,
+      4084,
+      4085,
+      4086,
+      4088,
+      4089,
+      4091,
+      4092,
+      4093,
+      4094,
+      4095
+     ],
+     "added": [
+      "7646461"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 2,
+     "new_blocks": [
+      185,
+      1013,
+      1116,
+      1323,
+      2462,
+      3884,
+      3923,
+      3925,
+      3936,
+      4057,
+      4060,
+      4063,
+      4075,
+      4078,
+      4080,
+      4087
+     ],
+     "added": [
+      "1702635"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 3,
+     "new_blocks": [
+      496,
+      3786,
+      3918,
+      3924,
+      3926,
+      3932,
+      3938,
+      3939,
+      3940,
+      4041,
+      4049,
+      4055,
+      4059,
+      4065,
+      4082,
+      4090
+     ],
+     "added": [],
+     "dropped": []
+    }
+   ],
+   "reread_tokens": 8448
+  },
+  {
+   "mode": "iterative",
+   "kind": "MV",
+   "question": "What are all the special magic numbers for golden viper?",
+   "expected": [
+    "8599992",
+    "3642312",
+    "1251670",
+    "9864766"
+   ],
+   "answer": "The special magic numbers for golden viper are: 1999101, 6090228, 8599992, 1251670, 9864766, 1702635, 2579129, 8492589, 8981982, 8580",
+   "hits": [
+    "8599992",
+    "1251670",
+    "9864766"
+   ],
+   "extras": [
+    "1702635",
+    "1999101",
+    "2579129",
+    "6090228",
+    "8492589",
+    "8981982"
+   ],
+   "forbidden": [],
+   "full": false,
+   "located": [
+    true,
+    true,
+    true,
+    true
+   ],
+   "seconds": 118.6,
+   "rounds": 6,
+   "quotes": [
+    "1251670",
+    "8599992",
+    "9864766",
+    "3642312",
+    "8981982",
+    "2579129",
+    "9520162",
+    "8492589",
+    "2059731",
+    "1999101",
+    "6090228",
+    "7646461",
+    "2521199",
+    "7299227",
+    "1877827",
+    "8981982",
+    "8580488",
+    "8812311",
+    "3378927",
+    "1702635",
+    "4098086",
+    "8589669"
+   ],
+   "trace": [
+    {
+     "round": 1,
+     "new_blocks": [
+      15,
+      185,
+      288,
+      599,
+      702,
+      1530,
+      1633,
+      3600,
+      3703,
+      3807,
+      3910,
+      3921,
+      3922,
+      4014,
+      4026,
+      4040,
+      4048,
+      4053,
+      4056,
+      4063,
+      4081,
+      4083,
+      4084,
+      4085,
+      4086,
+      4088,
+      4089,
+      4091,
+      4092,
+      4093,
+      4094,
+      4095
+     ],
+     "added": [
+      "1251670",
+      "8599992",
+      "9864766",
+      "3642312"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 2,
+     "new_blocks": [
+      1013,
+      1116,
+      1634,
+      1737,
+      2151,
+      2462,
+      3884,
+      3918,
+      3923,
+      3925,
+      4049,
+      4057,
+      4075,
+      4078,
+      4080,
+      4087
+     ],
+     "added": [
+      "8981982",
+      "2579129",
+      "9520162",
+      "8492589",
+      "2059731",
+      "1999101",
+      "6090228",
+      "7646461",
+      "2521199",
+      "7299227",
+      "1877827",
+      "8981982"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 3,
+     "new_blocks": [
+      289,
+      496,
+      2669,
+      3885,
+      3924,
+      3926,
+      3936,
+      3939,
+      4027,
+      4050,
+      4060,
+      4061,
+      4064,
+      4065,
+      4082,
+      4090
+     ],
+     "added": [
+      "8580488"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 4,
+     "new_blocks": [
+      392,
+      909,
+      1944,
+      2048,
+      3786,
+      3883,
+      3920,
+      3938,
+      4009,
+      4041,
+      4042,
+      4058,
+      4059,
+      4062,
+      4072,
+      4079
+     ],
+     "added": [
+      "8812311"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 5,
+     "new_blocks": [
+      1220,
+      2772,
+      3496,
+      3899,
+      3900,
+      3917,
+      3932,
+      3937,
+      3940,
+      3957,
+      3969,
+      4028,
+      4043,
+      4055,
+      4071,
+      4074
+     ],
+     "added": [
+      "3378927",
+      "1702635",
+      "4098086",
+      "8589669"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 6,
+     "new_blocks": [
+      3886,
+      3955,
+      3958,
+      3970,
+      4010,
+      4025,
+      4029,
+      4032,
+      4045,
+      4046,
+      4047,
+      4051,
+      4066,
+      4067,
+      4073,
+      4076
+     ],
+     "added": [],
+     "dropped": []
+    }
+   ],
+   "reread_tokens": 12480
+  },
+  {
+   "mode": "iterative",
+   "kind": "MQ",
+   "question": "What are the special magic numbers for crimson falcon, amber heron, jade mantis and onyx badger?",
+   "expected": [
+    "8589669",
+    "4098086",
+    "8492589",
+    "7646461"
+   ],
+   "answer": "key: number for crimson falcon is: 1999101\nkey: number for amber heron is: 4098086\nkey: number for jade mantis is: 8492589\nkey: number for onyx badger is: 7646461",
+   "hits": [
+    "4098086",
+    "8492589",
+    "7646461"
+   ],
+   "extras": [
+    "1999101"
+   ],
+   "forbidden": [],
+   "full": false,
+   "located": [
+    false,
+    true,
+    true,
+    true
+   ],
+   "seconds": 79.8,
+   "rounds": 5,
+   "quotes": [
+    "6090228",
+    "8599992",
+    "9520162",
+    "1251670",
+    "3642312",
+    "9864766",
+    "1702635",
+    "8981982",
+    "2059731",
+    "1877827",
+    "9520162",
+    "3642312",
+    "1251670",
+    "421542",
+    "122.085589",
+    "b'2005-05-26-10458.68",
+    "857713",
+    "122.544543",
+    "1999101",
+    "2579129",
+    "1877",
+    "8492589",
+    "4098086",
+    "7646461"
+   ],
+   "trace": [
+    {
+     "round": 1,
+     "new_blocks": [
+      15,
+      288,
+      702,
+      909,
+      1013,
+      1530,
+      1633,
+      3600,
+      3703,
+      3807,
+      3910,
+      3921,
+      3922,
+      4014,
+      4026,
+      4040,
+      4041,
+      4048,
+      4053,
+      4056,
+      4063,
+      4081,
+      4084,
+      4085,
+      4086,
+      4088,
+      4089,
+      4091,
+      4092,
+      4093,
+      4094,
+      4095
+     ],
+     "added": [
+      "6090228",
+      "8599992",
+      "9520162",
+      "1251670",
+      "3642312",
+      "9864766",
+      "1702635",
+      "8981982",
+      "2059731",
+      "1877827",
+      "9520162",
+      "3642312",
+      "1251670"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 2,
+     "new_blocks": [
+      185,
+      1116,
+      3884,
+      3918,
+      3923,
+      3925,
+      3936,
+      4049,
+      4057,
+      4060,
+      4065,
+      4075,
+      4082,
+      4083,
+      4087,
+      4090
+     ],
+     "added": [
+      "421542",
+      "122.085589",
+      "b'2005-05-26-10458.68",
+      "857713",
+      "122.544543",
+      "1999101",
+      "2579129",
+      "1877"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 3,
+     "new_blocks": [
+      599,
+      1737,
+      3786,
+      3885,
+      3900,
+      3924,
+      3926,
+      3938,
+      3939,
+      4027,
+      4050,
+      4058,
+      4061,
+      4062,
+      4078,
+      4080
+     ],
+     "added": [
+      "8492589"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 4,
+     "new_blocks": [
+      496,
+      2151,
+      2462,
+      2669,
+      3496,
+      3883,
+      3920,
+      4028,
+      4042,
+      4043,
+      4051,
+      4059,
+      4064,
+      4066,
+      4072,
+      4079
+     ],
+     "added": [
+      "4098086",
+      "7646461"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 5,
+     "new_blocks": [
+      1634,
+      3886,
+      3889,
+      3890,
+      3917,
+      3927,
+      3937,
+      3940,
+      3957,
+      4011,
+      4029,
+      4044,
+      4045,
+      4055,
+      4067,
+      4076
+     ],
+     "added": [],
+     "dropped": []
+    }
+   ],
+   "reread_tokens": 10688
+  },
+  {
+   "mode": "iterative",
+   "kind": "VT",
+   "question": "Which variables are assigned the value 14673, either directly or through a chain of assignments such as VAR B = VAR A?",
+   "expected": [
+    "GHTAY",
+    "OKOSG",
+    "QHUJP",
+    "AVCOU",
+    "INRCW"
+   ],
+   "answer": "The value 14673 is assigned to the variable `GHTAY` directly in the provided code snippet. There are no other variables in the code that are assigned the value 14673 through a chain of assignments.\n\nHere is the list of variables assigned the value 14673, either directly or through a chain of assignments:\n\n- `GHTAY`",
+   "hits": [
+    "GHTAY"
+   ],
+   "extras": [],
+   "forbidden": [],
+   "full": false,
+   "located": [
+    true,
+    true,
+    false,
+    false,
+    false
+   ],
+   "seconds": 25.7,
+   "rounds": 2,
+   "quotes": [
+    "VAR GHTAY = 14673"
+   ],
+   "trace": [
+    {
+     "round": 1,
+     "new_blocks": [
+      15,
+      496,
+      1633,
+      3807,
+      3884,
+      3910,
+      3921,
+      3922,
+      3932,
+      4014,
+      4026,
+      4040,
+      4041,
+      4048,
+      4053,
+      4056,
+      4063,
+      4075,
+      4080,
+      4081,
+      4083,
+      4084,
+      4085,
+      4086,
+      4087,
+      4088,
+      4089,
+      4091,
+      4092,
+      4093,
+      4094,
+      4095
+     ],
+     "added": [
+      "VAR GHTAY = 14673"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 2,
+     "new_blocks": [
+      392,
+      806,
+      3600,
+      3703,
+      3923,
+      3925,
+      3939,
+      4049,
+      4055,
+      4057,
+      4060,
+      4061,
+      4062,
+      4065,
+      4078,
+      4090
+     ],
+     "added": [],
+     "dropped": []
+    }
+   ],
+   "reread_tokens": 6016
+  },
+  {
+   "mode": "iterative",
+   "kind": "2H",
+   "question": "What is the employee badge number of the person who holds the vault key of the Orrin observatory?",
+   "expected": [
+    "1877827"
+   ],
+   "answer": "The employee badge number of the person who holds the vault key of the Orrin observatory is 1877827.",
+   "hits": [
+    "1877827"
+   ],
+   "extras": [],
+   "forbidden": [],
+   "full": true,
+   "located": [
+    true,
+    true
+   ],
+   "seconds": 13.4,
+   "rounds": 1,
+   "quotes": [],
+   "trace": [
+    {
+     "round": 1,
+     "new_blocks": [
+      15,
+      81,
+      82,
+      599,
+      1323,
+      1633,
+      2048,
+      3600,
+      3703,
+      3807,
+      3910,
+      3921,
+      3922,
+      4014,
+      4026,
+      4040,
+      4048,
+      4053,
+      4056,
+      4063,
+      4081,
+      4083,
+      4084,
+      4085,
+      4086,
+      4088,
+      4089,
+      4091,
+      4092,
+      4093,
+      4094,
+      4095
+     ],
+     "added": [],
+     "dropped": [
+      "The employee badge number of the person who holds the vault key of the Orrin observatory is not explicitly mentioned in the provided text."
+     ]
+    }
+   ],
+   "reread_tokens": 4608
+  },
+  {
+   "mode": "iterative",
+   "kind": "2H",
+   "question": "Which combination opens the personal safe of the architect who designed the Teal Harbor lighthouse?",
+   "expected": [
+    "7667674"
+   ],
+   "answer": "The combination that opens the personal safe of the architect who designed the Teal Harbor lighthouse is 2225380.",
+   "hits": [],
+   "extras": [
+    "2225380"
+   ],
+   "forbidden": [],
+   "full": false,
+   "located": [
+    true,
+    false
+   ],
+   "seconds": 17.4,
+   "rounds": 2,
+   "quotes": [
+    "2225380"
+   ],
+   "trace": [
+    {
+     "round": 1,
+     "new_blocks": [
+      15,
+      599,
+      1323,
+      1633,
+      2255,
+      3600,
+      3703,
+      3807,
+      3910,
+      3921,
+      3922,
+      4014,
+      4026,
+      4040,
+      4048,
+      4053,
+      4056,
+      4063,
+      4080,
+      4081,
+      4083,
+      4084,
+      4085,
+      4086,
+      4087,
+      4088,
+      4089,
+      4091,
+      4092,
+      4093,
+      4094,
+      4095
+     ],
+     "added": [
+      "2225380"
+     ],
+     "dropped": []
+    },
+    {
+     "round": 2,
+     "new_blocks": [
+      81,
+      1530,
+      3884,
+      3918,
+      3923,
+      3925,
+      4041,
+      4049,
+      4055,
+      4057,
+      4060,
+      4062,
+      4065,
+      4075,
+      4078,
+      4090
+     ],
+     "added": [],
+     "dropped": []
+    }
+   ],
+   "reread_tokens": 6208
+  }
+ ]
+}
