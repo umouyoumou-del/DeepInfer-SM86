@@ -1334,6 +1334,7 @@ class DeepSeekV2LiteGGUFRuntime:
         remote_expert_device: int | None = None,
         remote_expert_fraction: float = 0.5,
         max_cache: int = 256,
+        rope_scaling: str | float | None = None,
         cpu_threads: int = 6,
         expert_chunk_size: int = 8,
         cpu_moe_layers: int = 0,
@@ -1622,6 +1623,7 @@ class DeepSeekV2LiteGGUFRuntime:
         self.model.native_paged_attention_kernel = bool(
             self.native_paged_attention_layers
         ) and os.environ.get("DEEPINFER_DISABLE_NATIVE_PAGED_MLA") != "1"
+        self.rope_mscale = self._apply_rope_scaling(rope_scaling)
         self.gpu_free_bytes_after_load = int(torch.cuda.mem_get_info()[0])
         self.auto_pinned_experts = 0
         requested = getattr(self, "pin_all_experts", None)
@@ -1799,6 +1801,55 @@ class DeepSeekV2LiteGGUFRuntime:
     ) -> None:
         target = self.device if device is None else device
         _set_parameter(module, "weight", self._read_weight(name, device=target, dtype=dtype))
+
+    def _apply_rope_scaling(self, requested: str | float | None) -> float:
+        """Rewrite every rotary module in place with YaRN, return the mscale.
+
+        Without this the model extrapolates past its trained length: DeepSeek's
+        GGUF declares 163,840 tokens and OLMoE only 4,096, and the remote
+        DeepseekV2RotaryEmbedding builds plain base-10000 frequencies with no
+        scaling, so nothing here is interpolated.
+        """
+
+        if requested is None:
+            return 1.0
+        from deepinfer.moe.yarn_rope import patch_rotary, yarn_from_config
+
+        if isinstance(requested, str):
+            parsed = yarn_from_config(self.config)
+            if parsed is None:
+                self._log("rope scaling requested but config declares none; ignored")
+                return 1.0
+            factor, beta_fast, beta_slow, original = parsed
+            if requested not in ("auto", "yarn"):
+                factor = float(requested)
+        else:
+            factor = float(requested)
+            beta_fast, beta_slow = 32.0, 1.0
+            original = int(getattr(self.config, "max_position_embeddings", 4096))
+        if factor <= 1.0:
+            return 1.0
+
+        patched = 0
+        for module in self.model.modules():
+            rotary = getattr(module, "rotary_emb", None)
+            if rotary is None or not hasattr(rotary, "inv_freq"):
+                continue
+            patch_rotary(
+                rotary,
+                factor=factor,
+                beta_fast=beta_fast,
+                beta_slow=beta_slow,
+                max_position=original,
+                seq_len=max(int(self.max_cache), int(original)),
+            )
+            patched += 1
+        mscale = 0.1 * __import__("math").log(factor) + 1.0
+        self._log(
+            "rope scaling: yarn factor %.2f over %d rotary modules "
+            "(original %d tokens), mscale %.3f" % (factor, patched, original, mscale)
+        )
+        return mscale
 
     def _choose_optional_device(self, requested: str, *, required_mib: int) -> str:
         if requested not in ("auto", "cpu", "cuda"):
