@@ -1,0 +1,52 @@
+{
+ "script": "scripts/bench_paged_decode.py",
+ "gpu": "NVIDIA GeForce RTX 4080 SUPER",
+ "torch": "2.5.1+cu124",
+ "kv": "int8",
+ "past": 131072,
+ "pool_gib": 20.473,
+ "model_gib": 2.161,
+ "experts_resident": false,
+ "free_gib_after_pool": 8.483,
+ "layers": 27,
+ "runs": [
+  {
+   "config": "w4096s4",
+   "window": 4096,
+   "sink": 4,
+   "model_ms_median": 520.09,
+   "model_tok_s": 1.92,
+   "model_ms_samples": [
+    545.15,
+    523.29,
+    517.77,
+    520.23,
+    519.94,
+    518.92
+   ],
+   "kernel_one_layer_ms_median": 8.996,
+   "kernel_x_layers_ms": 242.9
+  },
+  {
+   "config": "full",
+   "window": null,
+   "sink": null,
+   "model_ms_median": 7617.33,
+   "model_tok_s": 0.13,
+   "model_ms_samples": [
+    7620.2,
+    7612.76,
+    7610.97,
+    7620.69,
+    7621.63,
+    7614.46
+   ],
+   "kernel_one_layer_ms_median": 276.154,
+   "kernel_x_layers_ms": 7456.15
+  }
+ ],
+ "short_context": {
+  "past": 256,
+  "model_ms_median": 211.32
+ }
+}
