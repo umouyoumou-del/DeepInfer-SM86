@@ -53,6 +53,45 @@ PagedKVCacheManager(num_layers=27, num_kv_heads=16, head_dim=192,
 
 ---
 
+## 2.5 布局已修复（本轮）
+
+`paged_mla_attend` 现在按 `kv_heads` 步进（由 `key_pool.shape[1]` 传入），
+不再假定等于 query heads。调用方把 pool 按 `num_kv_heads=1` 分配即可。
+
+### 验证
+
+`tests/moe/test_mla_kv_sharing.py`（3 项）：
+
+| 测试 | 内容 |
+|---|---|
+| 共享布局 == 复制布局 | 同一 latent 分别存 1 份与 16 份，输出逐元素一致（`atol=2e-3`）——**证明这是纯浪费，不是语义** |
+| 体积 | 1 份池的元素数恰为 16 份的 1/16 |
+| 部分分组 | `kv_heads=4` 时每个 latent 由 4 个 query head 共享，输出有限且形状正确 |
+
+### 容量实测（4080 SUPER，31.47 GiB）
+
+| 上下文 | 修复前 | 修复后 | 状态 |
+|---:|---:|---:|---|
+| 64K | 20.2 GiB | **1.3 GiB** | ✅ |
+| 256K | 81 GiB ❌ | **5.1 GiB** | ✅ |
+| **512K** | 162 GiB ❌ | **10.1 GiB** | ✅ **现在装得下** |
+| 1M | 324 GiB ❌ | **20.2 GiB** | ❌ 仍差一点 |
+
+`num_kv_heads=1` 时每 token 是 **20,736 bytes（20.25 KiB）**，与真 MLA 推算一致。
+
+### 1M 的失败点精确定位
+
+```
+key_pool  10.12 GiB   ✅ 分配成功
+value_pool 10.12 GiB  ❌ OOM（可用 18.8 GiB）
+```
+
+**1M 需要 20.24 GiB 的 KV，而卡上自由显存只有 18.8 GiB**——
+即使不考虑 9 GiB 权重也不够。所以 **int8 是 1M 的唯一路径**：
+int8 后 KV 为 10.12 GiB，加权重共约 19 GiB，在 31.47 GiB 内。
+
+---
+
 ## 3. 要做的改动
 
 ### 3.1 pool 布局：按 head 共享

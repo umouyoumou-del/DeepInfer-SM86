@@ -39,6 +39,7 @@ extern "C" __global__ void dp_paged_mla_attend(
     __half* __restrict__ out,
     int total_warps,
     int heads,
+    int kv_heads,
     int q_len,
     int block_size,
     int max_blocks,
@@ -88,7 +89,7 @@ extern "C" __global__ void dp_paged_mla_attend(
             block_table[(long long)batch * max_blocks + block_index];
         if (block < 0) continue;
         const __half* kp =
-            k_pool + (((block * heads + head) * block_size + offset) * DP_MLA_D);
+            k_pool + (((block * kv_heads + head / (heads / kv_heads)) * block_size + offset) * DP_MLA_D);
         const float2 kv0 = __half22float2(
             *reinterpret_cast<const __half2*>(kp + lane * 2));
         const float2 kv1 = __half22float2(
@@ -107,7 +108,7 @@ extern "C" __global__ void dp_paged_mla_attend(
         const float probability = __expf(score - new_max);
         running_sum = running_sum * alpha + probability;
         const __half* vp =
-            v_pool + (((block * heads + head) * block_size + offset) * DP_MLA_D);
+            v_pool + (((block * kv_heads + head / (heads / kv_heads)) * block_size + offset) * DP_MLA_D);
         const float2 vv0 = __half22float2(
             *reinterpret_cast<const __half2*>(vp + lane * 2));
         const float2 vv1 = __half22float2(
@@ -211,6 +212,7 @@ def paged_mla_attend(
             _to_cupy(output),
             int(total_warps),
             int(heads),
+            int(key_pool.shape[1]),
             int(q_len),
             int(block_size),
             int(max_blocks),
@@ -237,6 +239,7 @@ extern "C" __global__ void dp_paged_mla_attend_cta(
     __half* __restrict__ out,
     int total_queries,
     int heads,
+    int kv_heads,
     int q_len,
     int block_size,
     int max_blocks,
@@ -278,7 +281,7 @@ extern "C" __global__ void dp_paged_mla_attend_cta(
             block_table[(long long)batch * max_blocks + block_index];
         if (block < 0) continue;
         const __half* kp =
-            k_pool + (((block * heads + head) * block_size + offset) * DP_MLA_D);
+            k_pool + (((block * kv_heads + head / (heads / kv_heads)) * block_size + offset) * DP_MLA_D);
         float dot = q0 * __half2float(kp[lane]);
         dot += q1 * __half2float(kp[lane + 32]);
         dot += q2 * __half2float(kp[lane + 64]);
@@ -294,7 +297,7 @@ extern "C" __global__ void dp_paged_mla_attend_cta(
         const float probability = __expf(score - new_max);
         running_sum = running_sum * alpha + probability;
         const __half* vp =
-            v_pool + (((block * heads + head) * block_size + offset) * DP_MLA_D);
+            v_pool + (((block * kv_heads + head / (heads / kv_heads)) * block_size + offset) * DP_MLA_D);
         acc0 = acc0 * alpha + probability * __half2float(vp[lane]);
         acc1 = acc1 * alpha + probability * __half2float(vp[lane + 32]);
         acc2 = acc2 * alpha + probability * __half2float(vp[lane + 64]);
@@ -398,6 +401,7 @@ def paged_mla_attend_cta(
             _to_cupy(output),
             int(total_queries),
             int(heads),
+            int(key_pool.shape[1]),
             int(q_len),
             int(block_size),
             int(max_blocks),
@@ -424,6 +428,7 @@ extern "C" __global__ void dp_paged_mla_attend_scalar(
     __half* __restrict__ out,
     int total_warps,
     int heads,
+    int kv_heads,
     int q_len,
     int block_size,
     int max_blocks,
@@ -460,7 +465,7 @@ extern "C" __global__ void dp_paged_mla_attend_scalar(
             block_table[(long long)batch * max_blocks + block_index];
         if (block < 0) continue;
         const __half* kp =
-            k_pool + (((block * heads + head) * block_size + offset) * DP_MLA_D);
+            k_pool + (((block * kv_heads + head / (heads / kv_heads)) * block_size + offset) * DP_MLA_D);
         float dot = q0 * __half2float(kp[lane]);
         dot += q1 * __half2float(kp[lane + 32]);
         dot += q2 * __half2float(kp[lane + 64]);
@@ -476,7 +481,7 @@ extern "C" __global__ void dp_paged_mla_attend_scalar(
         const float probability = __expf(score - new_max);
         running_sum = running_sum * alpha + probability;
         const __half* vp =
-            v_pool + (((block * heads + head) * block_size + offset) * DP_MLA_D);
+            v_pool + (((block * kv_heads + head / (heads / kv_heads)) * block_size + offset) * DP_MLA_D);
         acc0 = acc0 * alpha + probability * __half2float(vp[lane]);
         acc1 = acc1 * alpha + probability * __half2float(vp[lane + 32]);
         acc2 = acc2 * alpha + probability * __half2float(vp[lane + 64]);
@@ -555,6 +560,7 @@ def paged_mla_attend_scalar(
             _to_cupy(output),
             int(total_warps),
             int(heads),
+            int(key_pool.shape[1]),
             int(q_len),
             int(block_size),
             int(max_blocks),
