@@ -1,0 +1,102 @@
+{
+ "script": "scripts/bench_paged_decode.py",
+ "gpu": "NVIDIA GeForce RTX 4080 SUPER",
+ "torch": "2.5.1+cu124",
+ "kv": "int8",
+ "past": 114688,
+ "pool_gib": 17.916,
+ "model_gib": 11.137,
+ "experts_resident": true,
+ "free_gib_after_pool": 1.665,
+ "layers": 27,
+ "runs": [
+  {
+   "config": "w4096s4",
+   "window": 4096,
+   "sink": 4,
+   "model_ms_median": 118.2,
+   "model_tok_s": 8.46,
+   "model_ms_samples": [
+    120.81,
+    118.47,
+    118.99,
+    116.67,
+    116.57,
+    118.14,
+    117.14,
+    119.52,
+    118.27,
+    117.37
+   ],
+   "kernel_one_layer_ms_median": 0.229,
+   "kernel_x_layers_ms": 6.19
+  },
+  {
+   "config": "w8192s4",
+   "window": 8192,
+   "sink": 4,
+   "model_ms_median": 102.31,
+   "model_tok_s": 9.77,
+   "model_ms_samples": [
+    102.65,
+    103.6,
+    107.14,
+    102.12,
+    102.11,
+    102.5,
+    103.04,
+    89.27,
+    64.98,
+    64.96
+   ],
+   "kernel_one_layer_ms_median": 0.172,
+   "kernel_x_layers_ms": 4.64
+  },
+  {
+   "config": "w16384s4",
+   "window": 16384,
+   "sink": 4,
+   "model_ms_median": 66.08,
+   "model_tok_s": 15.13,
+   "model_ms_samples": [
+    66.33,
+    66.4,
+    65.97,
+    66.39,
+    65.63,
+    65.73,
+    66.18,
+    65.75,
+    66.94,
+    65.69
+   ],
+   "kernel_one_layer_ms_median": 0.403,
+   "kernel_x_layers_ms": 10.87
+  },
+  {
+   "config": "full",
+   "window": null,
+   "sink": null,
+   "model_ms_median": 118.59,
+   "model_tok_s": 8.43,
+   "model_ms_samples": [
+    118.15,
+    118.09,
+    118.93,
+    117.65,
+    118.5,
+    119.1,
+    118.9,
+    118.68,
+    118.88,
+    118.25
+   ],
+   "kernel_one_layer_ms_median": 2.34,
+   "kernel_x_layers_ms": 63.19
+  }
+ ],
+ "short_context": {
+  "past": 256,
+  "model_ms_median": 118.18
+ }
+}

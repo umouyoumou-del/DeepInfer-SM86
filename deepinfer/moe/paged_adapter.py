@@ -131,6 +131,35 @@ class DeepSeekPagedCache(Cache):
         if self.native_attention and os.environ.get(
             "DEEPINFER_DISABLE_CUDA_PAGED_MLA"
         ) != "1":
+            if os.environ.get("DEEPINFER_PAGED_MLA_SPLIT", "1") != "0":
+                # Decode: one query per head cannot fill the GPU with one warp
+                # per query, so split the keys across CTAs (flash-decoding).
+                from deepinfer.moe.paged_mla_split import (
+                    paged_mla_decode_split,
+                    paged_mla_split_supported,
+                )
+
+                if paged_mla_split_supported(
+                    query_states, view.key_pool, view.value_pool
+                ):
+                    return paged_mla_decode_split(
+                        query_states,
+                        view.key_pool,
+                        view.value_pool,
+                        view.block_table,
+                        valid_lengths,
+                        positions,
+                        block_size=int(view.block_size),
+                        max_blocks=int(view.block_table.shape[1]),
+                        scale=float(scale),
+                        key_scale_pool=view.key_scale_pool,
+                        value_scale_pool=view.value_scale_pool,
+                        key_dim=self.key_dim,
+                        value_dim=self.value_dim,
+                        sliding_window=self.sliding_window,
+                        attention_sink=self.attention_sink,
+                        max_kv_length=self.max_length,
+                    )
             from deepinfer.moe.paged_mla_kernel import (
                 cuda_paged_mla_supported,
                 paged_mla_attend,
