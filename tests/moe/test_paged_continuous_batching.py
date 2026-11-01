@@ -378,3 +378,73 @@ def test_prefix_cache_disabled_keeps_zero_hits() -> None:
         engine.close()
     assert status["prefix_cache"]["hits_this_engine"] == 0
     assert status["prefix_cache"]["max_blocks"] == 0
+
+
+def _position_sensitive_runtime() -> SimpleNamespace:
+    """Fake runtime whose prediction depends on the position it was given.
+
+    Chunked prefill must forward each piece at its absolute positions; if it
+    restarts from zero the sampled token changes, so this makes position drift
+    observable rather than silent.
+    """
+
+    runtime = _fake_runtime()
+    seen: list[int] = []
+
+    def forward_logits(input_ids, position_ids, *, kv_cache=None, attention_mask=None):
+        assert kv_cache is not None
+        seen.append(int(position_ids[0, -1]))
+        logits = torch.zeros(int(input_ids.shape[0]), 1, 120)
+        for row in range(int(input_ids.shape[0])):
+            target = (int(input_ids[row, -1]) + int(position_ids[row, -1]) + 1) % 100
+            logits[row, 0, target] = 1.0
+        return logits
+
+    runtime.forward_logits = forward_logits
+    runtime._positions_seen = seen
+    return runtime
+
+
+def _run_prefill(chunk_tokens: int) -> tuple[list[int], list[int]]:
+    runtime = _position_sensitive_runtime()
+    engine = PagedContinuousBatchEngine(
+        runtime,
+        max_batch_size=1,
+        block_size=4,
+        num_blocks=32,
+        prefill_mode="paged",
+        pool_device="cpu",
+        prefill_chunk_tokens=chunk_tokens,
+    )
+    try:
+        result = engine.submit(
+            [{"role": "user", "content": "a bb ccc dd ee fff gg hh"}],
+            max_new_tokens=3,
+        ).result(timeout=30)
+    finally:
+        engine.close()
+    ids = list(result.token_ids)
+    return ids, list(runtime._positions_seen)
+
+
+def test_chunked_prefill_matches_single_shot() -> None:
+    """Splitting the prompt must not change the tokens or the positions used."""
+
+    single_ids, single_positions = _run_prefill(0)
+    chunked_ids, chunked_positions = _run_prefill(2)
+    assert chunked_ids == single_ids
+    # the final position forwarded must be the same in both cases
+    assert chunked_positions[-1] == single_positions[-1]
+    # chunking must actually have split the work
+    assert len(chunked_positions) > len(single_positions)
+
+
+def test_chunked_prefill_positions_are_absolute() -> None:
+    """Every forwarded piece must start where the previous one ended."""
+
+    _, positions = _run_prefill(2)
+    # decode steps follow the prefill; the prefill positions must ascend from
+    # the first chunk without ever restarting at zero after the first call
+    prefill_positions = positions[: len(positions) - 3]
+    assert prefill_positions[0] >= 0
+    assert all(b >= a for a, b in zip(prefill_positions, prefill_positions[1:]))

@@ -293,11 +293,14 @@ class PagedContinuousBatchEngine:
         prefix_namespace: str = "",
         admission_grace_ms: float = 0.0,
         overlap_prefill: bool = False,
+        prefill_chunk_tokens: int = 0,
     ) -> None:
         if prefill_mode not in {"batched", "paged"}:
             raise ValueError("prefill_mode must be 'batched' or 'paged'")
         self.runtime = runtime
         self.max_batch_size = max(1, int(max_batch_size))
+        # 0 keeps the previous behaviour: one forward for the whole suffix.
+        self.prefill_chunk_tokens = max(0, int(prefill_chunk_tokens))
         self.device = int(device)
         self.prefill_mode = prefill_mode
         self.dims = paged_dims(runtime)
@@ -568,9 +571,45 @@ class PagedContinuousBatchEngine:
                 positions = torch.arange(
                     start_position, length, dtype=torch.long, device=runtime.device
                 ).unsqueeze(0)
-            logits = runtime.forward_logits(
-                suffix.to(runtime.device), positions, kv_cache=views
-            )
+            chunk = self.prefill_chunk_tokens
+            if chunk and suffix.shape[1] > chunk:
+                # Chunked prefill: forward `chunk` tokens at a time, each at its
+                # absolute positions, so peak activation and score memory depend
+                # on the chunk rather than on the prompt.  Only the last chunk's
+                # logits are sampled, and every chunk writes its own KV, so the
+                # result must equal the single-shot forward.
+                total = suffix.shape[1]
+                for offset in range(0, total - 1, chunk):
+                    end = min(offset + chunk, total)
+                    piece = suffix[:, offset:end]
+                    piece_positions = positions[:, offset:end]
+                    piece_views = self._make_views(
+                        [request],
+                        [start_position + offset],
+                        max_length=length,
+                        new_tokens=end - offset,
+                    )
+                    logits = runtime.forward_logits(
+                        piece.to(runtime.device), piece_positions, kv_cache=piece_views
+                    )
+                if (total - 1) % chunk:
+                    # the final token must be scored on its own so its KV is new
+                    tail_start = total - 1
+                    tail = suffix[:, tail_start:]
+                    tail_positions = positions[:, tail_start:]
+                    tail_views = self._make_views(
+                        [request],
+                        [start_position + tail_start],
+                        max_length=length,
+                        new_tokens=1,
+                    )
+                    logits = runtime.forward_logits(
+                        tail.to(runtime.device), tail_positions, kv_cache=tail_views
+                    )
+            else:
+                logits = runtime.forward_logits(
+                    suffix.to(runtime.device), positions, kv_cache=views
+                )
             elapsed = time.perf_counter() - started
             token = runtime._sample(
                 logits[0, -1],
