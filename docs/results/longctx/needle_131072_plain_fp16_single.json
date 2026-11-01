@@ -1,0 +1,77 @@
+{
+  "model": "coder",
+  "tokens": 131072,
+  "mode": "single",
+  "positions": "plain",
+  "trained": null,
+  "kv": "fp16",
+  "gpu_tokens": 131328,
+  "experts": "pinned",
+  "prefill_seconds": [
+    47.8,
+    47.8,
+    47.7,
+    47.9,
+    47.8
+  ],
+  "timings": {
+    "prefill_attention": 164.7,
+    "prefill_mlp": 79.4,
+    "decode_attention": 3.5,
+    "decode_mlp": 2.1
+  },
+  "peak_gib": 17.46,
+  "recall": "5/5",
+  "needles": [
+    {
+      "statement": "The secret code of agent Crimson Falcon is 6433012.",
+      "question": "What is the secret code of agent Crimson Falcon?",
+      "code": "6433012",
+      "depth": 0.25,
+      "position": 32772,
+      "answer": " 6433012",
+      "hit": true,
+      "seconds": 3.03
+    },
+    {
+      "statement": "The vault in the Silver Otter building opens with the combination 3530829.",
+      "question": "Which combination opens the vault in the Silver Otter building?",
+      "code": "3530829",
+      "depth": 0.5,
+      "position": 65527,
+      "answer": " The combination to open the vault in the Silver Otter building is 3530829.",
+      "hit": true,
+      "seconds": 3.15
+    },
+    {
+      "statement": "Dr. Amber Lynx keeps her research notes in locker number 7624039.",
+      "question": "In which locker number does Dr. Amber Lynx keep her research notes?",
+      "code": "7624039",
+      "depth": 0.6,
+      "position": 78631,
+      "answer": " 7624039",
+      "hit": true,
+      "seconds": 2.11
+    },
+    {
+      "statement": "The shipping container of the Cobalt Heron expedition is labeled 1810111.",
+      "question": "What label is on the shipping container of the Cobalt Heron expedition?",
+      "code": "1810111",
+      "depth": 0.75,
+      "position": 98299,
+      "answer": " 1810111",
+      "hit": true,
+      "seconds": 2.14
+    },
+    {
+      "statement": "The library card issued to Ivory Mantis carries the number 2215279.",
+      "question": "What number is on the library card issued to Ivory Mantis?",
+      "code": "2215279",
+      "depth": 0.9,
+      "position": 117959,
+      "answer": " 2215279",
+      "hit": true,
+      "seconds": 1.71
+    }
+  ]
+}

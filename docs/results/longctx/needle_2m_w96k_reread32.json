@@ -1,0 +1,126 @@
+{
+  "model": "coder",
+  "tokens": 2097152,
+  "mode": "insert",
+  "positions": "dca",
+  "trained": 131072,
+  "far": 131071,
+  "kv": "fp8",
+  "retrieval": null,
+  "logn": false,
+  "reread": 32,
+  "encode_window": 98304,
+  "gpu_tokens": 1512515,
+  "experts": "streamed",
+  "prefill_seconds": [
+    1212.9
+  ],
+  "cache_load_seconds": null,
+  "timings": {
+    "prefill_attention": 976.7,
+    "prefill_mlp": 403.2
+  },
+  "peak_gib": 29.61,
+  "recall": "9/9",
+  "needles": [
+    {
+      "statement": "The secret code of agent Crimson Falcon is 6433012.",
+      "question": "What is the secret code of agent Crimson Falcon?",
+      "code": "6433012",
+      "depth": 0.0,
+      "position": 4,
+      "answer": " The secret code of agent Crimson Falcon is 6433012.",
+      "hit": true,
+      "located": true,
+      "seconds": 23.99
+    },
+    {
+      "statement": "The vault in the Silver Otter building opens with the combination 3530829.",
+      "question": "Which combination opens the vault in the Silver Otter building?",
+      "code": "3530829",
+      "depth": 0.1,
+      "position": 209719,
+      "answer": " The combination to open the vault in the Silver Otter building is 3530829.",
+      "hit": true,
+      "located": true,
+      "seconds": 25.33
+    },
+    {
+      "statement": "Dr. Amber Lynx keeps her research notes in locker number 7624039.",
+      "question": "In which locker number does Dr. Amber Lynx keep her research notes?",
+      "code": "7624039",
+      "depth": 0.25,
+      "position": 524292,
+      "answer": " Dr. Amber Lynx keeps her research notes in locker number 7624039.",
+      "hit": true,
+      "located": true,
+      "seconds": 33.26
+    },
+    {
+      "statement": "The shipping container of the Cobalt Heron expedition is labeled 1810111.",
+      "question": "What label is on the shipping container of the Cobalt Heron expedition?",
+      "code": "1810111",
+      "depth": 0.4,
+      "position": 838871,
+      "answer": " The label on the shipping container of the Cobalt Heron expedition is 1810111.",
+      "hit": true,
+      "located": true,
+      "seconds": 24.26
+    },
+    {
+      "statement": "The library card issued to Ivory Mantis carries the number 2215279.",
+      "question": "What number is on the library card issued to Ivory Mantis?",
+      "code": "2215279",
+      "depth": 0.5,
+      "position": 1048571,
+      "answer": " The number on the library card issued to Ivory Mantis is 2215279.",
+      "hit": true,
+      "located": true,
+      "seconds": 29.53
+    },
+    {
+      "statement": "The parcel sent to Jade Panther has the tracking number 9990608.",
+      "question": "What is the tracking number of the parcel sent to Jade Panther?",
+      "code": "9990608",
+      "depth": 0.6,
+      "position": 1258283,
+      "answer": " The tracking number of the parcel sent to Jade Panther is 9990608.",
+      "hit": true,
+      "located": true,
+      "seconds": 31.96
+    },
+    {
+      "statement": "The train ticket bought by Scarlet Ibis has the booking reference 2579240.",
+      "question": "What is the booking reference of the train ticket bought by Scarlet Ibis?",
+      "code": "2579240",
+      "depth": 0.75,
+      "position": 1572850,
+      "answer": " The booking reference of the train ticket bought by Scarlet Ibis is 2579240.",
+      "hit": true,
+      "located": true,
+      "seconds": 23.62
+    },
+    {
+      "statement": "The telescope at the Onyx Badger observatory has the serial number 7135241.",
+      "question": "What is the serial number of the telescope at the Onyx Badger observatory?",
+      "code": "7135241",
+      "depth": 0.9,
+      "position": 1887433,
+      "answer": " The serial number of the telescope at the Onyx Badger observatory is 7135241.",
+      "hit": true,
+      "located": true,
+      "seconds": 32.65
+    },
+    {
+      "statement": "The emergency hotline of the Golden Viper hotel has the extension 1973060.",
+      "question": "What is the extension of the emergency hotline of the Golden Viper hotel?",
+      "code": "1973060",
+      "depth": 0.99,
+      "position": 2076161,
+      "answer": " 1973060",
+      "hit": true,
+      "located": true,
+      "seconds": 27.38
+    }
+  ]
+}

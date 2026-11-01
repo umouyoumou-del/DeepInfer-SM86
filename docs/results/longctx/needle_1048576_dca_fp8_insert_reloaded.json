@@ -1,0 +1,65 @@
+{
+  "model": "coder",
+  "tokens": 1048576,
+  "mode": "insert",
+  "positions": "dca",
+  "trained": 131072,
+  "far": 131071,
+  "kv": "fp8",
+  "retrieval": null,
+  "logn": false,
+  "gpu_tokens": 1048832,
+  "experts": "streamed",
+  "prefill_seconds": [],
+  "cache_load_seconds": 13.8,
+  "timings": {
+    "prefill_attention": 20.0,
+    "prefill_mlp": 6.6,
+    "decode_attention": 12.0,
+    "decode_mlp": 17.3
+  },
+  "peak_gib": 20.1,
+  "recall": "0/4",
+  "needles": [
+    {
+      "statement": "The secret code of agent Crimson Falcon is 8589669.",
+      "question": "What is the secret code of agent Crimson Falcon?",
+      "code": "8589669",
+      "depth": 0.05,
+      "position": 52432,
+      "answer": " The secret code of agent Crimson Falcon is 8589934511.\n\nThis code is used to represent the secret code of",
+      "hit": false,
+      "seconds": 14.94
+    },
+    {
+      "statement": "The vault in the Silver Otter building opens with the combination 8812311.",
+      "question": "Which combination opens the vault in the Silver Otter building?",
+      "code": "8812311",
+      "depth": 0.33,
+      "position": 346027,
+      "answer": " The combination opens the vault, and the rest of the code continues to parse the input as a decimal number, which is then used to set the locale's",
+      "hit": false,
+      "seconds": 11.28
+    },
+    {
+      "statement": "Dr. Amber Lynx keeps her research notes in locker number 8580488.",
+      "question": "In which locker number does Dr. Amber Lynx keep her research notes?",
+      "code": "8580488",
+      "depth": 0.66,
+      "position": 692057,
+      "answer": " The answer is 776.",
+      "hit": false,
+      "seconds": 6.2
+    },
+    {
+      "statement": "The shipping container of the Cobalt Heron expedition is labeled 9520162.",
+      "question": "What label is on the shipping container of the Cobalt Heron expedition?",
+      "code": "9520162",
+      "depth": 0.95,
+      "position": 996130,
+      "answer": " The label is on the shipping container of the Cobalt Heron expedition.\n\nThe label contains the 7-digit number 0x0000",
+      "hit": false,
+      "seconds": 14.05
+    }
+  ]
+}

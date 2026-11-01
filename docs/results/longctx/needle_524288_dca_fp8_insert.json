@@ -1,0 +1,115 @@
+{
+  "model": "coder",
+  "tokens": 524288,
+  "mode": "insert",
+  "positions": "dca",
+  "trained": 131072,
+  "kv": "fp8",
+  "retrieval": null,
+  "gpu_tokens": 524544,
+  "experts": "pinned",
+  "prefill_seconds": [
+    562.3
+  ],
+  "cache_load_seconds": null,
+  "timings": {
+    "prefill_attention": 523.4,
+    "prefill_mlp": 79.3,
+    "decode_attention": 7.4,
+    "decode_mlp": 5.0
+  },
+  "peak_gib": 22.31,
+  "recall": "4/9",
+  "needles": [
+    {
+      "statement": "The secret code of agent Crimson Falcon is 6433012.",
+      "question": "What is the secret code of agent Crimson Falcon?",
+      "code": "6433012",
+      "depth": 0.0,
+      "position": 4,
+      "answer": " 6432178",
+      "hit": false,
+      "seconds": 4.47
+    },
+    {
+      "statement": "The vault in the Silver Otter building opens with the combination 3530829.",
+      "question": "Which combination opens the vault in the Silver Otter building?",
+      "code": "3530829",
+      "depth": 0.1,
+      "position": 52432,
+      "answer": " 3530829",
+      "hit": true,
+      "seconds": 5.66
+    },
+    {
+      "statement": "Dr. Amber Lynx keeps her research notes in locker number 7624039.",
+      "question": "In which locker number does Dr. Amber Lynx keep her research notes?",
+      "code": "7624039",
+      "depth": 0.25,
+      "position": 131076,
+      "answer": " 7624",
+      "hit": false,
+      "seconds": 3.35
+    },
+    {
+      "statement": "The shipping container of the Cobalt Heron expedition is labeled 1810111.",
+      "question": "What label is on the shipping container of the Cobalt Heron expedition?",
+      "code": "1810111",
+      "depth": 0.4,
+      "position": 209719,
+      "answer": " 7448421",
+      "hit": false,
+      "seconds": 3.44
+    },
+    {
+      "statement": "The library card issued to Ivory Mantis carries the number 2215279.",
+      "question": "What number is on the library card issued to Ivory Mantis?",
+      "code": "2215279",
+      "depth": 0.5,
+      "position": 262154,
+      "answer": " 2984571",
+      "hit": false,
+      "seconds": 3.69
+    },
+    {
+      "statement": "The parcel sent to Jade Panther has the tracking number 9990608.",
+      "question": "What is the tracking number of the parcel sent to Jade Panther?",
+      "code": "9990608",
+      "depth": 0.6,
+      "position": 314568,
+      "answer": " 9990608",
+      "hit": true,
+      "seconds": 3.35
+    },
+    {
+      "statement": "The train ticket bought by Scarlet Ibis has the booking reference 2579240.",
+      "question": "What is the booking reference of the train ticket bought by Scarlet Ibis?",
+      "code": "2579240",
+      "depth": 0.75,
+      "position": 393208,
+      "answer": " 2579468",
+      "hit": false,
+      "seconds": 3.67
+    },
+    {
+      "statement": "The telescope at the Onyx Badger observatory has the serial number 7135241.",
+      "question": "What is the serial number of the telescope at the Onyx Badger observatory?",
+      "code": "7135241",
+      "depth": 0.9,
+      "position": 471841,
+      "answer": " 7135241",
+      "hit": true,
+      "seconds": 5.61
+    },
+    {
+      "statement": "The emergency hotline of the Golden Viper hotel has the extension 1973060.",
+      "question": "What is the extension of the emergency hotline of the Golden Viper hotel?",
+      "code": "1973060",
+      "depth": 0.99,
+      "position": 519036,
+      "answer": " 1973060",
+      "hit": true,
+      "seconds": 3.82
+    }
+  ]
+}

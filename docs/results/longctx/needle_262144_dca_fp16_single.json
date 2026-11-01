@@ -1,0 +1,55 @@
+{
+  "model": "coder",
+  "tokens": 262144,
+  "mode": "single",
+  "positions": "dca",
+  "trained": 131072,
+  "kv": "fp16",
+  "gpu_tokens": 262400,
+  "experts": "pinned",
+  "prefill_seconds": [
+    156.8,
+    160.2,
+    157.0
+  ],
+  "timings": {
+    "prefill_attention": 383.9,
+    "prefill_mlp": 93.5,
+    "decode_attention": 2.8,
+    "decode_mlp": 1.4
+  },
+  "peak_gib": 21.25,
+  "recall": "3/3",
+  "needles": [
+    {
+      "statement": "The secret code of agent Crimson Falcon is 6433012.",
+      "question": "What is the secret code of agent Crimson Falcon?",
+      "code": "6433012",
+      "depth": 0.25,
+      "position": 65540,
+      "answer": " 6433012",
+      "hit": true,
+      "seconds": 3.14
+    },
+    {
+      "statement": "The vault in the Silver Otter building opens with the combination 3530829.",
+      "question": "Which combination opens the vault in the Silver Otter building?",
+      "code": "3530829",
+      "depth": 0.5,
+      "position": 131063,
+      "answer": " The combination that opens the vault in the Silver Otter building is 3530829.",
+      "hit": true,
+      "seconds": 3.29
+    },
+    {
+      "statement": "Dr. Amber Lynx keeps her research notes in locker number 7624039.",
+      "question": "In which locker number does Dr. Amber Lynx keep her research notes?",
+      "code": "7624039",
+      "depth": 0.75,
+      "position": 196592,
+      "answer": " 7624039",
+      "hit": true,
+      "seconds": 2.66
+    }
+  ]
+}

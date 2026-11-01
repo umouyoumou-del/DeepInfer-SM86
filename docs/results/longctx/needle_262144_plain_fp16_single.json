@@ -1,0 +1,55 @@
+{
+  "model": "coder",
+  "tokens": 262144,
+  "mode": "single",
+  "positions": "plain",
+  "trained": null,
+  "kv": "fp16",
+  "gpu_tokens": 262400,
+  "experts": "pinned",
+  "prefill_seconds": [
+    160.8,
+    160.6,
+    158.1
+  ],
+  "timings": {
+    "prefill_attention": 386.1,
+    "prefill_mlp": 96.3,
+    "decode_attention": 4.5,
+    "decode_mlp": 3.9
+  },
+  "peak_gib": 21.26,
+  "recall": "0/3",
+  "needles": [
+    {
+      "statement": "The secret code of agent Crimson Falcon is 6433012.",
+      "question": "What is the secret code of agent Crimson Falcon?",
+      "code": "6433012",
+      "depth": 0.25,
+      "position": 65540,
+      "answer": " = None = index =  # Remove = None if not None if not None in raw_scan = name = _find = None = self._scan =",
+      "hit": false,
+      "seconds": 4.95
+    },
+    {
+      "statement": "The vault in the Silver Otter building opens with the combination 3530829.",
+      "question": "Which combination opens the vault in the Silver Otter building?",
+      "code": "3530829",
+      "depth": 0.5,
+      "position": 131063,
+      "answer": " = index = name = index = None\n    if not None in C = name = self.pop(self = None = _scan = len = cls",
+      "hit": false,
+      "seconds": 3.62
+    },
+    {
+      "statement": "Dr. Amber Lynx keeps her research notes in locker number 7624039.",
+      "question": "In which locker number does Dr. Amber Lynx keep her research notes?",
+      "code": "7624039",
+      "depth": 0.75,
+      "position": 196592,
+      "answer": "\n        if not if not None = None if not sysize = _mapping = _container = None = _scan = self.__name = cls = _",
+      "hit": false,
+      "seconds": 4.4
+    }
+  ]
+}
