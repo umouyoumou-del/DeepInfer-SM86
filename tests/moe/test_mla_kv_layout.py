@@ -1,12 +1,19 @@
-"""MLA stores one latent per token per layer; the pool must not copy it per head.
+"""MLA's pooled KV is per head, not shared - corrected after a wrong claim.
 
-DeepSeek-V2-Lite has kv_lora_rank 512 plus a 64-wide rope part, so a token needs
-576 values per layer, shared by all 16 heads.  Allocating [blocks, 16, block,
-192] stored 16 identical copies - 10.7x the memory MLA actually requires, which
-is what put a 1M context out of reach.
+An earlier version of this file asserted that DeepSeek's MLA latent is shared by
+all heads and that storing one copy per head was therefore a 10.7x waste.  That
+is false.  ``blk.N.attn_kv_b.weight`` is (4096, 512): the 512-wide latent is
+up-projected to 16 x (128 nope + 128 v) *different* per-head keys and values.
+The pool stores those expansions, so one copy per head is correct.
 
-These tests pin the fix: a pool with one kv head must give exactly the same
-attention output as a pool where that latent is replicated across all heads.
+The tests below were written to prove the wrong thing: they built both pools
+from a single latent, so of course sharing matched - the premise was baked into
+the fixture.  They are kept only to pin what the kernel's kv_heads stride does
+for callers that genuinely do share (grouped-query models), with the names
+corrected so nobody reads them as evidence about DeepSeek.
+
+DeepSeek-V2-Lite therefore needs kv_heads == heads.  Setting it lower silently
+produces wrong attention, which is why the runtime never sets it.
 """
 
 from __future__ import annotations
@@ -53,7 +60,10 @@ def _run(kv_heads: int):
 
 
 def test_one_kv_head_matches_replicated_pool() -> None:
-    """Sharing the latent must not change the numbers - it only stops copying it."""
+    """Kernel contract only: when the data really is replicated, sharing is exact.
+
+    This says nothing about DeepSeek, where the per-head projections differ.
+    """
 
     shared = _run(1)
     replicated = _run(HEADS)
