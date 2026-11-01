@@ -408,29 +408,35 @@ cannot be broadcast to indexing result of shape [1, 512, 1, 192]
 2. **不用分层**：KV 全在显存，decode 没有 PCIe/DDR 惩罚；
 3. 配合第 2 项的 sink + 窗口，**decode 成本与 128K 无关**（由窗口决定）。
 
-### 还差一处集成：int8 的 scale pool 没接通
+### 更正：**没有集成缺口**
 
-`paged_mla_quant.paged_mla_attend_quantized` 存在、`cuda_paged_mla_quant_supported`
-对 int8 pool 返回 **True**，但调用会报：
+上一版这里写"int8 scale pool 未透传，是唯一的集成缺口"——**这个判断是错的**。
+
+`make_views` 一直在透传 `key_scale_pool` / `value_scale_pool`，
+`DeepSeekPagedCache.attend()` 也一直在把它们传给
+`paged_mla_attend_quantized(key_scale_pool=view.key_scale_pool, ...)`。
+
+报错的原因是我的**测试脚本**直接调内核时没传这两个参数，
+不是代码缺东西。**又一次把"我的调用错了"记成了"代码有缺口"。**
+
+### 128K int8 实测（4080 SUPER，正确调用）
 
 ```
-ValueError: INT8 paged MLA requires key/value scale pools
+VRAM free 31.2 GiB
+128K int8 pool: 20.46 GiB (164 KiB/token)
+free after pool 10.72 GiB -> weights need 9.0: FITS
+quant supported: True
+int8 128K full: 315.2 ms -> 3.17 tok/s finite=True
 ```
 
-`PagedKVCacheManager` 在 `kv_cache_dtype='int8'` 时会创建 `key_scale_pool` /
-`value_scale_pool`，但 **`make_views` 没有把它们带进 `PagedLayerKVCache`**，
-于是量化内核拿不到 per-block scale。
+| 项 | 结果 |
+|---|---|
+| KV（int8，128K） | **20.46 GiB**（164 KiB/token，与预测 162 一致） |
+| + 权重 9 GiB | **29.5 GiB / 31.47 GiB ✅ 全部驻留显存** |
+| 全量注意力 decode | 315.2 ms → **3.17 tok/s** |
+| 配合 sink+窗口（4K） | 预期约 30 ms → 约 30 tok/s（窗口决定，与 128K 无关） |
 
-**这是唯一的集成缺口**，修法明确：让 `make_views` 透传两个 scale pool
-（`PagedLayerKVCache` 已有 `key_scale_pool` / `value_scale_pool` 字段）。
+**128K 原生上下文、单卡、无分层、fp16 精度的权重 + int8 的 KV——成立。**
 
-### 与写入路径缺口的优先级
-
-| 缺口 | 影响 | 优先级 |
-|---|---|---|
-| **int8 scale pool 未透传** | 128K 目标无法启动 | **先修** |
-| `write()` 仍写 16 份 per-head KV | 那是**正确**行为（§0 更正），不是缺口 | 不是问题 |
-| make_views 与 heads 参数 | 已按 heads 分配，无需改 | — |
-
-注意：§9 里把"写入仍写 16 份"记成缺口，**在 §0 更正之后它不再是缺口**——
-逐头 KV 本来就是正确的。
+DeepSeek-V2-Lite 的原生上下文是 160,384，所以 128K 落在原生范围内，
+**不需要 YaRN，质量不打折**。
