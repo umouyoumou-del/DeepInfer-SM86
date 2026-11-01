@@ -102,3 +102,40 @@ def coverage(mass: torch.Tensor, keep: int) -> float:
         return 0.0
     kept = mass.reshape(-1)[hottest_blocks(mass, keep)]
     return float(kept.sum()) / total
+
+
+class BlockMassHeat:
+    """``heat_fn`` adapter: physical block id -> attention mass.
+
+    ``PrefixCache`` asks ``heat_fn(block_id)`` for each candidate and evicts the
+    coldest, which is exactly H2O's rule once the number is attention mass
+    instead of recency: the block the model is not looking at is the one that
+    can leave.  Mass is naturally zero for blocks the last measurement did not
+    touch, and unknown ids also score zero, so a stale or partial map degrades
+    to "evict the ones we know nothing about" rather than raising.
+    """
+
+    def __init__(self, mass, *, default: float = 0.0) -> None:
+        self._mass = mass
+        self._default = float(default)
+        self.calls = 0
+
+    def update(self, mass) -> None:
+        self._mass = mass
+
+    def __call__(self, block_id: int) -> float:
+        self.calls += 1
+        try:
+            index = int(block_id)
+        except Exception:  # noqa: BLE001
+            return self._default
+        flat = self._mass.reshape(-1) if hasattr(self._mass, "reshape") else self._mass
+        if index < 0 or index >= len(flat):
+            return self._default
+        return float(flat[index])
+
+
+def from_layer_mass(mass_row) -> BlockMassHeat:
+    """Adapter for one row of ``block_attention_mass`` output."""
+
+    return BlockMassHeat(mass_row)
