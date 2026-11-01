@@ -1,0 +1,4 @@
+pool 20.25 GiB
+filled 0.2 s, VRAM used 20.26 GiB
+trial 0: attention over 1048575 tokens = 1023.4 ms -> 0.98 tok/s (finite)
+trial 1: attention over 1048575 tokens = 810.5 ms -> 1.23 tok/s (finite)
