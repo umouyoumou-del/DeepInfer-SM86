@@ -1624,6 +1624,9 @@ class DeepSeekV2LiteGGUFRuntime:
             self.native_paged_attention_layers
         ) and os.environ.get("DEEPINFER_DISABLE_NATIVE_PAGED_MLA") != "1"
         self.rope_mscale = self._apply_rope_scaling(rope_scaling)
+        # bounded-cost decode; None means attend over the whole history
+        self.paged_sliding_window: int | None = None
+        self.paged_attention_sink: int | None = None
         self.gpu_free_bytes_after_load = int(torch.cuda.mem_get_info()[0])
         self.auto_pinned_experts = 0
         requested = getattr(self, "pin_all_experts", None)
@@ -3068,6 +3071,8 @@ class DeepSeekV2LiteGGUFRuntime:
                 and getattr(self, "native_paged_attention_enabled", True)
                 and os.environ.get("DEEPINFER_DISABLE_NATIVE_PAGED_MLA") != "1"
             ),
+            sliding_window=getattr(self, "paged_sliding_window", None),
+            attention_sink=getattr(self, "paged_attention_sink", None),
         )
         outputs = self.model.model(
             inputs_embeds=self._embed_tokens(input_ids),
