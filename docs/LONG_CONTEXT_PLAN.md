@@ -380,3 +380,57 @@ cannot be broadcast to indexing result of shape [1, 512, 1, 192]
 **在此之前，不能声称"长上下文已在真实模型上可用"。**
 目前能声称的是：每一件零件都对，且 1M 的**容量**与**内核吞吐**已实测；
 端到端的最后一公里还差写入路径。
+
+---
+
+## 10. 单卡 32 GiB 的真实上限：128K（int8，全部驻留）
+
+### 容量表（含 9.65 GB 权重，留 2 GiB 余量）
+
+| 上下文 | repo fp16 | repo int8 | 最小布局 int8 |
+|---:|---:|---:|---:|
+| 128K | ✗ 49.5 GiB | **✅ 29.2 GiB** | ✅ 22.7 GiB |
+| 160K | ✗ 58.4 GiB | ✗ 33.7 GiB | ✅ 25.7 GiB |
+| **256K** | ✗ 90.0 GiB | ✗ 49.5 GiB | ✗ **36.4 GiB** |
+| 1M | ✗ 324 GiB | ✗ | ✗ |
+| 2M | ✗ 648 GiB | ✗ | ✗ |
+
+**256K 在单卡上不成立**（最小布局 int8 也要 36.4 GiB）。
+**2M 只在把 KV 全部放进 503 GB 主机内存 + sink/窗口维持 decode 的前提下才可能**，
+那是 219 GiB 的硬件账单。
+
+### 因此目标定为：128K，int8，全部驻留显存
+
+这个数字值得做，原因有三：
+
+1. **DeepSeek-V2-Lite 的原生上下文就是 160,384**，128K 落在**原生范围内**——
+   不需要 YaRN 拉伸，**质量不打折**；
+2. **不用分层**：KV 全在显存，decode 没有 PCIe/DDR 惩罚；
+3. 配合第 2 项的 sink + 窗口，**decode 成本与 128K 无关**（由窗口决定）。
+
+### 还差一处集成：int8 的 scale pool 没接通
+
+`paged_mla_quant.paged_mla_attend_quantized` 存在、`cuda_paged_mla_quant_supported`
+对 int8 pool 返回 **True**，但调用会报：
+
+```
+ValueError: INT8 paged MLA requires key/value scale pools
+```
+
+`PagedKVCacheManager` 在 `kv_cache_dtype='int8'` 时会创建 `key_scale_pool` /
+`value_scale_pool`，但 **`make_views` 没有把它们带进 `PagedLayerKVCache`**，
+于是量化内核拿不到 per-block scale。
+
+**这是唯一的集成缺口**，修法明确：让 `make_views` 透传两个 scale pool
+（`PagedLayerKVCache` 已有 `key_scale_pool` / `value_scale_pool` 字段）。
+
+### 与写入路径缺口的优先级
+
+| 缺口 | 影响 | 优先级 |
+|---|---|---|
+| **int8 scale pool 未透传** | 128K 目标无法启动 | **先修** |
+| `write()` 仍写 16 份 per-head KV | 那是**正确**行为（§0 更正），不是缺口 | 不是问题 |
+| make_views 与 heads 参数 | 已按 heads 分配，无需改 | — |
+
+注意：§9 里把"写入仍写 16 份"记成缺口，**在 §0 更正之后它不再是缺口**——
+逐头 KV 本来就是正确的。
