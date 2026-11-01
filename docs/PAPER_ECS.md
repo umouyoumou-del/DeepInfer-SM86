@@ -586,6 +586,20 @@ profile 当时指向 gather（24%）与同步（43%），但两者相加也不�
 两个阶段都领先，但**领先幅度远小于 §5.8.2 的 158×**——后者是相对本移植起点，
 不是相对 llama.cpp。本文不把这两个数字混用。
 
+**方法学**（这一处对照的三条纪律，缺任何一条都会让结论失效）：
+
+1. **同卡、同模型、同量化文件。** llama.cpp 从源码构建（b12024，
+   `-DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=89`），避免版本与编译选项差异。
+2. **三轮交替，llama-first / deepinfer-first 轮换。** 单次对比无法排除慢态
+   （§5.6 G2 记录该机存在约 2 倍的慢态）；每轮记录 `throttled_periods` 与
+   `cpu-probe`，确保两侧处于同一状态。
+3. **贪心 top-5 logits 逐位对齐。** 不只比速度——比对两边同一个 prompt 的
+   logits 排序，确认是在比较"同一个计算结果的速度"，而不是两个碰巧都能出字的实现。
+
+CUPTI 逐 kernel 追踪只用于**取 kernel 时长分布**，不用于端到端速度：
+追踪开启后我们的 busy time 从 4.02 升到 4.11 ms，llama.cpp 的 tg64 掉到 439 tok/s，
+两者都被扰动，但 kernel 本身的执行时间不受影响。
+
 CUPTI 逐 kernel 追踪显示 decode 的 1.54 ms 里：
 
 ```
