@@ -26,7 +26,7 @@ Same math as ``decode`` in fp32 accumulation; only the rounding differs.
 from __future__ import annotations
 
 import os
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 import torch
@@ -209,12 +209,24 @@ class GraphDecoder:
     # ------------------------------------------------------------- decode
 
     @torch.inference_mode()
-    def greedy(self, logits: torch.Tensor, *, max_new_tokens: int, stop_ids: Sequence[int] = ()) -> list[int]:
-        """What ``DeepSeekLongContext.generate`` returns after its prompt: argmax of ``logits``, then greedy steps."""
+    def greedy(
+        self,
+        logits: torch.Tensor,
+        *,
+        max_new_tokens: int,
+        stop_ids: Sequence[int] = (),
+        on_tokens: Callable[[list[int]], None] | None = None,
+    ) -> list[int]:
+        """What ``DeepSeekLongContext.generate`` returns after its prompt: argmax of ``logits``, then greedy steps.
+
+        ``on_tokens`` gets each batch of new ids as the host reads it (every ``sync_every`` steps).
+        """
 
         s = self.session
         stops = {int(token) for token in stop_ids}
         produced = [int(torch.argmax(logits))]
+        if on_tokens is not None:
+            on_tokens(list(produced))
         limit = min(int(max_new_tokens), s.cache.capacity - s.next_position + 1)
         if produced[-1] in stops or limit <= 1:
             return produced
@@ -236,10 +248,14 @@ class GraphDecoder:
                 self.graph.replay()
             fresh = self.produced[done : done + batch].tolist()
             done += batch
+            added = []
             for token in fresh:
                 produced.append(int(token))
+                added.append(int(token))
                 if token in stops or len(produced) >= limit:
                     break
+            if on_tokens is not None and added:
+                on_tokens(added)
             if produced[-1] in stops or len(produced) >= limit:
                 break
         # the session now holds everything fed: the produced ids but the last

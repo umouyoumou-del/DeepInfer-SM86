@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3M 上下文对话 · DeepInfer</title>
+<style>
+  :root { --ink:#1f2328; --muted:#6e7781; --line:#d0d7de; --bg:#f6f8fa; --blue:#0969da; --red:#cf222e; --green:#1a7f37; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.6 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; color:var(--ink); background:#fff; }
+  header { padding:16px 24px 12px; border-bottom:1px solid var(--line); background:var(--bg); }
+  .count { font-size:34px; font-weight:700; letter-spacing:.5px; font-variant-numeric:tabular-nums; }
+  .count small { font-size:16px; font-weight:400; color:var(--muted); }
+  .sub { color:var(--muted); font-size:14px; font-variant-numeric:tabular-nums; }
+  .bar { height:10px; background:#e6e9ed; border-radius:5px; overflow:hidden; margin:8px 0 4px; }
+  .bar > div { height:100%; background:var(--blue); width:0; transition:width .5s; }
+  canvas { width:100%; height:44px; display:block; margin-top:6px; border:1px solid var(--line); border-radius:4px; background:#fff; }
+  .legend { font-size:12px; color:var(--muted); margin-top:2px; }
+  .legend i { display:inline-block; width:10px; height:10px; margin:0 4px 0 12px; vertical-align:-1px; }
+  main { display:grid; grid-template-columns: 360px 1fr; gap:0; height:calc(100vh - 210px); min-height:420px; }
+  aside { border-right:1px solid var(--line); padding:16px; overflow:auto; }
+  aside h3 { margin:0 0 8px; font-size:15px; }
+  textarea { width:100%; height:120px; font:13px/1.5 ui-monospace, Consolas, monospace; border:1px solid var(--line); border-radius:6px; padding:8px; }
+  button { font:inherit; padding:6px 12px; border:1px solid var(--line); background:#fff; border-radius:6px; cursor:pointer; }
+  button.primary { background:var(--blue); color:#fff; border-color:var(--blue); }
+  button:disabled { opacity:.5; cursor:default; }
+  .row { display:flex; gap:8px; align-items:center; margin:8px 0; flex-wrap:wrap; }
+  .sources { font-size:13px; margin-top:8px; }
+  .sources div { padding:4px 0; border-bottom:1px dashed var(--line); }
+  .samples button { display:block; width:100%; text-align:left; margin:4px 0; font-size:13px; padding:4px 8px; }
+  #chat { display:flex; flex-direction:column; }
+  #log { flex:1; overflow:auto; padding:16px 24px; }
+  .q { margin:14px 0 4px; font-weight:600; }
+  .a { white-space:pre-wrap; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:10px 12px; }
+  .a .round { color:var(--muted); font-size:12px; margin-bottom:4px; }
+  .final { margin-top:8px; font-weight:700; color:var(--green); }
+  .meta { color:var(--muted); font-size:12px; margin-top:6px; font-variant-numeric:tabular-nums; }
+  .evidence { margin-top:6px; font-size:13px; }
+  .evidence div { padding:2px 0; }
+  .evidence b { color:var(--red); font-weight:600; font-variant-numeric:tabular-nums; }
+  form { display:flex; gap:8px; padding:12px 24px; border-top:1px solid var(--line); background:var(--bg); }
+  form input[type=text] { flex:1; font:inherit; padding:8px 10px; border:1px solid var(--line); border-radius:6px; }
+  .err { color:var(--red); }
+</style>
+</head>
+<body>
+<header>
+  <div class="count"><span id="ctx">0</span> <small>/ <span id="cap">0</span> token 上下文</small></div>
+  <div class="bar"><div id="fill"></div></div>
+  <div class="sub" id="sub">连接中…</div>
+  <canvas id="map" width="1600" height="88"></canvas>
+  <div class="legend">位置图：整条上下文从左到右<i style="background:#9ec5fe"></i>读入的文本<i style="background:#b6e3c0"></i>对话<i style="background:#0969da"></i>本次定位读回的块<i style="background:#cf222e"></i>答案依据的行</div>
+</header>
+<main>
+  <aside>
+    <h3>流式输入</h3>
+    <textarea id="paste" placeholder="粘贴任意长的文本，点「追加」送进上下文；也可以选文件（会分段流式上传）。"></textarea>
+    <div class="row">
+      <button class="primary" id="add">追加到上下文</button>
+      <input type="file" id="file" multiple>
+    </div>
+    <div class="row">
+      <button id="demo">加载 3M 演示文档</button>
+      <button id="reset">清空</button>
+    </div>
+    <div class="sub" id="upload"></div>
+    <div class="sources" id="sources"></div>
+    <div class="samples" id="samples"></div>
+  </aside>
+  <section id="chat">
+    <div id="log"></div>
+    <form id="ask">
+      <input type="text" id="question" placeholder="问上下文里任何位置的内容，读入过程中也可以问" autocomplete="off">
+      <label class="sub"><input type="checkbox" id="deep" checked> 多轮（用答案再定位、确认；关掉更快）</label>
+      <button class="primary" id="send">提问</button>
+    </form>
+  </section>
+</main>
+<script>
+const KEY = new URLSearchParams(location.search).get('key') || '';
+const $ = id => document.getElementById(id);
+const fmt = n => Number(n || 0).toLocaleString('en-US');
+const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const url = (path, extra) => path + '?key=' + encodeURIComponent(KEY) + (extra || '');
+let status = null, located = [], evidence = [];
+
+function seconds(s) { return s >= 120 ? (s / 60).toFixed(1) + ' 分钟' : Math.round(s) + ' 秒'; }
+
+async function poll() {
+  try {
+    const r = await fetch(url('/status'));
+    if (r.status === 403) { $('sub').innerHTML = '<span class="err">缺少访问密钥：请用启动时打印的链接打开（?key=…）</span>'; return; }
+    status = await r.json();
+    $('ctx').textContent = fmt(status.context);
+    $('cap').textContent = fmt(status.capacity);
+    $('fill').style.width = (100 * status.context / status.capacity).toFixed(2) + '%';
+    const parts = [];
+    const host = Math.max(0, status.context - status.gpu_tokens);
+    parts.push(`显存 ${fmt(Math.min(status.context, status.gpu_tokens))} + 主机内存 ${fmt(host)} token`);
+    if (status.queued) parts.push(`正在读入：还剩 ${fmt(status.queued)} token · ${fmt(status.rate)} token/s · 约 ${seconds(status.eta_seconds)}`);
+    else parts.push(status.state === 'answering' ? '正在回答' : '空闲');
+    if (status.last && status.last.error) parts.push('<span class="err">' + esc(status.last.error) + '</span>');
+    $('sub').innerHTML = parts.join(' · ');
+    $('sources').innerHTML = status.sources.map(s =>
+      `<div>${esc(s.name)}<br><span class="sub">${fmt(s.done)} / ${fmt(s.tokens)} token` +
+      (s.segments.length ? ` · 从第 ${fmt(s.segments[0][0])} 个 token 起` : '') + '</span></div>').join('');
+    if (status.demo_questions && status.demo_questions.length && !$('samples').dataset.filled) {
+      $('samples').dataset.filled = '1';
+      $('samples').innerHTML = '<h3 style="margin-top:14px">演示问题（点击填入）</h3>' + status.demo_questions.map(q =>
+        `<button type="button">${esc(q)}</button>`).join('');
+      [...$('samples').querySelectorAll('button')].forEach(b => b.onclick = () => { $('question').value = b.textContent; $('question').focus(); });
+    }
+    drawMap();
+  } catch (e) { $('sub').innerHTML = '<span class="err">连不上服务：' + e + '</span>'; }
+}
+
+function drawMap() {
+  const c = $('map'), g = c.getContext('2d'), W = c.width, H = c.height;
+  g.clearRect(0, 0, W, H);
+  if (!status) return;
+  const total = Math.max(status.capacity, 1), x = p => W * p / total;
+  for (const s of status.sources) for (const [start, len] of s.segments) {
+    g.fillStyle = s.kind === 'conversation' ? '#b6e3c0' : '#9ec5fe';
+    g.fillRect(x(start), 10, Math.max(1, x(len)), H - 20);
+  }
+  g.fillStyle = '#0969da';
+  for (const p of located) g.fillRect(x(p), 4, 2, H - 8);
+  g.fillStyle = '#cf222e';
+  for (const p of evidence) g.fillRect(x(p) - 1, 0, 4, H);
+}
+
+async function postText(text, name) {
+  const r = await fetch(url('/ingest', '&name=' + encodeURIComponent(name)), { method: 'POST', body: text });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+
+$('add').onclick = async () => {
+  const text = $('paste').value;
+  if (!text.trim()) return;
+  $('add').disabled = true;
+  try { const j = await postText(text, '粘贴的文本'); $('upload').textContent = `已排队 ${fmt(j.tokens)} token`; $('paste').value = ''; }
+  catch (e) { $('upload').innerHTML = '<span class="err">' + e.message + '</span>'; }
+  $('add').disabled = false; poll();
+};
+
+$('file').onchange = async () => {
+  for (const file of $('file').files) {
+    const text = await file.text();
+    const piece = 400000;
+    for (let i = 0, n = 0; i < text.length; n++) {
+      let j = Math.min(text.length, i + piece);
+      if (j < text.length) { const k = text.lastIndexOf('\n', j); if (k > i) j = k + 1; }
+      $('upload').textContent = `上传 ${file.name}：${(100 * j / text.length).toFixed(0)}%`;
+      try { await postText(text.slice(i, j), file.name); }
+      catch (e) { $('upload').innerHTML = '<span class="err">' + file.name + '：' + e.message + '</span>'; return; }
+      i = j; poll();
+    }
+    $('upload').textContent = `${file.name} 已全部排队，后台边读边编码`;
+  }
+  $('file').value = '';
+};
+
+$('demo').onclick = async () => {
+  $('demo').disabled = true; $('upload').textContent = '正在生成 3M 演示文档（约 15 秒）…';
+  try {
+    const r = await fetch(url('/demo'), { method: 'POST', body: JSON.stringify({ tokens: 3145728 }) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error);
+    $('upload').textContent = `已排队 ${fmt(j.tokens)} token；读入过程中就可以提问`;
+  } catch (e) { $('upload').innerHTML = '<span class="err">' + e.message + '</span>'; }
+  $('demo').disabled = false; poll();
+};
+
+$('reset').onclick = async () => {
+  if (!confirm('清空整个上下文？')) return;
+  await fetch(url('/reset'), { method: 'POST' });
+  located = []; evidence = []; $('samples').innerHTML = ''; delete $('samples').dataset.filled; poll();
+};
+
+$('ask').onsubmit = async ev => {
+  ev.preventDefault();
+  const question = $('question').value.trim();
+  if (!question) return;
+  $('question').value = ''; $('send').disabled = true;
+  const log = $('log');
+  const q = document.createElement('div'); q.className = 'q'; q.textContent = '问：' + question; log.appendChild(q);
+  const a = document.createElement('div'); a.className = 'a'; log.appendChild(a);
+  const head = document.createElement('div'); head.className = 'round'; a.appendChild(head);
+  let body = document.createElement('div'); a.appendChild(body);
+  const final = document.createElement('div'); final.className = 'final'; a.appendChild(final);
+  const ev2 = document.createElement('div'); ev2.className = 'evidence'; a.appendChild(ev2);
+  const meta = document.createElement('div'); meta.className = 'meta'; a.appendChild(meta);
+  let round = 0; const t0 = performance.now();
+  head.textContent = '排队中…';
+  try {
+    const r = await fetch(url('/ask'), { method: 'POST', body: JSON.stringify({ question, deep: $('deep').checked }) });
+    if (!r.ok) { const j = await r.json(); throw new Error(j.error); }
+    const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = '';
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let cut;
+      while ((cut = buf.indexOf('\n\n')) >= 0) {
+        const line = buf.slice(0, cut); buf = buf.slice(cut + 2);
+        if (!line.startsWith('data: ')) continue;
+        const e = JSON.parse(line.slice(6));
+        if (e.event === 'start') head.textContent = `在 ${fmt(e.context)} token 的上下文里定位…`;
+        else if (e.event === 'located') {
+          located = e.positions; evidence = []; drawMap();
+          if (e.round !== round) {
+            if (round) { body = document.createElement('div'); body.style.marginTop = '8px'; a.insertBefore(body, final); }
+            round = e.round;
+          }
+          head.textContent = `第 ${e.round} 轮：在 ${fmt(e.context)} 个 token 里定位到 ${e.positions.length} 个块（${e.seconds} 秒），正在读回作答…`;
+        }
+        else if (e.event === 'text') { body.textContent += e.text; log.scrollTop = log.scrollHeight; }
+        else if (e.event === 'answer') {
+          body.textContent = e.text;
+          final.textContent = e.final ? '答：' + e.final : '';
+          evidence = e.evidence.map(x => x.position); drawMap();
+          ev2.innerHTML = e.evidence.filter(x => e.text.includes(x.line.slice(0, 40))).concat(
+            e.evidence.filter(x => !e.text.includes(x.line.slice(0, 40)))).slice(0, 6).map(x =>
+            `<div><b>第 ${fmt(x.position)} 个 token（${(100 * x.depth).toFixed(1)}%）</b> ${x.source ? '· ' + esc(x.source) + ' ' : ''}· ${esc(x.line)}</div>`).join('');
+          if (!e.stop) head.textContent = `第 ${e.round} 轮答完，用答案再定位一次…`;
+        }
+        else if (e.event === 'done') {
+          head.textContent = `上下文 ${fmt(e.context)} token · 共 ${e.rounds} 轮`;
+          meta.textContent = `首字 ${e.first_token ?? '-'} 秒 · 共 ${e.seconds} 秒 · 生成 ${fmt(e.tokens)} token · 读回 ${fmt(e.read_tokens)} token`;
+        }
+        else if (e.event === 'error') throw new Error(e.message);
+      }
+    }
+  } catch (e) { meta.innerHTML = '<span class="err">' + e.message + '</span>'; }
+  $('send').disabled = false; poll();
+  console.log('round trip', ((performance.now() - t0) / 1000).toFixed(1), 's');
+};
+
+poll(); setInterval(poll, 1000);
+</script>
+</body>
+</html>

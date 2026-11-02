@@ -581,13 +581,15 @@ class DeepSeekLongContext:
         *,
         max_new_tokens: int = 32,
         stop_ids: Sequence[int] = (),
+        on_tokens: Callable[[list[int]], None] | None = None,
     ) -> list[int]:
         """Greedy continuation of ``prompt_ids`` appended to the cache.
 
         With retrieval on, the prompt is fed token by token so that it, too,
         only sees the retrieved blocks.  A short fp16 context in VRAM decodes
         through :class:`~deepinfer.moe.graph_decode.GraphDecoder` (one CUDA
-        graph per step, no host round trip inside it).
+        graph per step, no host round trip inside it).  ``on_tokens`` gets the new
+        ids as they are produced.
         """
 
         from deepinfer.moe import graph_decode
@@ -598,12 +600,16 @@ class DeepSeekLongContext:
             logits = self.prefill(prompt_ids, bounded=False)
         if int(max_new_tokens) > 1 and graph_decode.usable(self):
             decoder = graph_decode.GraphDecoder(self, steps=int(max_new_tokens))
-            return decoder.greedy(logits, max_new_tokens=int(max_new_tokens), stop_ids=stop_ids)
+            return decoder.greedy(
+                logits, max_new_tokens=int(max_new_tokens), stop_ids=stop_ids, on_tokens=on_tokens
+            )
         produced: list[int] = []
         stops = {int(token) for token in stop_ids}
         for _ in range(int(max_new_tokens)):
             token = int(torch.argmax(logits))
             produced.append(token)
+            if on_tokens is not None:
+                on_tokens([token])
             if token in stops:
                 break
             logits = self.decode(token)

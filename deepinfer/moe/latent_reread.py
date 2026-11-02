@@ -330,15 +330,26 @@ def span_document(
     *,
     header_ids: Sequence[int],
     separator_ids: Sequence[int],
+    slots: list[int] | None = None,
 ) -> list[int]:
-    """Header, then the tokens of ``spans`` in document order, separated."""
+    """Header, then the tokens of ``spans`` in document order, separated.
+
+    ``slots``, if given, receives the cache slot of every document token (-1 for
+    the header and separators).
+    """
 
     ordered = sorted(spans, key=lambda span: _logical(session.extents, span[0]))
     document: list[int] = list(header_ids)
+    if slots is not None:
+        slots.extend([-1] * len(header_ids))
     for number, (lo, hi) in enumerate(ordered):
         if number:
             document.extend(separator_ids)
+            if slots is not None:
+                slots.extend([-1] * len(separator_ids))
         document.extend(session.slot_tokens[lo:hi])
+        if slots is not None:
+            slots.extend(range(lo, hi))
     return document
 
 
@@ -387,9 +398,17 @@ class Refine:
 
     @torch.inference_mode()
     def __call__(
-        self, rt, document: Sequence[int], header_length: int, query_ids: Sequence[int] | None = None
+        self,
+        rt,
+        document: Sequence[int],
+        header_length: int,
+        query_ids: Sequence[int] | None = None,
+        starts: list[int] | None = None,
     ) -> tuple[list[int], list[str]]:
-        """``(compact document, kept lines)``; ``query_ids`` overrides the query for this call."""
+        """``(compact document, kept lines)``; ``query_ids`` overrides the query for this call.
+
+        ``starts``, if given, receives the document index where each kept line begins.
+        """
 
         from deepinfer.moe.deepseek_longctx import DeepSeekLongContext
 
@@ -419,6 +438,8 @@ class Refine:
             if "Ċ" not in self.tokenizer.convert_ids_to_tokens(line[-1:])[0]:
                 compact.extend(newline)
             kept.append(self.tokenizer.decode(line).strip())
+            if starts is not None:
+                starts.append(lo)
         return compact, kept
 
 
@@ -435,27 +456,36 @@ def reread(
     refine: Refine | None = None,
     kept: list | None = None,
     refine_query: Sequence[int] | None = None,
+    on_tokens=None,
+    kept_positions: list | None = None,
 ) -> list[int]:
     """Greedy answer to ``prompt_ids`` in a fresh short context holding only ``spans``.
 
     With ``refine`` the context is cut down to its best lines first (their text
-    is appended to ``kept`` if given).
+    is appended to ``kept`` if given, their logical positions in the long
+    sequence to ``kept_positions``).  ``on_tokens`` streams the answer's ids.
     """
 
     from deepinfer.moe.deepseek_longctx import DeepSeekLongContext
 
-    document = span_document(session, spans, header_ids=header_ids, separator_ids=separator_ids)
+    slots: list[int] = []
+    document = span_document(session, spans, header_ids=header_ids, separator_ids=separator_ids, slots=slots)
     if refine is not None:
-        document, lines = refine(session.rt, document, len(header_ids), refine_query)
+        starts: list[int] = []
+        document, lines = refine(session.rt, document, len(header_ids), refine_query, starts=starts)
         if kept is not None:
             kept.extend(lines)
+        if kept_positions is not None:
+            kept_positions.extend(
+                _logical(session.extents, slots[start]) if slots[start] >= 0 else -1 for start in starts
+            )
     short = DeepSeekLongContext(
         session.rt,
         capacity=len(document) + len(prompt_ids) + max_new_tokens + 8,
         kv_dtype="fp16",
     )
     short.prefill(document)
-    produced = short.generate(prompt_ids, max_new_tokens=max_new_tokens, stop_ids=stop_ids)
+    produced = short.generate(prompt_ids, max_new_tokens=max_new_tokens, stop_ids=stop_ids, on_tokens=on_tokens)
     del short
     return produced
 
@@ -586,6 +616,7 @@ def feedback_locate_and_reread(
     final_tokens: int = 64,
     final_with_question: bool = False,
     final_entity_rows: bool = False,
+    on_event=None,
 ) -> dict:
     """Locate, re-read and answer; then locate again with the question *and the answer*.
 
@@ -610,6 +641,11 @@ def feedback_locate_and_reread(
     hops (scripts/rank_followup.py) - hence 32 such blocks a round, left to the
     line-level refine to sort out.  Scoring only the answer's own tokens
     (``final_entity_rows``) did not rank better.
+
+    ``on_event(dict)``, if given, follows the search as it happens: ``located``
+    (a round's new blocks and the time it took), ``tokens`` (the round's answer
+    ids as they are generated) and ``answer`` (the round's answer, the lines it
+    read with their positions, and whether the search stops).
     """
 
     def encode(text: str) -> list[int]:
@@ -646,6 +682,11 @@ def feedback_locate_and_reread(
             )
             new = new + final_new
         located = time.perf_counter()
+        if on_event is not None:
+            on_event({
+                "event": "located", "round": round_index + 1, "blocks": sorted(new), "block": BLOCK,
+                "seconds": round(located - began, 2),
+            })
         chosen.extend(new)
         spans = spans_from_blocks(chosen, block=BLOCK, neighbors=neighbors, length=length)
         kept: list[str] = []
@@ -658,15 +699,21 @@ def feedback_locate_and_reread(
                 f"Check it against the text above and give the complete answer. {answer_instruction}".rstrip()
                 + "\n\nAssistant:"
             )
+        kept_positions: list[int] = []
         produced = reread(
             session, spans, asked,
             header_ids=header_ids, separator_ids=separator_ids,
             max_new_tokens=max_new_tokens, stop_ids=stop_ids, refine=refine, kept=kept,
             refine_query=None if round_index == 0 else query,
+            on_tokens=None if on_event is None else (
+                lambda ids, number=round_index + 1: on_event({"event": "tokens", "round": number, "ids": ids})
+            ),
+            kept_positions=kept_positions,
         )
         answer = tokenizer.decode(produced, skip_special_tokens=True).strip()
         trace.append({
-            "round": round_index + 1, "new_blocks": new, "final_blocks": final_new, "lines": kept, "answer": answer,
+            "round": round_index + 1, "new_blocks": new, "final_blocks": final_new, "lines": kept,
+            "line_positions": kept_positions, "answer": answer,
             "query_tokens": len(query), "answer_tokens": len(produced),
             "seconds": {"locate": round(located - began, 2), "reread": round(time.perf_counter() - located, 2)},
         })
@@ -678,6 +725,11 @@ def feedback_locate_and_reread(
         )
         stable = committed and bool(answers) and final == answers[-1]
         answers.append(final)
+        if on_event is not None:
+            on_event({
+                "event": "answer", "round": round_index + 1, "text": answer, "lines": kept,
+                "line_positions": kept_positions, "stop": stable or round_index + 1 == int(rounds),
+            })
         if stable:
             break
         # the query is written into the cache while it is located: keep it within the room left
