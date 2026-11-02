@@ -13,6 +13,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
+from deepinfer.moe import latent_mla
 from deepinfer.moe.latent_mla import (
     DualChunkPositions,
     LatentKVCache,
@@ -344,13 +345,17 @@ def _setup(device: str, n: int, seed: int = 0, heads: int = 4):
     return attention, weights, rope, latent, pe_raw
 
 
-@pytest.mark.skipif(not FLASH, reason="needs CUDA flash attention")
+@pytest.mark.skipif(not CUDA, reason="needs CUDA")
+@pytest.mark.parametrize(
+    "kernel", [pytest.param("flash", marks=pytest.mark.skipif(not FLASH, reason="no FlashAttention here")), "efficient"]
+)
 @pytest.mark.parametrize(
     "positions",
     [DualChunkPositions.plain(), DualChunkPositions(trained=48, chunk=36)],
     ids=["plain", "dca"],
 )
-def test_prefill_attention_matches_the_definition(positions: DualChunkPositions) -> None:
+def test_prefill_attention_matches_the_definition(positions: DualChunkPositions, kernel: str, monkeypatch) -> None:
+    monkeypatch.setattr(latent_mla, "_FLASH", kernel == "flash")
     n = 120
     attention, weights, rope, latent, pe_raw = _setup("cuda", n)
     cache = LatentKVCache(num_layers=1, capacity=n, kv_dtype="fp16", device="cuda")

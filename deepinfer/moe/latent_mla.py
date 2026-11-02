@@ -574,15 +574,39 @@ def _read_rows(handle, target: torch.Tensor, *, staging: int = 256 << 20) -> Non
 # ---------------------------------------------------------------- attention
 
 
+_FLASH: bool | None = None  # whether FlashAttention runs here; tried on first use
+
+
+def _flash_runs(q: torch.Tensor) -> bool:
+    probe = torch.zeros((1, 1, 8, q.shape[-1]), dtype=q.dtype, device=q.device)
+    try:
+        torch.ops.aten._scaled_dot_product_flash_attention(probe, probe, probe, 0.0, True, False, scale=1.0)
+    except RuntimeError:  # not built in (PyTorch's Windows wheels) or not for this GPU
+        return False
+    return True
+
+
 def flash_with_lse(
     q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, *, causal: bool, scale: float
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """FlashAttention-2 returning ``(out [1,H,S,D] fp16, lse [1,H,S] fp32)``."""
+    """FlashAttention-2 returning ``(out [1,H,S,D] fp16, lse [1,H,S] fp32)``.
 
-    result = torch.ops.aten._scaled_dot_product_flash_attention(
-        q, k, v, 0.0, causal, False, scale=scale
+    Where FlashAttention is missing, the memory-efficient kernel gives the same
+    pair (its log-sum-exp padded to a multiple of 32 rows).
+    """
+
+    global _FLASH
+    if _FLASH is None:
+        _FLASH = _flash_runs(q)
+    if _FLASH:
+        result = torch.ops.aten._scaled_dot_product_flash_attention(
+            q, k, v, 0.0, causal, False, scale=scale
+        )
+        return result[0], result[1]
+    result = torch.ops.aten._scaled_dot_product_efficient_attention(
+        q, k, v, None, True, 0.0, causal, scale=scale
     )
-    return result[0], result[1]
+    return result[0], result[1][..., : q.shape[-2]]
 
 
 def merge_partials(
