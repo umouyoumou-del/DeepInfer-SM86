@@ -169,15 +169,25 @@ class LongContextChat:
         self.jobs.put(INGEST, ("ingest", source, ids))
         return source
 
-    def ask(self, question: str, *, deep: bool = False, instruction: str | None = None) -> queue.Queue:
+    def ask(
+        self,
+        question: str,
+        *,
+        deep: bool = False,
+        instruction: str | None = None,
+        variants: Sequence[str] = (),
+        rounds: int | None = None,
+    ) -> queue.Queue:
         """Queue a question; events (dicts) arrive on the returned queue, ``done`` or ``error`` last.
 
-        ``instruction`` replaces the default quote-then-answer one (the demo's questions
-        carry the instructions they were evaluated with).
+        ``instruction`` replaces the default quote-then-answer one, and ``variants`` -
+        more phrasings of the final pick, asked over the converged reading - add their
+        codes and names to the answer: how the demo's questions were evaluated.  A deep
+        search runs ``rounds`` rounds at most (default 4).
         """
 
         events: queue.Queue = queue.Queue()
-        self.jobs.put(ASK, ("ask", question, deep, events, instruction))
+        self.jobs.put(ASK, ("ask", question, deep, events, instruction, tuple(variants), rounds))
         return events
 
     def reset(self) -> None:
@@ -210,7 +220,7 @@ class LongContextChat:
                 if job[0] == "ingest":
                     self._ingest(seq, job[1], job[2])
                 elif job[0] == "ask":
-                    self._answer(job[1], job[2], job[3], job[4])
+                    self._answer(*job[1:])
                 elif job[0] == "reset":
                     self._reset(job[1])
             except Exception as error:  # noqa: BLE001 - the worker must survive a failed job
@@ -255,12 +265,22 @@ class LongContextChat:
             self._baseline_length = self.session.length
         return self._baseline
 
-    def _answer(self, question: str, deep: bool, events: queue.Queue, instruction: str | None = None) -> None:
+    def _answer(
+        self,
+        question: str,
+        deep: bool,
+        events: queue.Queue,
+        instruction: str | None = None,
+        variants: Sequence[str] = (),
+        rounds: int | None = None,
+    ) -> None:
         from deepinfer.moe.latent_reread import (
             BLOCK,
             Refine,
+            answer_items,
             feedback_locate_and_reread,
             final_answer,
+            reread,
         )
 
         with self.lock:
@@ -312,11 +332,27 @@ class LongContextChat:
         detail = feedback_locate_and_reread(
             session, self.tok, question, answer_instruction=instruction or QUOTE_FIRST, preamble=self._recent(),
             header_ids=self.header_ids, separator_ids=self.separator_ids, baseline=baseline, reduce="max",
-            top=32, follow_top=8, neighbors=1, rounds=8 if deep else 1, max_new_tokens=1024,
+            top=32, follow_top=8, neighbors=1, rounds=(rounds or 4) if deep else 1, max_new_tokens=1024,
             stop_ids=[self.tok.eos_token_id], refine=refine, near_window=self.near_window, follow_final=32,
             on_event=relay,
         )
         answer = self.tok.decode(detail["answer_ids"], skip_special_tokens=True).strip()
+        if variants:
+            events.put({"event": "variants", "count": len(variants)})
+            texts = [answer]
+            for variant in variants:
+                prompt = self.tok.encode(f"\n\n{question} {variant}\n\nAssistant:", add_special_tokens=False)
+                ids = reread(
+                    session, detail["spans"], prompt, header_ids=self.header_ids, separator_ids=self.separator_ids,
+                    max_new_tokens=1024, stop_ids=[self.tok.eos_token_id], refine=refine,
+                    refine_query=detail["refine_query"],
+                )
+                texts.append(self.tok.decode(ids, skip_special_tokens=True).strip())
+            given = set(answer_items(question))  # the value asked about is not an answer
+            union = sorted({item for text in texts for item in answer_items(text)} - given)
+            if union:
+                answer = f"{answer}\n\n[{len(texts)} phrasings, union]\nAnswer: {', '.join(union)}"
+                events.put({"event": "union", "final": ", ".join(union), "phrasings": len(texts)})
         seconds = time.perf_counter() - began
         # the turn joins the context, so a later question can find it
         turn = self.tok.encode(f"\n\n[Q] {question}\n[A] {final_answer(answer)}\n", add_special_tokens=False)

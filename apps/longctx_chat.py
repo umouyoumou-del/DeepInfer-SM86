@@ -40,7 +40,7 @@ from deepinfer.moe.longctx_service import LongContextChat, Source, build_session
 PAGE = Path(__file__).with_name("longctx_chat.html")
 SERVICE: LongContextChat | None = None
 KEY = ""
-DEMO: dict = {"questions": [], "instructions": {}}
+DEMO: dict = {"questions": [], "instructions": {}, "variants": {}}
 MAX_BODY = 64 << 20
 
 
@@ -113,13 +113,17 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("empty question")
                 # the demo's questions are answered with the instructions they were evaluated with
                 instruction = request.get("instruction") or DEMO["instructions"].get(question)
-                self._stream(SERVICE.ask(question, deep=bool(request.get("deep")), instruction=instruction))
+                demo = question in DEMO["instructions"]
+                self._stream(SERVICE.ask(
+                    question, deep=bool(request.get("deep")), instruction=instruction,
+                    variants=DEMO["variants"].get(question, ()), rounds=8 if demo else None,
+                ))
             elif path == "/demo":
                 request = json.loads(body or b"{}")
                 self._json(HTTPStatus.OK, load_demo(int(request.get("tokens") or 3145728)))
             elif path == "/reset":
                 SERVICE.reset()
-                DEMO["questions"], DEMO["instructions"] = [], {}
+                DEMO["questions"], DEMO["instructions"], DEMO["variants"] = [], {}, {}
                 self._json(HTTPStatus.OK, {"context": SERVICE.session.length})
             else:
                 self._json(HTTPStatus.NOT_FOUND, {"error": "no such endpoint"})
@@ -159,6 +163,7 @@ def load_demo(tokens: int) -> dict:
     source = SERVICE.add_ids(body, f"演示：Python 标准库草堆 + 39 根针（{len(document):,} token）", kind="demo")
     DEMO["questions"] = [q["question"] for q in questions]
     DEMO["instructions"] = {q["question"]: q["instruction"] for q in questions}
+    DEMO["variants"] = {q["question"]: q.get("variants", []) for q in questions if q.get("variants")}
     return {"name": source.name, "tokens": source.tokens, "questions": DEMO["questions"]}
 
 

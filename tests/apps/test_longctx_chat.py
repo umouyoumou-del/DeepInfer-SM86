@@ -31,8 +31,9 @@ class _Service:
         self.added.append((name, text))
         return types.SimpleNamespace(name=name, tokens=len(text))
 
-    def ask(self, question: str, *, deep: bool = False, instruction: str | None = None) -> queue.Queue:
+    def ask(self, question: str, *, deep: bool = False, instruction: str | None = None, variants=(), rounds=None):
         self.instructions.append(instruction)
+        self.rounds = rounds
         events: queue.Queue = queue.Queue()
         events.put({"event": "start", "question": question, "context": 7, "deep": deep})
         events.put({"event": "text", "round": 1, "text": "Answer: 42"})
@@ -96,6 +97,7 @@ def test_demo_questions_carry_their_evaluation_instruction(server) -> None:
     try:
         for question in ("Which VAR?", "Something else?"):
             _post(server + "/ask?key=secret", json.dumps({"question": question}).encode())
+        assert longctx_chat.SERVICE.rounds is None  # a user's question: the service's default cap
     finally:
         longctx_chat.DEMO["instructions"] = {}
     assert longctx_chat.SERVICE.instructions == ["Simulate the VAR lines.", None]

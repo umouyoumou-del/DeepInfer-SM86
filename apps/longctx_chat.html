@@ -106,7 +106,7 @@ async function poll() {
       (s.segments.length ? ` · 从第 ${fmt(s.segments[0][0])} 个 token 起` : '') + '</span></div>').join('');
     if (status.demo_questions && status.demo_questions.length && !$('samples').dataset.filled) {
       $('samples').dataset.filled = '1';
-      $('samples').innerHTML = '<h3 style="margin-top:14px">演示问题（点击填入）</h3><div class="sub">这些问题会带上评测时用的作答指令；自己的问题用通用指令。</div>' + status.demo_questions.map(q =>
+      $('samples').innerHTML = '<h3 style="margin-top:14px">演示问题（点击填入）</h3><div class="sub">这些问题按评测时的方式作答（同样的作答指令，变量链题再取几种问法的并集，最多 8 轮）；自己的问题用通用指令，最多 4 轮。</div>' + status.demo_questions.map(q =>
         `<button type="button">${esc(q)}</button>`).join('');
       [...$('samples').querySelectorAll('button')].forEach(b => b.onclick = () => { $('question').value = b.textContent; $('question').focus(); });
     }
@@ -226,6 +226,8 @@ $('ask').onsubmit = async ev => {
             `<div><b>第 ${fmt(x.position)} 个 token（${(100 * x.depth).toFixed(1)}%）</b> ${x.source ? '· ' + esc(x.source) + ' ' : ''}· ${esc(x.line)}</div>`).join('');
           if (!e.stop) head.textContent = `第 ${e.round} 轮答完，用答案再定位一次…`;
         }
+        else if (e.event === 'variants') head.textContent = `再用另外 ${e.count} 种问法确认最后一步…`;
+        else if (e.event === 'union') final.textContent = `答（${e.phrasings} 种问法取并集）：` + e.final;
         else if (e.event === 'done') {
           head.textContent = `上下文 ${fmt(e.context)} token · 共 ${e.rounds} 轮`;
           meta.textContent = `首字 ${e.first_token ?? '-'} 秒 · 共 ${e.seconds} 秒 · 生成 ${fmt(e.tokens)} token · 读回 ${fmt(e.read_tokens)} token`;

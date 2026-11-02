@@ -79,6 +79,8 @@ def ask(base: str, key: str, question: str, deep: bool) -> dict:
                 others = [item for item in event["evidence"] if item not in quoted]
                 for item in (quoted + others)[:4]:
                     print(f"\n  evidence @ token {item['position']:,} ({100 * item['depth']:.1f}%): {item['line'][:100]}")
+            elif kind == "union":
+                print(f"\n[{event['phrasings']} phrasings, union] Answer: {event['final']}", flush=True)
             elif kind == "done":
                 done = event
             elif kind == "error":
