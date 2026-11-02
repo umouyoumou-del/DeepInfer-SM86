@@ -12,7 +12,16 @@ import math
 import threading
 import time
 from collections import defaultdict
+from dataclasses import dataclass
 from typing import Any
+
+
+@dataclass
+class GenerationStats:
+    """Token counts of one generation request."""
+
+    prompt_tokens: int
+    completion_tokens: int
 
 _HELP = {
     "requests_total": "Generation requests accepted by the engine.",

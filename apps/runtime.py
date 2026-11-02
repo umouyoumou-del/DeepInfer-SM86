@@ -7,7 +7,6 @@ import sys
 import threading
 import time
 from collections.abc import Iterator, Sequence
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from deepinfer.engine.metrics import GenerationStats  # shared with the DeepSeek adapter
 from scripts.run_qwen7b_mixed_gpu_harness import (
     _install_deepinfer_import_stubs,
     _load_module,
@@ -25,12 +25,6 @@ from scripts.run_qwen7b_mixed_gpu_harness import (
 
 DEFAULT_CHECKPOINT = Path(r"D:\Qwen7B-Mixed-SM86")
 DEFAULT_MAX_CACHE = 256
-
-
-@dataclass
-class GenerationStats:
-    prompt_tokens: int
-    completion_tokens: int
 
 
 def _load_backend_modules() -> tuple[Any, ...]:

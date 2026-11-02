@@ -28,8 +28,6 @@ Token counts and the memory plan are printed before anything is allocated.
 from __future__ import annotations
 
 import argparse
-import glob
-import hashlib
 import json
 import os
 import random
@@ -41,6 +39,12 @@ import torch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from deepinfer.longctx_suite import (
+    document_hash,
+    haystack_tokens,
+    header_ids,
+    line_start,
+)
 from deepinfer.moe.deepseek_longctx import DeepSeekLongContext
 from deepinfer.moe.deepseek_v2_runtime import DeepSeekV2LiteGGUFRuntime
 from deepinfer.moe.latent_mla import DualChunkPositions, LatentKVCache
@@ -114,40 +118,6 @@ def make_needles(depths: list[float], seed: int, style: str) -> list[dict]:
     return needles
 
 
-def haystack_tokens(tok, root: str, count: int) -> list[int]:
-    """The first ``count`` tokens of the concatenated standard library."""
-
-    files = sorted(glob.glob(os.path.join(root, "**", "*.py"), recursive=True))
-    body: list[int] = []
-    for path in files:
-        if "site-packages" in path:
-            continue
-        try:
-            with open(path, encoding="utf-8", errors="ignore") as handle:
-                text = handle.read()
-        except OSError:
-            continue
-        ids = tok.encode(f"\n# {os.path.relpath(path, root)}\n{text}", add_special_tokens=False)
-        body.extend(ids[: count - len(body)])
-        if len(body) >= count:
-            return body
-    raise RuntimeError(f"haystack has only {len(body):,} tokens, {count:,} needed")
-
-
-def line_start(pieces: list[str], depth: float, length: int) -> int:
-    """Index in the first ``length`` body tokens at ``depth``, moved to a line start."""
-
-    cut = min(int(depth * length), length)
-    limit = min(length, cut + 4096)
-    while 0 < cut < limit and not pieces[cut - 1].endswith("Ċ"):
-        cut += 1
-    return cut
-
-
-def header_ids(tok) -> list[int]:
-    return [tok.bos_token_id] + tok.encode("User: ", add_special_tokens=False)
-
-
 def build_document(tok, target: int, needles: list[dict], body: list[int], pieces: list[str]):
     """``[BOS] User: <haystack with needles>``, exactly ``target`` tokens long.
 
@@ -170,10 +140,6 @@ def build_document(tok, target: int, needles: list[dict], body: list[int], piece
         previous = cut
     document.extend(body[previous:body_length])
     return document
-
-
-def document_hash(ids: list[int]) -> str:
-    return hashlib.sha256(" ".join(map(str, ids)).encode()).hexdigest()
 
 
 def main() -> None:

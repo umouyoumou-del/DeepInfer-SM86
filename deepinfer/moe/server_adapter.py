@@ -15,7 +15,7 @@ from typing import Any
 
 import torch
 
-from apps.runtime import GenerationStats
+from deepinfer.engine.metrics import GenerationStats
 from deepinfer.moe.deepseek_v2_runtime import DeepSeekV2LiteGGUFRuntime
 
 
