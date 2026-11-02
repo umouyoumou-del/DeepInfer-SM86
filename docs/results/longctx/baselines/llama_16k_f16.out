@@ -1,0 +1,25 @@
+server ready: -fa off -c 18432 (VRAM 15613 MiB)
+llama.cpp: document 16,384 tokens, sha256 a6fe0d5e020f7b28
+ 1 MK FULL 1/1 (5 s) What is the special magic number for crimson falco -> '8589669'
+ 2 MK FULL 1/1 (0 s) What is the special magic number for crimson otter -> '8812311'
+ 3 MK FULL 1/1 (0 s) What is the special magic number for silver falcon -> 'The special magic number for silver falcon is: 8580488.'
+ 4 MK FULL 1/1 (0 s) What is the special magic number for silver otter? -> '9520162'
+ 5 MK FULL 1/1 (0 s) What is the special magic number for amber lynx? -> '4186027'
+ 6 MK FULL 1/1 (0 s) What is the special magic number for amber heron? -> '4098086'
+ 7 MK FULL 1/1 (0 s) What is the special magic number for cobalt lynx? -> '9588401'
+ 8 MK FULL 1/1 (3 s) What is the special magic number for cobalt heron? -> 'The special magic number for cobalt heron is: 8981982.\n\nTo find this number, I c'
+ 9 MK FULL 1/1 (1 s) What is the special magic number for ivory mantis? -> '4123476'
+10 MK MISS 0/1 (0 s) What is the special magic number for ivory panther -> '4123476'
+11 MK FULL 1/1 (0 s) What is the special magic number for jade mantis? -> '8492589'
+12 MK FULL 1/1 (0 s) What is the special magic number for jade panther? -> '6090228'
+13 MK MISS 0/1 (0 s) What is the special magic number for scarlet ibis? -> '2521199'
+14 MK FULL 1/1 (0 s) What is the special magic number for scarlet badge -> 'The special magic number for scarlet badger is: 2521199.'
+15 MK FULL 1/1 (0 s) What is the special magic number for onyx ibis? -> '1702635'
+16 MK FULL 1/1 (1 s) What is the special magic number for onyx badger? -> 'The special magic number for onyx badger is: 7646461.\n\nReasoning:\n1. The text pr'
+17 MV MISS 0/4 (12 s) What are all the special magic numbers for golden  -> 'The special magic numbers for golden viper are:\n\n1999101, 6090228, 1999101, 1999'
+18 MQ FULL 4/4 (2 s) What are the special magic numbers for crimson fal -> 'The special magic numbers for the given entities are:\n\nCrimson falcon: 8589669\nA'
+19 VT MISS 5/5 (26 s) Find all variables that are assigned the value 146 -> 'ACSYD, AVAGG, AVCOU, GHTAY, INRCW, KYHQJ, MDJMC, OKOSG, QHUJP'
+20 2H MISS 0/1 (1 s) What is the employee badge number of the person wh -> 'The text provided does not contain an employee badge number for the person who h'
+21 2H MISS 0/1 (2 s) Which combination opens the personal safe of the a -> 'The combination to open the personal safe of the architect who designed the Teal'
+{"questions_full": "15/21", "items": "23/31", "by_kind": {"MK": "14/16", "MV": "0/1", "MQ": "1/1", "VT": "0/1", "2H": "0/2"}, "question_seconds": 56.9}
+done: /root/autodl-tmp/llamacpp-vs-deepinfer/longctx/llama_16k_f16.json

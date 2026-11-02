@@ -1,0 +1,32 @@
+Token indices sequence length is longer than the specified maximum sequence length for this model (27594 > 16384). Running this sequence through the model will result in indexing errors
+document 65,536 tokens with 39 needles (1 s); 21 questions, 31 expected items
+DeepseekV2ForCausalLM has generative capabilities, as `prepare_inputs_for_generation` is explicitly overwritten. However, it doesn't directly inherit from `GenerationMixin`. From 👉v4.50👈 onwards, `PreTrainedModel` will NOT inherit from `GenerationMixin`, and this model will lose the ability to call `generate` and other related functions.
+  - If you're using `trust_remote_code=True`, you can get rid of this warning by loading the model with an auto class. See https://huggingface.co/docs/transformers/en/model_doc/auto#auto-classes
+  - If you are the owner of the model architecture code, please modify your model class such that it inherits from `GenerationMixin` (after `PreTrainedModel`, otherwise you'll get an exception).
+  - If you are not the owner of the model architecture class, please contact the model code owner to update it.
+memory: kv fp8 1.11 GiB; experts pinned; gpu holds 67,584 tokens, host 0
+  prefill 65,536/65,536 tokens, 0.2 min
+prefill 65,536 tokens in 0.2 min
+[plain]  1 MK FULL 1/1 located 0/1 (8 s) | What is the special magic number for crimson falcon? -> 'The special magic number for crimson falcon is: 8589669.\n\nTo find the special magic number for crimson falcon, we need t'
+[plain]  2 MK FULL 1/1 located 0/1 (11 s) | What is the special magic number for crimson otter? -> 'The special magic number for crimson otter is: 8812311.\n\nTo find the special magic number for crimson otter, we need to '
+[plain]  3 MK MISS 0/1 extras ['8588401'] located 0/1 (2 s) | What is the special magic number for silver falcon? -> 'The special magic number for silver falcon is: 8588401.'
+[plain]  4 MK FULL 1/1 located 0/1 (9 s) | What is the special magic number for silver otter? -> 'The special magic number for silver otter is: 9520162.\n\nTo find the special magic number for silver otter, we need to fo'
+[plain]  5 MK MISS 0/1 extras ['3642312'] located 0/1 (9 s) | What is the special magic number for amber lynx? -> 'To find the special magic number for amber lynx, we need to follow these steps:\n\n1. **Identify the relevant text**: We n'
+[plain]  6 MK MISS 0/1 extras ['9520162'] located 0/1 (14 s) | What is the special magic number for amber heron? -> 'The special magic number for amber heron is: 9520162.\n\nTo find the special magic number for amber heron, we need to foll'
+[plain]  7 MK MISS 0/1 extras ['8981982'] located 0/1 (2 s) | What is the special magic number for cobalt lynx? -> 'The special magic number for cobalt lynx is: 8981982.\n\nAnswer: 8981982'
+[plain]  8 MK MISS 1/1 extras ['1702635', '2059731', '2579129', '3642312', '4123476', '7299227', '7667674', '8885078'] located 0/1 (23 s) | What is the special magic number for cobalt heron? -> 'The special magic number for cobalt heron is: 8981982.\n\nReasoning:\n1. The text states "One of the special magic numbers '
+[plain]  9 MK FULL 1/1 located 0/1 (9 s) | What is the special magic number for ivory mantis? -> 'The special magic number for ivory mantis is: 4123476.\n\nTo find the special magic number for ivory mantis, we need to fo'
+[plain] 10 MK MISS 0/1 extras ['4123476'] located 0/1 (2 s) | What is the special magic number for ivory panther? -> 'The special magic number for ivory panther is: 4123476.\n\nAnswer: 4123476'
+[plain] 11 MK MISS 0/1 extras ['8588401'] located 0/1 (2 s) | What is the special magic number for jade mantis? -> 'The special magic number for jade mantis is: 8588401.'
+[plain] 12 MK MISS 0/1 extras ['4123476'] located 0/1 (2 s) | What is the special magic number for jade panther? -> 'The special magic number for jade panther is: 4123476.'
+[plain] 13 MK MISS 0/1 extras ['2579129', '4123476', '8885078', '8981982'] located 0/1 (17 s) | What is the special magic number for scarlet ibis? -> 'The special magic number for scarlet ibis is: 8981982.\n\nTo find the special magic number for scarlet ibis, we need to fo'
+[plain] 14 MK MISS 0/1 extras ['8981982'] located 0/1 (8 s) | What is the special magic number for scarlet badger? -> 'The special magic number for scarlet badger is: 8981982.\n\nTo find the special magic number for scarlet badger, we need t'
+[plain] 15 MK FULL 1/1 located 0/1 (2 s) | What is the special magic number for onyx ibis? -> 'The special magic number for onyx ibis is: 1702635.\n\nAnswer: 1702635'
+[plain] 16 MK MISS 0/1 extras ['8981982'] located 0/1 (22 s) | What is the special magic number for onyx badger? -> 'The special magic number for onyx badger is: 8981982.\n\nReasoning:\n1. The text above contains a section titled "_compat_p'
+[plain] 17 MV MISS 3/4 extras ['1999101', '4123476', '8580488', '8589669', '8981982', '9520162'] located 0/4 (22 s) | What are all the special magic numbers for golden viper? -> 'To find all the special magic numbers for golden viper, we need to extract the numbers mentioned in the text. Here are t'
+[plain] 18 MQ MISS 2/4 extras ['8981982'] located 0/4 (8 s) | What are the special magic numbers for crimson falcon, amber -> 'The special magic numbers for the mentioned animals are as follows:\n\nCrimson falcon: 881982\nAmber heron: 8981982\nJade ma'
+[plain] 19 VT MISS 2/5 extras ['KYHQJ'] DECOY ['KYHQJ'] located 0/5 (57 s) | Find all variables that are assigned the value 14673, direct -> 'To find all variables that are assigned the value 14673, we need to carefully analyze the given text and track the assig'
+[plain] 20 2H FULL 1/1 located 0/2 (2 s) | What is the employee badge number of the person who holds th -> 'The employee badge number of the person who holds the vault key of the Orrin observatory is 1877827.'
+[plain] 21 2H MISS 0/1 extras ['2225380'] located 0/2 (13 s) | Which combination opens the personal safe of the architect w -> 'The combination to open the personal safe of the architect who designed the Teal Harbor lighthouse is 2225380.\n\nTo find '
+[plain] questions fully right 6/21, items 14/31, by kind {'MK': '5/16', 'MV': '0/1', 'MQ': '0/1', 'VT': '0/1', '2H': '1/2'}
+wrote /root/autodl-tmp/llamacpp-vs-deepinfer/longctx/deepinfer_64k_plain.json

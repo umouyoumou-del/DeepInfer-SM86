@@ -153,7 +153,20 @@ def answer_questions(session, tok, questions: list[dict], needles: list[dict], a
                 refine = Refine(
                     tok, bare, tok.encode(NEUTRAL_PROMPT, add_special_tokens=False), keep=args.refine, order=args.order
                 )
-            if mode == "single":
+            if mode == "plain":
+                # no locating: full attention over the whole context, as a serving engine answers;
+                # the cache is rolled back after each answer
+                state = session.snapshot()
+                answers = []
+                for instruction in [question["instruction"], *question.get("variants", [])]:
+                    ids = tok.encode(f"\n\n{question['question']} {instruction}\n\nAssistant:", add_special_tokens=False)
+                    answers.append(session.generate(ids, max_new_tokens=args.max_new, stop_ids=stop))
+                    session.restore(state)
+                produced, spans = answers[0], []
+                detail = {"spans": spans}
+                if len(answers) > 1:
+                    detail["variant_answers"] = [tok.decode(ids, skip_special_tokens=True).strip() for ids in answers[1:]]
+            elif mode == "single":
                 q_ids = tok.encode(
                     f"\n\n{question['question']} {question['instruction']}\n\nAssistant:", add_special_tokens=False
                 )
@@ -250,7 +263,10 @@ def main() -> None:
     parser.add_argument("--workspace-gib", type=float, default=4.0)
     parser.add_argument("--unpin", choices=("auto", "yes", "no"), default="auto")
     parser.add_argument("--seed", type=int, default=11)
-    parser.add_argument("--mode", choices=("feedback", "single", "both"), default="feedback")
+    parser.add_argument(
+        "--mode", choices=("feedback", "single", "both", "plain"), default="feedback",
+        help="plain: answer with full attention over the whole context, no locating (a control)",
+    )
     parser.add_argument(
         "--score", choices=("sum", "max", "sum-contrast", "max-contrast", "max-ratio"), default="max-contrast",
         help="block scoring for locate: mass summed or sharpest row, optionally minus a neutral prompt's",

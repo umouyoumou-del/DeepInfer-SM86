@@ -1,0 +1,3 @@
+server ready: -c 133120 -ctk q8_0 -ctv q8_0 (VRAM 28797 MiB)
+Token indices sequence length is longer than the specified maximum sequence length for this model (27594 > 16384). Running this sequence through the model will result in indexing errors
+llama.cpp: document 131,072 tokens, sha256 556972db9b4301c5

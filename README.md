@@ -193,6 +193,25 @@ python apps/longctx_chat.py --port 6006 --capacity 3407872   # 仓库里的旧�
 
 多轮模式下回答的第 1 轮几秒内开始逐字流出，确认轮要再 20 秒左右（3M 时每次定位要把 315 万个位置读一遍）。坦白：用户直接问变量链（不带评测时的逐行模拟指令）时只找到链头 GHTAY——这一步是模型的推理，演示题为此带上了评测指令；一个服务一次只答一个问题（单卡、单工作线程）；读入 3M 要 25 分钟（96K 窗口，可换 16K 窗口更快）。细节见 [`docs/LONG_CONTEXT_1M.md`](docs/LONG_CONTEXT_1M.md) §4.10。
 
+### 和 llama.cpp、vLLM 比：同一张卡、同一份文档（2026-11-03）
+
+同一台 RTX 4080 SUPER（32 GB 改装版）、同一个模型、每个长度逐 token 相同的文档、同样 21 题和评分。
+llama.cpp b12024 用它在这份文件上最快的 GPU 配置，并把同一份权重改写成它最省显存的 MLA 布局再测一次
+（`scripts/gguf_mla_layout.py`）；vLLM 0.7.3 用同一模型的 AWQ 版（最新版已不能加载 GGUF，它要的 PyTorch 也装不进机器剩余的磁盘）。
+
+| | 3M | 这台机器上最长 | 98K | 1M |
+|---|---|---:|---:|---:|
+| **本系统**（定位 + 重读） | **21/21** | 3.41M（服务容量） | 20/21 | **21/21** |
+| 本系统整段直接回答（对照） | — | — | 0/21 | — |
+| llama.cpp，同一个 GGUF | 装不下（KV 要 810 GiB） | 98K | 3/21 | 装不下 |
+| llama.cpp，MLA 布局 | 装不下（KV 要 48.4 GiB） | 1M | — | 0/21，输出成乱码 |
+| vLLM 0.7.3，AWQ | 装不下 | 163,840（位置表上限） | 3/21 | 装不下 |
+
+读入 1M：llama.cpp 99.3 分钟，本系统 8.7 分钟。整段直接回答随长度变差，各引擎一致（llama.cpp 16K 15/21、
+64K 7/21、98K 3/21；vLLM 98K 3/21；本系统同样的答法 16、6、0 题）；差距来自"定位 + 重读"的方法，而它需要一个能放下全部 KV 的缓存——这正是 3M 上别的引擎做不到的。
+论文 [`docs/PAPER_LONG_CONTEXT.md`](docs/PAPER_LONG_CONTEXT.md)，细节 [`docs/LONG_CONTEXT_1M.md`](docs/LONG_CONTEXT_1M.md) §4.11，
+结果与日志 `docs/results/longctx/baselines/`。
+
 ### DeepSeek-V2-Lite Q4_K_M 原生 MoE（2026-10-28）
 
 目标不是把 15.7B 参数全部塞进 4 GB，而是让 DeepInfer 自己的执行层在

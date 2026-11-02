@@ -138,7 +138,8 @@ def main() -> int:
     subprocess.run(
         [
             CHROME, "--headless=new", "--disable-gpu", "--no-sandbox",
-            f"--user-data-dir={dst.parent / ('.chromepdf_' + dst.stem)}",
+            # absolute: Chrome hangs at startup on a relative profile path
+            f"--user-data-dir={dst.resolve().parent / ('.chromepdf_' + dst.stem)}",
             "--no-pdf-header-footer",
             f"--print-to-pdf={dst.resolve()}",
             tmp.resolve().as_uri(),

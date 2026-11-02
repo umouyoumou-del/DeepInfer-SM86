@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="400" viewBox="0 0 1000 400" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#52514e"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="400" fill="#fcfcfb"/>
+
+  <!-- reading path -->
+  <text x="20" y="22" font-size="13" fill="#52514e">读入（一次，逐段 16K token）</text>
+  <rect x="20" y="50" width="140" height="64" rx="6" fill="#ffffff" stroke="#c3c2b7"/>
+  <text x="90" y="78" font-size="14" fill="#0b0b0b" text-anchor="middle">长文本</text>
+  <text x="90" y="98" font-size="12" fill="#52514e" text-anchor="middle">3,145,728 token</text>
+  <line x1="160" y1="82" x2="192" y2="82" stroke="#52514e" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <rect x="196" y="36" width="236" height="92" rx="6" fill="#ffffff" stroke="#c3c2b7"/>
+  <text x="314" y="58" font-size="14" fill="#0b0b0b" text-anchor="middle">有界编码</text>
+  <text x="314" y="78" font-size="12" fill="#52514e" text-anchor="middle">每个 token 只看 64 个 sink</text>
+  <text x="314" y="95" font-size="12" fill="#52514e" text-anchor="middle">和它之前的 96K：O(N·W)</text>
+  <text x="314" y="112" font-size="12" fill="#52514e" text-anchor="middle">位置：DCA，相对距离 &lt; 128K</text>
+  <line x1="432" y1="82" x2="464" y2="82" stroke="#52514e" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <rect x="468" y="30" width="512" height="104" rx="6" fill="#ffffff" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="484" y="52" font-size="14" fill="#0b0b0b">latent MLA 缓存：每 token 17.3 KiB</text>
+  <text x="964" y="52" font-size="12" fill="#52514e" text-anchor="end">fp8 latent 512 + fp16 k_pe 64，× 27 层</text>
+  <rect x="484" y="64" width="142" height="54" rx="4" fill="#9ec5f4"/>
+  <text x="555" y="87" font-size="12" fill="#0b0b0b" text-anchor="middle">显存</text>
+  <text x="555" y="105" font-size="12" fill="#0b0b0b" text-anchor="middle">0.93M token</text>
+  <rect x="628" y="64" width="336" height="54" rx="4" fill="#cde2fb"/>
+  <text x="796" y="87" font-size="12" fill="#0b0b0b" text-anchor="middle">锁页主机内存</text>
+  <text x="796" y="105" font-size="12" fill="#0b0b0b" text-anchor="middle">2.21M token（定位时经 PCIe 分段预取）</text>
+
+  <!-- the cache feeds every locate -->
+  <path d="M 540 134 L 540 168 L 300 168 L 300 200" fill="none" stroke="#52514e" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="552" y="160" font-size="12" fill="#52514e">每轮定位读遍全部缓存位置</text>
+
+  <!-- answering path -->
+  <text x="20" y="196" font-size="13" fill="#52514e">问答（每题）</text>
+  <rect x="20" y="236" width="104" height="60" rx="6" fill="#ffffff" stroke="#c3c2b7"/>
+  <text x="72" y="271" font-size="14" fill="#0b0b0b" text-anchor="middle">问题</text>
+  <line x1="124" y1="266" x2="166" y2="266" stroke="#52514e" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <rect x="170" y="204" width="260" height="124" rx="6" fill="#ffffff" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="300" y="228" font-size="14" fill="#0b0b0b" text-anchor="middle">定位（每层一遍）</text>
+  <text x="300" y="250" font-size="12" fill="#52514e" text-anchor="middle">融合 Triton kernel：问题对全部位置的</text>
+  <text x="300" y="268" font-size="12" fill="#52514e" text-anchor="middle">注意力质量，按 64 token 一块累加</text>
+  <text x="300" y="286" font-size="12" fill="#52514e" text-anchor="middle">块分 = 最尖锐的一行 − 中性提示的</text>
+  <text x="300" y="304" font-size="12" fill="#52514e" text-anchor="middle">取前 32 块（近端 96K 按比例配额）</text>
+  <line x1="430" y1="266" x2="462" y2="266" stroke="#52514e" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <rect x="466" y="204" width="228" height="124" rx="6" fill="#ffffff" stroke="#c3c2b7"/>
+  <text x="580" y="228" font-size="14" fill="#0b0b0b" text-anchor="middle">重读 + 行级精读</text>
+  <text x="580" y="250" font-size="12" fill="#52514e" text-anchor="middle">按原顺序读回这些块的原文</text>
+  <text x="580" y="268" font-size="12" fill="#52514e" text-anchor="middle">短上下文里逐 token 再定位</text>
+  <text x="580" y="286" font-size="12" fill="#52514e" text-anchor="middle">只留最好的 12 行</text>
+  <line x1="694" y1="266" x2="726" y2="266" stroke="#52514e" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <rect x="730" y="204" width="150" height="124" rx="6" fill="#ffffff" stroke="#c3c2b7"/>
+  <text x="805" y="228" font-size="14" fill="#0b0b0b" text-anchor="middle">短上下文作答</text>
+  <text x="805" y="250" font-size="12" fill="#52514e" text-anchor="middle">先抄原句</text>
+  <text x="805" y="268" font-size="12" fill="#52514e" text-anchor="middle">再推理</text>
+  <text x="805" y="286" font-size="12" fill="#52514e" text-anchor="middle">最后 Answer:</text>
+  <text x="805" y="304" font-size="12" fill="#52514e" text-anchor="middle">（CUDA graph 生成）</text>
+  <line x1="880" y1="266" x2="912" y2="266" stroke="#52514e" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <rect x="916" y="236" width="64" height="60" rx="6" fill="#ffffff" stroke="#c3c2b7"/>
+  <text x="948" y="271" font-size="14" fill="#0b0b0b" text-anchor="middle">回答</text>
+
+  <!-- feedback rounds -->
+  <path d="M 805 328 L 805 362 L 300 362 L 300 332" fill="none" stroke="#52514e" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="552" y="384" font-size="12" fill="#52514e" text-anchor="middle">反馈轮：再用"问题 + 回答"和"只有最终答案"定位，补读新块；最终答案连续两轮不变即停（最多 8 轮）</text>
+</svg>

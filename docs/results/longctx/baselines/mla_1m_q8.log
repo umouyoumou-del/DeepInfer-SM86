@@ -1,0 +1,15 @@
+0.00.103.028 I srv  llama_server: initializing ...
+0.00.103.045 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.103.290 W srv  server_setup: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+0.00.118.239 I srv    load_model: loading model '/dev/shm/DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M-mla.gguf'
+0.00.458.110 E llama_init_from_model: model does not support different K (q8_0) and V (f16) cache types
+0.00.476.961 E common_fit_params: encountered an error while trying to fit params to free device memory: failed to create llama_context from model
+0.00.567.289 W load: control-looking token: 100002 '<｜fim▁hole｜>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.00.578.484 W load: control-looking token: 100003 '<｜fim▁begin｜>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.00.583.458 W load: control-looking token: 100004 '<｜fim▁end｜>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.02.445.531 E llama_init_from_model: model does not support different K (q8_0) and V (f16) cache types
+0.02.445.537 E cmn  common_init_: failed to create context with model '/dev/shm/DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M-mla.gguf'
+0.02.445.541 E cmn  common_init_: failed to create context with model '/dev/shm/DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M-mla.gguf'
+0.02.445.547 E srv    load_model: failed to create_context with model '/dev/shm/DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M-mla.gguf'
+0.02.445.551 I srv    operator(): operator(): cleaning up before exit...
+0.02.453.177 E srv  server_run_i: exiting due to model loading error

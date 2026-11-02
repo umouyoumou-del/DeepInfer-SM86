@@ -1,0 +1,8 @@
+23:52:34 llama.cpp 1M done; DeepInfer 1M
+00:37:50 DeepInfer 1M done; waiting for vLLM install + AWQ download
+00:37:50 vLLM runs
+00:41:39 queue done
+00:41:45 queue2: DeepInfer 16K / 64K
+01:02:04 queue2 done
+01:02:19 queue3: vLLM with --max-num-batched-tokens
+01:17:08 queue3 done

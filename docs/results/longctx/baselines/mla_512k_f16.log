@@ -1,0 +1,15 @@
+0.00.119.103 I srv  llama_server: initializing ...
+0.00.119.122 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.119.360 W srv  server_setup: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+0.00.134.303 I srv    load_model: loading model '/dev/shm/DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M-mla.gguf'
+0.00.611.175 W load: control-looking token: 100002 '<｜fim▁hole｜>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.00.622.273 W load: control-looking token: 100003 '<｜fim▁begin｜>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.00.627.145 W load: control-looking token: 100004 '<｜fim▁end｜>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.02.595.253 W llama_context: setting new yarn_attn_factor = 1.0000 (mscale == 0.7, mscale_all_dim = 0.7)
+0.02.595.266 W llama_context: n_ctx_seq (526336) > n_ctx_train (163840) -- possible training context overflow
+0.02.874.393 I cmn          init: llama threadpool init, n_threads = 64
+0.02.942.554 W srv    load_model: the slot context (526336) exceeds the training context of the model (163840) - capping
+0.03.003.805 I srv    load_model: initializing, n_slots = 1, n_ctx_slot = 163840, kv_unified = 'false'
+0.03.006.252 I srv  server_run_i: model loaded
+0.03.006.262 I srv  server_on_li: listening on http://127.0.0.1:8090
+0.05.021.161 I srv    operator(): operator(): cleaning up before exit...

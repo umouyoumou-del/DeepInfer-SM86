@@ -1,0 +1,165 @@
+INFO 11-03 01:02:25 __init__.py:207] Automatically detected platform cuda.
+INFO 11-03 01:02:25 api_server.py:912] vLLM API server version 0.7.3
+INFO 11-03 01:02:25 api_server.py:913] args: Namespace(host=None, port=8000, uvicorn_log_level='info', allow_credentials=False, allowed_origins=['*'], allowed_methods=['*'], allowed_headers=['*'], api_key=None, lora_modules=None, prompt_adapters=None, chat_template=None, chat_template_content_format='auto', response_role='assistant', ssl_keyfile=None, ssl_certfile=None, ssl_ca_certs=None, ssl_cert_reqs=0, root_path=None, middleware=[], return_tokens_as_token_ids=False, disable_frontend_multiprocessing=False, enable_request_id_headers=False, enable_auto_tool_choice=False, enable_reasoning=False, reasoning_parser=None, tool_call_parser=None, tool_parser_plugin='', model='/dev/shm/awq', task='auto', tokenizer=None, skip_tokenizer_init=False, revision=None, code_revision=None, tokenizer_revision=None, tokenizer_mode='auto', trust_remote_code=True, allowed_local_media_path=None, download_dir=None, load_format='auto', config_format=<ConfigFormat.AUTO: 'auto'>, dtype='auto', kv_cache_dtype='auto', max_model_len=100352, guided_decoding_backend='xgrammar', logits_processor_pattern=None, model_impl='auto', distributed_executor_backend=None, pipeline_parallel_size=1, tensor_parallel_size=1, max_parallel_loading_workers=None, ray_workers_use_nsight=False, block_size=None, enable_prefix_caching=None, disable_sliding_window=False, use_v2_block_manager=True, num_lookahead_slots=0, seed=0, swap_space=4, cpu_offload_gb=0, gpu_memory_utilization=0.95, num_gpu_blocks_override=None, max_num_batched_tokens=100352, max_num_partial_prefills=1, max_long_partial_prefills=1, long_prefill_token_threshold=0, max_num_seqs=1, max_logprobs=20, disable_log_stats=False, quantization=None, rope_scaling=None, rope_theta=None, hf_overrides=None, enforce_eager=False, max_seq_len_to_capture=8192, disable_custom_all_reduce=False, tokenizer_pool_size=0, tokenizer_pool_type='ray', tokenizer_pool_extra_config=None, limit_mm_per_prompt=None, mm_processor_kwargs=None, disable_mm_preprocessor_cache=False, enable_lora=False, enable_lora_bias=False, max_loras=1, max_lora_rank=16, lora_extra_vocab_size=256, lora_dtype='auto', long_lora_scaling_factors=None, max_cpu_loras=None, fully_sharded_loras=False, enable_prompt_adapter=False, max_prompt_adapters=1, max_prompt_adapter_token=0, device='auto', num_scheduler_steps=1, multi_step_stream_outputs=True, scheduler_delay_factor=0.0, enable_chunked_prefill=None, speculative_model=None, speculative_model_quantization=None, num_speculative_tokens=None, speculative_disable_mqa_scorer=False, speculative_draft_tensor_parallel_size=None, speculative_max_model_len=None, speculative_disable_by_batch_size=None, ngram_prompt_lookup_max=None, ngram_prompt_lookup_min=None, spec_decoding_acceptance_method='rejection_sampler', typical_acceptance_sampler_posterior_threshold=None, typical_acceptance_sampler_posterior_alpha=None, disable_logprobs_during_spec_decoding=None, model_loader_extra_config=None, ignore_patterns=[], preemption_mode=None, served_model_name=['coder'], qlora_adapter_name_or_path=None, otlp_traces_endpoint=None, collect_detailed_traces=None, disable_async_output_proc=False, scheduling_policy='fcfs', scheduler_cls='vllm.core.scheduler.Scheduler', override_neuron_config=None, override_pooler_config=None, compilation_config=None, kv_transfer_config=None, worker_cls='auto', generation_config=None, override_generation_config=None, enable_sleep_mode=False, calculate_kv_scales=False, additional_config=None, disable_log_requests=False, max_log_len=None, disable_fastapi_docs=False, enable_prompt_tokens_details=False)
+INFO 11-03 01:02:25 api_server.py:209] Started engine process with PID 273627
+INFO 11-03 01:02:25 config.py:208] Replacing legacy 'type' key with 'rope_type'
+INFO 11-03 01:02:30 __init__.py:207] Automatically detected platform cuda.
+INFO 11-03 01:02:31 config.py:208] Replacing legacy 'type' key with 'rope_type'
+INFO 11-03 01:02:33 config.py:549] This model supports multiple tasks: {'generate', 'score', 'classify', 'reward', 'embed'}. Defaulting to 'generate'.
+INFO 11-03 01:02:34 awq_marlin.py:114] The model is convertible to awq_marlin during runtime. Using awq_marlin kernel.
+WARNING 11-03 01:02:34 arg_utils.py:1187] Chunked prefill is enabled by default for models with max_model_len > 32K. Currently, chunked prefill might not work with some features or models. If you encounter any issues, please disable chunked prefill by setting --enable-chunked-prefill=False.
+INFO 11-03 01:02:34 config.py:1555] Chunked prefill is enabled with max_num_batched_tokens=100352.
+INFO 11-03 01:02:34 config.py:3329] MLA is enabled; forcing chunked prefill and prefix caching to be disabled.
+INFO 11-03 01:02:37 config.py:549] This model supports multiple tasks: {'classify', 'generate', 'score', 'embed', 'reward'}. Defaulting to 'generate'.
+INFO 11-03 01:02:39 awq_marlin.py:114] The model is convertible to awq_marlin during runtime. Using awq_marlin kernel.
+WARNING 11-03 01:02:39 arg_utils.py:1187] Chunked prefill is enabled by default for models with max_model_len > 32K. Currently, chunked prefill might not work with some features or models. If you encounter any issues, please disable chunked prefill by setting --enable-chunked-prefill=False.
+INFO 11-03 01:02:39 config.py:1555] Chunked prefill is enabled with max_num_batched_tokens=100352.
+INFO 11-03 01:02:39 config.py:3329] MLA is enabled; forcing chunked prefill and prefix caching to be disabled.
+INFO 11-03 01:02:39 llm_engine.py:234] Initializing a V0 LLM engine (v0.7.3) with config: model='/dev/shm/awq', speculative_config=None, tokenizer='/dev/shm/awq', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, override_neuron_config=None, tokenizer_revision=None, trust_remote_code=True, dtype=torch.float16, max_seq_len=100352, download_dir=None, load_format=LoadFormat.AUTO, tensor_parallel_size=1, pipeline_parallel_size=1, disable_custom_all_reduce=False, quantization=awq_marlin, enforce_eager=False, kv_cache_dtype=auto,  device_config=cuda, decoding_config=DecodingConfig(guided_decoding_backend='xgrammar'), observability_config=ObservabilityConfig(otlp_traces_endpoint=None, collect_model_forward_time=False, collect_model_execute_time=False), seed=0, served_model_name=coder, num_scheduler_steps=1, multi_step_stream_outputs=True, enable_prefix_caching=False, chunked_prefill_enabled=False, use_async_output_proc=True, disable_mm_preprocessor_cache=False, mm_processor_kwargs=None, pooler_config=None, compilation_config={"splitting_ops":[],"compile_sizes":[],"cudagraph_capture_sizes":[1],"max_capture_size":1}, use_cached_outputs=True, 
+INFO 11-03 01:02:39 cuda.py:160] Using Triton MLA backend.
+WARNING 11-03 01:02:39 triton_decode_attention.py:44] The following error message 'operation scheduled before its operands' can be ignored.
+INFO 11-03 01:02:40 model_runner.py:1110] Starting to load model /dev/shm/awq...
+WARNING 11-03 01:02:40 utils.py:168] The model class DeepseekV2ForCausalLM has not defined `packed_modules_mapping`, this may lead to incorrect mapping of quantized or ignored modules
+INFO 11-03 01:02:40 cuda.py:160] Using Triton MLA backend.
+WARNING 11-03 01:02:40 awq_marlin.py:132] Layer 'model.layers.0.mlp.down_proj' is not supported by AWQMarlin. Falling back to unoptimized AWQ kernels.
+
+Loading safetensors checkpoint shards:   0% Completed | 0/2 [00:00<?, ?it/s]
+
+Loading safetensors checkpoint shards:  50% Completed | 1/2 [00:03<00:03,  3.64s/it]
+
+Loading safetensors checkpoint shards: 100% Completed | 2/2 [00:06<00:00,  2.97s/it]
+
+Loading safetensors checkpoint shards: 100% Completed | 2/2 [00:06<00:00,  3.07s/it]
+
+INFO 11-03 01:02:47 model_runner.py:1115] Loading model weights took 10.4155 GB
+WARNING 11-03 01:02:51 fused_moe.py:807] Using default MoE config. Performance might be sub-optimal! Config file not found at /root/vllm073-venv/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/configs/E=64,N=704,device_name=NVIDIA_GeForce_RTX_4080_SUPER,dtype=int4_w8a16.json
+INFO 11-03 01:03:16 worker.py:267] Memory profiling takes 29.05 seconds
+INFO 11-03 01:03:16 worker.py:267] the current vLLM instance can use total_gpu_memory (31.47GiB) x gpu_memory_utilization (0.95) = 29.90GiB
+INFO 11-03 01:03:16 worker.py:267] model weights take 10.42GiB; non_torch_memory takes 0.05GiB; PyTorch activation peak memory takes 7.33GiB; the rest of the memory reserved for KV Cache is 12.10GiB.
+INFO 11-03 01:03:16 executor_base.py:111] # cuda blocks: 23493, # CPU blocks: 7767
+INFO 11-03 01:03:16 executor_base.py:116] Maximum concurrency for 100352 tokens per request: 3.75x
+INFO 11-03 01:03:19 model_runner.py:1434] Capturing cudagraphs for decoding. This may lead to unexpected consequences if the model is not static. To run the model in eager mode, set 'enforce_eager=True' or use '--enforce-eager' in the CLI. If out-of-memory error occurs during cudagraph capture, consider decreasing `gpu_memory_utilization` or switching to eager mode. You can also reduce the `max_num_seqs` as needed to decrease memory usage.
+
+Capturing CUDA graph shapes:   0%|          | 0/1 [00:00<?, ?it/s]
+Capturing CUDA graph shapes: 100%|██████████| 1/1 [00:00<00:00,  1.30it/s]
+Capturing CUDA graph shapes: 100%|██████████| 1/1 [00:00<00:00,  1.30it/s]
+INFO 11-03 01:03:20 model_runner.py:1562] Graph capturing finished in 1 secs, took 0.07 GiB
+INFO 11-03 01:03:20 llm_engine.py:436] init engine (profile, create kv cache, warmup model) took 33.04 seconds
+INFO 11-03 01:03:21 api_server.py:958] Starting vLLM API server on http://0.0.0.0:8000
+INFO 11-03 01:03:21 launcher.py:23] Available routes are:
+INFO 11-03 01:03:21 launcher.py:31] Route: /openapi.json, Methods: HEAD, GET
+INFO 11-03 01:03:21 launcher.py:31] Route: /docs, Methods: HEAD, GET
+INFO 11-03 01:03:21 launcher.py:31] Route: /docs/oauth2-redirect, Methods: HEAD, GET
+INFO 11-03 01:03:21 launcher.py:31] Route: /redoc, Methods: HEAD, GET
+INFO:     Started server process [273547]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:51540 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51546 - "GET /v1/models HTTP/1.1" 200 OK
+INFO 11-03 01:03:31 logger.py:39] Received request cmpl-5e11fa75a4a64e3ebc19d581103f353a-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,066 characters]
+INFO 11-03 01:03:31 engine.py:280] Added request cmpl-5e11fa75a4a64e3ebc19d581103f353a-0.
+loc("/root/vllm073-venv/lib/python3.12/site-packages/vllm/attention/ops/triton_decode_attention.py":308:16): error: operation scheduled before its operands
+INFO 11-03 01:03:59 metrics.py:455] Avg prompt throughput: 3452.7 tokens/s, Avg generation throughput: 0.0 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 26.2%, CPU KV cache usage: 0.0%.
+INFO:     127.0.0.1:51560 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 01:04:01 logger.py:39] Received request cmpl-f7840a156eeb46678f44d746e60f6c38-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,065 characters]
+INFO 11-03 01:04:01 engine.py:280] Added request cmpl-f7840a156eeb46678f44d746e60f6c38-0.
+INFO 11-03 01:04:28 metrics.py:455] Avg prompt throughput: 3436.9 tokens/s, Avg generation throughput: 0.7 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 26.2%, CPU KV cache usage: 0.0%.
+INFO:     127.0.0.1:35350 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 01:04:30 logger.py:39] Received request cmpl-599ecc225f294ea483d2ef40643503e3-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,065 characters]
+INFO 11-03 01:04:30 engine.py:280] Added request cmpl-599ecc225f294ea483d2ef40643503e3-0.
+INFO 11-03 01:04:56 metrics.py:455] Avg prompt throughput: 3422.3 tokens/s, Avg generation throughput: 0.7 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 26.2%, CPU KV cache usage: 0.0%.
+INFO:     127.0.0.1:59950 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 01:04:59 logger.py:39] Received request cmpl-5feb48eebd644a8bb791fbaf9c7f43b9-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,064 characters]
+INFO 11-03 01:04:59 engine.py:280] Added request cmpl-5feb48eebd644a8bb791fbaf9c7f43b9-0.
+INFO 11-03 01:05:25 metrics.py:455] Avg prompt throughput: 3446.6 tokens/s, Avg generation throughput: 0.7 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 26.2%, CPU KV cache usage: 0.0%.
+INFO:     127.0.0.1:58670 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 01:05:27 logger.py:39] Received request cmpl-8dc7b4d986884d7f83db4d1c463bf125-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,065 characters]
+INFO 11-03 01:05:27 engine.py:280] Added request cmpl-8dc7b4d986884d7f83db4d1c463bf125-0.
+INFO 11-03 01:05:54 metrics.py:455] Avg prompt throughput: 3434.4 tokens/s, Avg generation throughput: 0.7 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 26.2%, CPU KV cache usage: 0.0%.
+INFO:     127.0.0.1:37036 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 01:05:56 logger.py:39] Received request cmpl-86a05a3257f9444d96310b2511831746-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,061 characters]
+INFO 11-03 01:05:56 engine.py:280] Added request cmpl-86a05a3257f9444d96310b2511831746-0.
+INFO 11-03 01:06:22 metrics.py:455] Avg prompt throughput: 3412.4 tokens/s, Avg generation throughput: 0.7 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 26.2%, CPU KV cache usage: 0.0%.
+INFO:     127.0.0.1:41442 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 01:06:25 logger.py:39] Received request cmpl-6ae3349c6d20478abf494a781a758e65-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,066 characters]
+INFO 11-03 01:06:25 engine.py:280] Added request cmpl-6ae3349c6d20478abf494a781a758e65-0.
+INFO 11-03 01:06:51 metrics.py:455] Avg prompt throughput: 3412.8 tokens/s, Avg generation throughput: 0.7 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 26.2%, CPU KV cache usage: 0.0%.
+INFO:     127.0.0.1:35662 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 01:06:54 logger.py:39] Received request cmpl-f436eb91806343ceafd2fa4098af47ce-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,062 characters]
+INFO 11-03 01:06:54 engine.py:280] Added request cmpl-f436eb91806343ceafd2fa4098af47ce-0.
+INFO 11-03 01:07:20 metrics.py:455] Avg prompt throughput: 3434.2 tokens/s, Avg generation throughput: 0.7 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 26.2%, CPU KV cache usage: 0.0%.
+INFO:     127.0.0.1:59168 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 01:07:22 logger.py:39] Received request cmpl-f44a65a07a424fb9922aba507331d39f-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,063 characters]
+INFO 11-03 01:07:22 engine.py:280] Added request cmpl-f44a65a07a424fb9922aba507331d39f-0.
+INFO 11-03 01:07:49 metrics.py:455] Avg prompt throughput: 3417.3 tokens/s, Avg generation throughput: 0.7 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 26.2%, CPU KV cache usage: 0.0%.
+INFO:     127.0.0.1:56536 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 01:07:51 logger.py:39] Received request cmpl-d581bcae442f4731aa00eff157fd936a-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,065 characters]
+INFO 11-03 01:07:51 engine.py:280] Added request cmpl-d581bcae442f4731aa00eff157fd936a-0.
+INFO 11-03 01:08:17 metrics.py:455] Avg prompt throughput: 3419.5 tokens/s, Avg generation throughput: 0.7 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 26.2%, CPU KV cache usage: 0.0%.
+INFO:     127.0.0.1:49330 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 01:08:20 logger.py:39] Received request cmpl-dc27c98c2df345ed9bceecafc0f62df0-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,062 characters]
+INFO 11-03 01:08:20 engine.py:280] Added request cmpl-dc27c98c2df345ed9bceecafc0f62df0-0.
+INFO 11-03 01:08:46 metrics.py:455] Avg prompt throughput: 3401.8 tokens/s, Avg generation throughput: 0.7 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 26.2%, CPU KV cache usage: 0.0%.
+INFO:     127.0.0.1:39146 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 01:08:49 logger.py:39] Received request cmpl-0e457b757b7d4c238468d4bf6b1f749f-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,064 characters]
+INFO 11-03 01:08:49 engine.py:280] Added request cmpl-0e457b757b7d4c238468d4bf6b1f749f-0.
+INFO 11-03 01:09:15 metrics.py:455] Avg prompt throughput: 3414.5 tokens/s, Avg generation throughput: 0.7 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 26.2%, CPU KV cache usage: 0.0%.
+INFO:     127.0.0.1:42766 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 01:09:17 logger.py:39] Received request cmpl-75f75882554041a69f8b8f5749cbbd38-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,064 characters]
+INFO 11-03 01:09:17 engine.py:280] Added request cmpl-75f75882554041a69f8b8f5749cbbd38-0.
+INFO 11-03 01:09:44 metrics.py:455] Avg prompt throughput: 3439.3 tokens/s, Avg generation throughput: 0.7 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 26.2%, CPU KV cache usage: 0.0%.
+INFO:     127.0.0.1:35412 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 01:09:49 logger.py:39] Received request cmpl-36b893300f2c4dca9369660eba2d907b-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,066 characters]
+INFO 11-03 01:09:50 engine.py:280] Added request cmpl-36b893300f2c4dca9369660eba2d907b-0.
+INFO 11-03 01:10:16 metrics.py:455] Avg prompt throughput: 3062.8 tokens/s, Avg generation throughput: 1.6 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 26.2%, CPU KV cache usage: 0.0%.
+INFO 11-03 01:10:21 metrics.py:455] Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 12.8 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 26.2%, CPU KV cache usage: 0.0%.
+INFO:     127.0.0.1:51564 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 01:10:24 logger.py:39] Received request cmpl-3e8ec5b17f6141f0ac9b0f02135f92de-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,066 characters]
+INFO 11-03 01:10:24 engine.py:280] Added request cmpl-3e8ec5b17f6141f0ac9b0f02135f92de-0.
+INFO 11-03 01:10:51 metrics.py:455] Avg prompt throughput: 3315.0 tokens/s, Avg generation throughput: 1.1 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 26.2%, CPU KV cache usage: 0.0%.
+INFO:     127.0.0.1:37936 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 01:10:54 logger.py:39] Received request cmpl-8651bd343628451eafedb6b197f8378a-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,068 characters]
+INFO 11-03 01:10:54 engine.py:280] Added request cmpl-8651bd343628451eafedb6b197f8378a-0.
+INFO 11-03 01:11:20 metrics.py:455] Avg prompt throughput: 3330.8 tokens/s, Avg generation throughput: 1.0 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 26.2%, CPU KV cache usage: 0.0%.
+INFO 11-03 01:11:25 metrics.py:455] Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 11.5 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 26.2%, CPU KV cache usage: 0.0%.
+INFO:     127.0.0.1:37984 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 01:11:27 logger.py:39] Received request cmpl-6c7b6024e0404efb8c767095f8e9d8bc-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,099 characters]
+INFO 11-03 01:11:27 engine.py:280] Added request cmpl-6c7b6024e0404efb8c767095f8e9d8bc-0.
+INFO 11-03 01:11:54 metrics.py:455] Avg prompt throughput: 3433.0 tokens/s, Avg generation throughput: 0.6 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 26.2%, CPU KV cache usage: 0.0%.
+INFO 11-03 01:11:59 metrics.py:455] Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 11.8 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 26.2%, CPU KV cache usage: 0.0%.
+INFO 11-03 01:12:04 metrics.py:455] Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 11.7 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 26.2%, CPU KV cache usage: 0.0%.
+INFO 11-03 01:12:09 metrics.py:455] Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 11.7 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 26.2%, CPU KV cache usage: 0.0%.
+INFO:     127.0.0.1:56942 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 01:12:13 logger.py:39] Received request cmpl-6362256a9d7d4de09152ffd3c810c067-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,217 characters]
+INFO 11-03 01:12:13 engine.py:280] Added request cmpl-6362256a9d7d4de09152ffd3c810c067-0.
+INFO 11-03 01:12:41 metrics.py:455] Avg prompt throughput: 3063.5 tokens/s, Avg generation throughput: 1.2 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 26.2%, CPU KV cache usage: 0.0%.
+INFO 11-03 01:12:46 metrics.py:455] Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 11.8 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 26.2%, CPU KV cache usage: 0.0%.
+INFO 11-03 01:12:51 metrics.py:455] Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 10.9 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 26.2%, CPU KV cache usage: 0.0%.
+INFO:     127.0.0.1:33356 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 01:12:53 logger.py:39] Received request cmpl-4f6f470281ff45589f3bf2c8f2738890-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,908 characters]
+INFO 11-03 01:12:53 engine.py:280] Added request cmpl-4f6f470281ff45589f3bf2c8f2738890-0.
+INFO 11-03 01:13:20 metrics.py:455] Avg prompt throughput: 3448.4 tokens/s, Avg generation throughput: 0.5 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 26.2%, CPU KV cache usage: 0.0%.
+INFO:     127.0.0.1:46868 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 01:13:22 logger.py:39] Received request cmpl-3e7074f512024efe8acbd59886b763db-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 880,113 characters]
+INFO 11-03 01:13:22 engine.py:280] Added request cmpl-3e7074f512024efe8acbd59886b763db-0.
+INFO 11-03 01:13:48 metrics.py:455] Avg prompt throughput: 3440.4 tokens/s, Avg generation throughput: 0.7 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 26.2%, CPU KV cache usage: 0.0%.
+INFO:     127.0.0.1:36668 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 01:13:51 logger.py:39] Received request cmpl-ffab8e8c42b54a4ea3bc80df206bc388-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,956 characters]
+INFO 11-03 01:13:51 engine.py:280] Added request cmpl-ffab8e8c42b54a4ea3bc80df206bc388-0.
+INFO 11-03 01:14:17 metrics.py:455] Avg prompt throughput: 3390.4 tokens/s, Avg generation throughput: 0.7 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 26.2%, CPU KV cache usage: 0.0%.
+INFO 11-03 01:14:22 metrics.py:455] Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 10.5 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 26.2%, CPU KV cache usage: 0.0%.
+INFO:     127.0.0.1:59422 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 01:14:23 logger.py:39] Received request cmpl-2564718fc4364d54b592a7248ee99884-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,171 characters]
+INFO 11-03 01:14:23 engine.py:280] Added request cmpl-2564718fc4364d54b592a7248ee99884-0.
+INFO 11-03 01:14:50 metrics.py:455] Avg prompt throughput: 3602.2 tokens/s, Avg generation throughput: 0.1 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 26.2%, CPU KV cache usage: 0.0%.
+INFO:     127.0.0.1:60456 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 01:14:53 logger.py:39] Received request cmpl-94178836af564cf4960db2200694145d-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,148 characters]
+INFO 11-03 01:14:53 engine.py:280] Added request cmpl-94178836af564cf4960db2200694145d-0.
+INFO 11-03 01:15:19 metrics.py:455] Avg prompt throughput: 3333.1 tokens/s, Avg generation throughput: 1.0 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 26.2%, CPU KV cache usage: 0.0%.
+INFO 11-03 01:15:24 metrics.py:455] Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 10.7 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 26.2%, CPU KV cache usage: 0.0%.
+INFO:     127.0.0.1:60940 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 01:15:29 launcher.py:62] Shutting down FastAPI HTTP server.
+[rank0]:[W1103 01:15:29.222831351 ProcessGroupNCCL.cpp:1250] Warning: WARNING: process group has NOT been destroyed before we destruct ProcessGroupNCCL. On normal program exit, the application should call destroy_process_group to ensure that any pending NCCL operations have finished in this process. In rare cases this process can exit before this point and block the progress of another member of the process group. This constraint has always been present,  but this warning has only been added since PyTorch 2.4 (function operator())
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.

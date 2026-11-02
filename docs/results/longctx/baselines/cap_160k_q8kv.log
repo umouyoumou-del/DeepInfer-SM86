@@ -1,0 +1,17 @@
+0.00.106.018 I srv  llama_server: initializing ...
+0.00.106.037 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.106.277 W srv  server_setup: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+0.00.121.818 I srv    load_model: loading model '/root/autodl-tmp/models/DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf'
+0.00.505.258 W common_fit_params: failed to fit params to free device memory: n_gpu_layers already set by user to 99, abort
+0.00.593.443 W load: control-looking token: 100002 '<｜fim▁hole｜>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.00.604.595 W load: control-looking token: 100003 '<｜fim▁begin｜>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.00.609.467 W load: control-looking token: 100004 '<｜fim▁end｜>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.02.841.892 W llama_context: setting new yarn_attn_factor = 1.0000 (mscale == 0.7, mscale_all_dim = 0.7)
+0.02.851.650 E ggml_backend_cuda_buffer_type_alloc_buffer: allocating 22950.00 MiB on device 0: cudaMalloc failed: out of memory
+0.02.851.657 E ggml_backend_buft_alloc_buffer_n_default: failed to allocate CUDA0 buffer of size 24064819200
+0.02.852.352 E llama_init_from_model: failed to initialize the context: failed to allocate buffer for kv cache
+0.02.852.359 E cmn  common_init_: failed to create context with model '/root/autodl-tmp/models/DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf'
+0.02.852.364 E cmn  common_init_: failed to create context with model '/root/autodl-tmp/models/DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf'
+0.02.852.370 E srv    load_model: failed to create_context with model '/root/autodl-tmp/models/DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf'
+0.02.852.376 I srv    operator(): operator(): cleaning up before exit...
+0.02.857.762 E srv  server_run_i: exiting due to model loading error

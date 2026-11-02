@@ -1,0 +1,559 @@
+{
+ "engine": "vllm",
+ "label": "vLLM 0.7.3, TechxGenus/DeepSeek-Coder-V2-Lite-Instruct-AWQ, max_model_len 100352 --max-num-batched-tokens 100352",
+ "tokens": 98304,
+ "seed": 11,
+ "document_sha256": "ba3b71cd21641fbd881f0317d2c48785919440ebbe8dfbf1502976c4e37b78fc",
+ "max_new": 1024,
+ "results": [
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for crimson falcon?",
+   "expected": [
+    "8589669"
+   ],
+   "answer": "The special magic number for crimson falcon is 8589669.",
+   "hits": [
+    "8589669"
+   ],
+   "extras": [],
+   "forbidden": [],
+   "full": true,
+   "requests": [
+    {
+     "text": " The special magic number for crimson falcon is 8589669.",
+     "prompt_tokens": 98365,
+     "prompt_seconds": null,
+     "new_tokens": 19,
+     "seconds": 30.670950807631016
+    }
+   ],
+   "seconds": 30.7
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for crimson otter?",
+   "expected": [
+    "8812311"
+   ],
+   "answer": "The special magic number for crimson otter is: 4098086.",
+   "hits": [],
+   "extras": [
+    "4098086"
+   ],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": " The special magic number for crimson otter is: 4098086.",
+     "prompt_tokens": 98365,
+     "prompt_seconds": null,
+     "new_tokens": 20,
+     "seconds": 28.764011949300766
+    }
+   ],
+   "seconds": 28.8
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for silver falcon?",
+   "expected": [
+    "8580488"
+   ],
+   "answer": "The special magic number for silver falcon is 8589669.",
+   "hits": [],
+   "extras": [
+    "8589669"
+   ],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": " The special magic number for silver falcon is 8589669.",
+     "prompt_tokens": 98365,
+     "prompt_seconds": null,
+     "new_tokens": 19,
+     "seconds": 28.55942276492715
+    }
+   ],
+   "seconds": 28.6
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for silver otter?",
+   "expected": [
+    "9520162"
+   ],
+   "answer": "The special magic number for silver otter is: 4098086.",
+   "hits": [],
+   "extras": [
+    "4098086"
+   ],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": " The special magic number for silver otter is: 4098086.",
+     "prompt_tokens": 98365,
+     "prompt_seconds": null,
+     "new_tokens": 20,
+     "seconds": 28.590203776955605
+    }
+   ],
+   "seconds": 28.6
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for amber lynx?",
+   "expected": [
+    "4186027"
+   ],
+   "answer": "The special magic number for amber lynx is: 1702635.",
+   "hits": [],
+   "extras": [
+    "1702635"
+   ],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": " The special magic number for amber lynx is: 1702635.",
+     "prompt_tokens": 98366,
+     "prompt_seconds": null,
+     "new_tokens": 21,
+     "seconds": 28.722370659932494
+    }
+   ],
+   "seconds": 28.7
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for amber heron?",
+   "expected": [
+    "4098086"
+   ],
+   "answer": "The special magic number for amber heron is 1702635.",
+   "hits": [],
+   "extras": [
+    "1702635"
+   ],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": " The special magic number for amber heron is 1702635.",
+     "prompt_tokens": 98365,
+     "prompt_seconds": null,
+     "new_tokens": 19,
+     "seconds": 28.90918862260878
+    }
+   ],
+   "seconds": 28.9
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for cobalt lynx?",
+   "expected": [
+    "9588401"
+   ],
+   "answer": "The special magic number for cobalt lynx is: 1702635.",
+   "hits": [],
+   "extras": [
+    "1702635"
+   ],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": " The special magic number for cobalt lynx is: 1702635.",
+     "prompt_tokens": 98366,
+     "prompt_seconds": null,
+     "new_tokens": 21,
+     "seconds": 28.656454902142286
+    }
+   ],
+   "seconds": 28.7
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for cobalt heron?",
+   "expected": [
+    "8981982"
+   ],
+   "answer": "The special magic number for cobalt heron is 1702635.",
+   "hits": [],
+   "extras": [
+    "1702635"
+   ],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": " The special magic number for cobalt heron is 1702635.",
+     "prompt_tokens": 98365,
+     "prompt_seconds": null,
+     "new_tokens": 19,
+     "seconds": 28.59064074791968
+    }
+   ],
+   "seconds": 28.6
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for ivory mantis?",
+   "expected": [
+    "4123476"
+   ],
+   "answer": "The special magic number for ivory mantis is: 4123476.",
+   "hits": [
+    "4123476"
+   ],
+   "extras": [],
+   "forbidden": [],
+   "full": true,
+   "requests": [
+    {
+     "text": " The special magic number for ivory mantis is: 4123476.",
+     "prompt_tokens": 98365,
+     "prompt_seconds": null,
+     "new_tokens": 20,
+     "seconds": 28.787441374734044
+    }
+   ],
+   "seconds": 28.8
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for ivory panther?",
+   "expected": [
+    "2579129"
+   ],
+   "answer": "The special magic number for ivory panther is: 1702635.",
+   "hits": [],
+   "extras": [
+    "1702635"
+   ],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": " The special magic number for ivory panther is: 1702635.",
+     "prompt_tokens": 98365,
+     "prompt_seconds": null,
+     "new_tokens": 20,
+     "seconds": 28.746611136943102
+    }
+   ],
+   "seconds": 28.7
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for jade mantis?",
+   "expected": [
+    "8492589"
+   ],
+   "answer": "The special magic number for jade mantis is: 1702635.",
+   "hits": [],
+   "extras": [
+    "1702635"
+   ],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": " The special magic number for jade mantis is: 1702635.",
+     "prompt_tokens": 98365,
+     "prompt_seconds": null,
+     "new_tokens": 20,
+     "seconds": 28.9138155374676
+    }
+   ],
+   "seconds": 28.9
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for jade panther?",
+   "expected": [
+    "6090228"
+   ],
+   "answer": "The special magic number for jade panther is 1702635.",
+   "hits": [],
+   "extras": [
+    "1702635"
+   ],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": " The special magic number for jade panther is 1702635.",
+     "prompt_tokens": 98365,
+     "prompt_seconds": null,
+     "new_tokens": 19,
+     "seconds": 28.57110346108675
+    }
+   ],
+   "seconds": 28.6
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for scarlet ibis?",
+   "expected": [
+    "3378927"
+   ],
+   "answer": "The text provided does not contain a special magic number for the scarlet ibis. The text discusses the special magic numbers for various animals and objects, but it does not mention a specific 7-digit number for the scarlet ibis.\n\nAnswer:",
+   "hits": [],
+   "extras": [],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": " The text provided does not contain a special magic number for the scarlet ibis. The text discusses the special magic numbers for various animals and objects, but it does not mention a specific 7-digit number for the scarlet ibis.\n\nAnswer:",
+     "prompt_tokens": 98365,
+     "prompt_seconds": null,
+     "new_tokens": 52,
+     "seconds": 32.07367576658726
+    }
+   ],
+   "seconds": 32.1
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for scarlet badger?",
+   "expected": [
+    "2521199"
+   ],
+   "answer": "The text provided does not contain a specific 7-digit number for the special magic number of a scarlet badger. The text only mentions the special magic numbers for other animals, such as the ivory mantis (4123476) and the golden viper (1251670). Since the question asks for the special magic number for a scarlet badger, and no such number is mentioned in the provided text, I cannot provide an answer.",
+   "hits": [],
+   "extras": [
+    "1251670",
+    "4123476"
+   ],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": " The text provided does not contain a specific 7-digit number for the special magic number of a scarlet badger. The text only mentions the special magic numbers for other animals, such as the ivory mantis (4123476) and the golden viper (1251670). Since the question asks for the special magic number for a scarlet badger, and no such number is mentioned in the provided text, I cannot provide an answer.",
+     "prompt_tokens": 98365,
+     "prompt_seconds": null,
+     "new_tokens": 98,
+     "seconds": 34.75809396803379
+    }
+   ],
+   "seconds": 34.8
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for onyx ibis?",
+   "expected": [
+    "1702635"
+   ],
+   "answer": "The text provided does not contain a special magic number for \"onyx ibis.\" Therefore, I cannot provide a specific number as requested.",
+   "hits": [],
+   "extras": [],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": " The text provided does not contain a special magic number for \"onyx ibis.\" Therefore, I cannot provide a specific number as requested.",
+     "prompt_tokens": 98366,
+     "prompt_seconds": null,
+     "new_tokens": 29,
+     "seconds": 29.239946644753218
+    }
+   ],
+   "seconds": 29.2
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for onyx badger?",
+   "expected": [
+    "7646461"
+   ],
+   "answer": "The text provided does not contain a specific 7-digit number for the special magic number of the onyx badger. The text discusses the special magic numbers for various animals and objects, but it does not mention a specific number for the onyx badger. Therefore, based on the provided text, I cannot determine the special magic number for the onyx badger.",
+   "hits": [],
+   "extras": [],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": " The text provided does not contain a specific 7-digit number for the special magic number of the onyx badger. The text discusses the special magic numbers for various animals and objects, but it does not mention a specific number for the onyx badger. Therefore, based on the provided text, I cannot determine the special magic number for the onyx badger.",
+     "prompt_tokens": 98366,
+     "prompt_seconds": null,
+     "new_tokens": 76,
+     "seconds": 33.84977437183261
+    }
+   ],
+   "seconds": 33.8
+  },
+  {
+   "kind": "MV",
+   "question": "What are all the special magic numbers for golden viper?",
+   "expected": [
+    "8599992",
+    "3642312",
+    "1251670",
+    "9864766"
+   ],
+   "answer": "The special magic numbers for golden viper are:\n\n1. 1251670\n2. 8589669\n3. 2059731\n4. 8981982\n5. 6090228\n6. 4123476\n7. 8492589\n8. 2579127\n9. 1702635\n10. 8580488\n\nAnswer: 1251670, 8589669, 2059731, 8981982, 6090228, 4123476, 8580488, 2579127, 1702635, 8580488",
+   "hits": [
+    "1251670"
+   ],
+   "extras": [
+    "1702635",
+    "2059731",
+    "2579127",
+    "4123476",
+    "6090228",
+    "8580488",
+    "8589669",
+    "8981982"
+   ],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": " The special magic numbers for golden viper are:\n\n1. 1251670\n2. 8589669\n3. 2059731\n4. 8981982\n5. 6090228\n6. 4123476\n7. 8492589\n8. 2579127\n9. 1702635\n10. 8580488\n\nAnswer: 1251670, 8589669, 2059731, 8981982, 6090228, 4123476, 8580488, 2579127, 1702635, 8580488",
+     "prompt_tokens": 98367,
+     "prompt_seconds": null,
+     "new_tokens": 216,
+     "seconds": 45.72689799964428
+    }
+   ],
+   "seconds": 45.7
+  },
+  {
+   "kind": "MQ",
+   "question": "What are the special magic numbers for crimson falcon, amber heron, jade mantis and onyx badger?",
+   "expected": [
+    "8589669",
+    "4098086",
+    "8492589",
+    "7646461"
+   ],
+   "answer": "The special magic numbers for the animals are as follows:\n\nCrimson falcon: 8589669\nAmber heron: 4098086\nJade mantis: 4123476\nOnyx badger: 1702635\n\nAnswer:\ncrimson falcon: 8589669\namber heron: 4098086\njade mantis: 4123476\nonyx badger: 1702635",
+   "hits": [
+    "8589669",
+    "4098086"
+   ],
+   "extras": [
+    "1702635",
+    "4123476"
+   ],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": " The special magic numbers for the animals are as follows:\n\nCrimson falcon: 8589669\nAmber heron: 4098086\nJade mantis: 4123476\nOnyx badger: 1702635\n\nAnswer:\ncrimson falcon: 8589669\namber heron: 4098086\njade mantis: 4123476\nonyx badger: 1702635",
+     "prompt_tokens": 98381,
+     "prompt_seconds": null,
+     "new_tokens": 128,
+     "seconds": 39.86339250393212
+    }
+   ],
+   "seconds": 39.9
+  },
+  {
+   "kind": "VT",
+   "question": "Find all variables that are assigned the value 14673, directly or through a chain of assignments (VAR B = VAR A gives B the value of A).",
+   "expected": [
+    "GHTAY",
+    "OKOSG",
+    "QHUJP",
+    "AVCOU",
+    "INRCW"
+   ],
+   "answer": "There are no variables assigned the value 14673 in the provided text.\n\n[union of 3 phrasings]\nAnswer: ",
+   "hits": [],
+   "extras": [],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": " There are no variables assigned the value 14673 in the provided text.",
+     "prompt_tokens": 98456,
+     "prompt_seconds": null,
+     "new_tokens": 19,
+     "seconds": 28.710225330665708
+    },
+    {
+     "text": " There are no variables assigned the value 14673 in the provided text.",
+     "prompt_tokens": 98477,
+     "prompt_seconds": null,
+     "new_tokens": 19,
+     "seconds": 28.93240351974964
+    },
+    {
+     "text": " The text provided does not contain any direct assignment to the value 14673. The text mentions VAR statements but does not assign the value 14673 to any variable. Therefore, there are no variables to write down.\n\nAnswer:",
+     "prompt_tokens": 98461,
+     "prompt_seconds": null,
+     "new_tokens": 55,
+     "seconds": 32.427415838465095
+    }
+   ],
+   "seconds": 90.1
+  },
+  {
+   "kind": "2H",
+   "question": "What is the employee badge number of the person who holds the vault key of the Orrin observatory?",
+   "expected": [
+    "1877827"
+   ],
+   "answer": "The employee badge number of the person who holds the vault key of the Orrin observatory is 1877827.",
+   "hits": [
+    "1877827"
+   ],
+   "extras": [],
+   "forbidden": [],
+   "full": true,
+   "requests": [
+    {
+     "text": " The employee badge number of the person who holds the vault key of the Orrin observatory is 1877827.",
+     "prompt_tokens": 98376,
+     "prompt_seconds": null,
+     "new_tokens": 30,
+     "seconds": 29.436770372092724
+    }
+   ],
+   "seconds": 29.4
+  },
+  {
+   "kind": "2H",
+   "question": "Which combination opens the personal safe of the architect who designed the Teal Harbor lighthouse?",
+   "expected": [
+    "7667674"
+   ],
+   "answer": "First, let's identify the relevant sentences from the text provided:\n\n\"The employee badge number of Kaila Brenn is 1877827.\"\n\nThis sentence does not provide the combination to open the safe. Therefore, based on the given text, there is no information about the architect who designed the Teal Harbor lighthouse.\n\nAnswer:\nThere is no information about the architect who designed the Teal Harbor lighthouse in the provided text.",
+   "hits": [],
+   "extras": [],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": " First, let's identify the relevant sentences from the text provided:\n\n\"The employee badge number of Kaila Brenn is 1877827.\"\n\nThis sentence does not provide the combination to open the safe. Therefore, based on the given text, there is no information about the architect who designed the Teal Harbor lighthouse.\n\nAnswer:\nThere is no information about the architect who designed the Teal Harbor lighthouse in the provided text.",
+     "prompt_tokens": 98371,
+     "prompt_seconds": null,
+     "new_tokens": 99,
+     "seconds": 36.14291073568165
+    }
+   ],
+   "seconds": 36.1
+  }
+ ],
+ "first_request_seconds": 30.7,
+ "prefill": {
+  "prompt_tokens": 98365,
+  "prompt_seconds": null
+ },
+ "summary": {
+  "questions_full": "3/21",
+  "items": "6/31",
+  "by_kind": {
+   "MK": "2/16",
+   "MV": "0/1",
+   "MQ": "0/1",
+   "VT": "0/1",
+   "2H": "1/2"
+  },
+  "question_seconds": 717.7
+ }
+}

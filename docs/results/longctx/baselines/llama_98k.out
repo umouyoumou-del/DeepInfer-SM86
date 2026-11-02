@@ -1,0 +1,26 @@
+server ready: -fa off -ctk q8_0 -ub 256 -c 100352 (VRAM 30791 MiB)
+Token indices sequence length is longer than the specified maximum sequence length for this model (27594 > 16384). Running this sequence through the model will result in indexing errors
+llama.cpp: document 98,304 tokens, sha256 ba3b71cd21641fbd
+ 1 MK MISS 0/1 (107 s) What is the special magic number for crimson falco -> '3642312'
+ 2 MK MISS 0/1 (5 s) What is the special magic number for crimson otter -> '8589669'
+ 3 MK MISS 0/1 (2 s) What is the special magic number for silver falcon -> '8589669'
+ 4 MK MISS 0/1 (1 s) What is the special magic number for silver otter? -> 'The special magic number for silver otter is: 4123476.'
+ 5 MK MISS 0/1 (3 s) What is the special magic number for amber lynx? -> '4123476'
+ 6 MK MISS 0/1 (5 s) What is the special magic number for amber heron? -> '4123476'
+ 7 MK MISS 0/1 (2 s) What is the special magic number for cobalt lynx? -> '1999101'
+ 8 MK MISS 0/1 (5 s) What is the special magic number for cobalt heron? -> '8589669'
+ 9 MK FULL 1/1 (5 s) What is the special magic number for ivory mantis? -> '**\n4123476'
+10 MK MISS 0/1 (6 s) What is the special magic number for ivory panther -> '4123476'
+11 MK MISS 0/1 (5 s) What is the special magic number for jade mantis? -> '4123476'
+12 MK MISS 0/1 (3 s) What is the special magic number for jade panther? -> '4123476'
+13 MK MISS 0/1 (5 s) What is the special magic number for scarlet ibis? -> '8589669'
+14 MK MISS 0/1 (4 s) What is the special magic number for scarlet badge -> '8589669'
+15 MK FULL 1/1 (5 s) What is the special magic number for onyx ibis? -> '1702635'
+16 MK MISS 0/1 (6 s) What is the special magic number for onyx badger? -> '1702635'
+17 MV MISS 1/4 (4 s) What are all the special magic numbers for golden  -> '1927864, 8589669, 1702635, 2059731, 3642312'
+18 MQ MISS 2/4 (4 s) What are the special magic numbers for crimson fal -> 'The special magic numbers for the mentioned animals are:\n\nCrimson falcon: 858966'
+19 VT MISS 3/5 (32 s) Find all variables that are assigned the value 146 -> 'AVAGG, AVCOU, INRCW, KYHQJ, OKOSG'
+20 2H FULL 1/1 (1 s) What is the employee badge number of the person wh -> 'The employee badge number of the person who holds the vault key of the Orrin obs'
+21 2H MISS 0/1 (3 s) Which combination opens the personal safe of the a -> '(No answer, as the text does not provide the necessary information)'
+{"questions_full": "3/21", "items": "9/31", "by_kind": {"MK": "2/16", "MV": "0/1", "MQ": "0/1", "VT": "0/1", "2H": "1/2"}, "question_seconds": 213.0}
+done: /root/autodl-tmp/llamacpp-vs-deepinfer/longctx/llama_98k.json

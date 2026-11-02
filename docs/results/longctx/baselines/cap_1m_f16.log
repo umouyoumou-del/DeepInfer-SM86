@@ -1,0 +1,18 @@
+0.00.106.764 I srv  llama_server: initializing ...
+0.00.106.787 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.107.074 W srv  server_setup: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+0.00.127.364 I srv    load_model: loading model '/root/autodl-tmp/models/DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf'
+0.00.428.446 W common_fit_params: failed to fit params to free device memory: n_gpu_layers already set by user to 99, abort
+0.00.484.045 W load: control-looking token: 100002 '<｜fim▁hole｜>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.00.490.475 W load: control-looking token: 100003 '<｜fim▁begin｜>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.00.493.340 W load: control-looking token: 100004 '<｜fim▁end｜>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.02.303.656 W llama_context: setting new yarn_attn_factor = 1.0000 (mscale == 0.7, mscale_all_dim = 0.7)
+0.02.303.667 W llama_context: n_ctx_seq (1048576) > n_ctx_train (163840) -- possible training context overflow
+0.02.333.952 E ggml_backend_cuda_buffer_type_alloc_buffer: allocating 276480.00 MiB on device 0: cudaMalloc failed: out of memory
+0.02.333.958 E ggml_backend_buft_alloc_buffer_n_default: failed to allocate CUDA0 buffer of size 289910292480
+0.02.336.877 E llama_init_from_model: failed to initialize the context: failed to allocate buffer for kv cache
+0.02.336.882 E cmn  common_init_: failed to create context with model '/root/autodl-tmp/models/DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf'
+0.02.336.887 E cmn  common_init_: failed to create context with model '/root/autodl-tmp/models/DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf'
+0.02.336.892 E srv    load_model: failed to create_context with model '/root/autodl-tmp/models/DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf'
+0.02.336.897 I srv    operator(): operator(): cleaning up before exit...
+0.02.341.031 E srv  server_run_i: exiting due to model loading error

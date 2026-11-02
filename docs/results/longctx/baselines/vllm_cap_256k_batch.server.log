@@ -1,0 +1,425 @@
+INFO 11-03 01:15:42 __init__.py:207] Automatically detected platform cuda.
+INFO 11-03 01:15:42 api_server.py:912] vLLM API server version 0.7.3
+INFO 11-03 01:15:42 api_server.py:913] args: Namespace(host=None, port=8000, uvicorn_log_level='info', allow_credentials=False, allowed_origins=['*'], allowed_methods=['*'], allowed_headers=['*'], api_key=None, lora_modules=None, prompt_adapters=None, chat_template=None, chat_template_content_format='auto', response_role='assistant', ssl_keyfile=None, ssl_certfile=None, ssl_ca_certs=None, ssl_cert_reqs=0, root_path=None, middleware=[], return_tokens_as_token_ids=False, disable_frontend_multiprocessing=False, enable_request_id_headers=False, enable_auto_tool_choice=False, enable_reasoning=False, reasoning_parser=None, tool_call_parser=None, tool_parser_plugin='', model='/dev/shm/awq', task='auto', tokenizer=None, skip_tokenizer_init=False, revision=None, code_revision=None, tokenizer_revision=None, tokenizer_mode='auto', trust_remote_code=True, allowed_local_media_path=None, download_dir=None, load_format='auto', config_format=<ConfigFormat.AUTO: 'auto'>, dtype='auto', kv_cache_dtype='auto', max_model_len=262144, guided_decoding_backend='xgrammar', logits_processor_pattern=None, model_impl='auto', distributed_executor_backend=None, pipeline_parallel_size=1, tensor_parallel_size=1, max_parallel_loading_workers=None, ray_workers_use_nsight=False, block_size=None, enable_prefix_caching=None, disable_sliding_window=False, use_v2_block_manager=True, num_lookahead_slots=0, seed=0, swap_space=4, cpu_offload_gb=0, gpu_memory_utilization=0.95, num_gpu_blocks_override=None, max_num_batched_tokens=262144, max_num_partial_prefills=1, max_long_partial_prefills=1, long_prefill_token_threshold=0, max_num_seqs=1, max_logprobs=20, disable_log_stats=False, quantization=None, rope_scaling=None, rope_theta=None, hf_overrides=None, enforce_eager=False, max_seq_len_to_capture=8192, disable_custom_all_reduce=False, tokenizer_pool_size=0, tokenizer_pool_type='ray', tokenizer_pool_extra_config=None, limit_mm_per_prompt=None, mm_processor_kwargs=None, disable_mm_preprocessor_cache=False, enable_lora=False, enable_lora_bias=False, max_loras=1, max_lora_rank=16, lora_extra_vocab_size=256, lora_dtype='auto', long_lora_scaling_factors=None, max_cpu_loras=None, fully_sharded_loras=False, enable_prompt_adapter=False, max_prompt_adapters=1, max_prompt_adapter_token=0, device='auto', num_scheduler_steps=1, multi_step_stream_outputs=True, scheduler_delay_factor=0.0, enable_chunked_prefill=None, speculative_model=None, speculative_model_quantization=None, num_speculative_tokens=None, speculative_disable_mqa_scorer=False, speculative_draft_tensor_parallel_size=None, speculative_max_model_len=None, speculative_disable_by_batch_size=None, ngram_prompt_lookup_max=None, ngram_prompt_lookup_min=None, spec_decoding_acceptance_method='rejection_sampler', typical_acceptance_sampler_posterior_threshold=None, typical_acceptance_sampler_posterior_alpha=None, disable_logprobs_during_spec_decoding=None, model_loader_extra_config=None, ignore_patterns=[], preemption_mode=None, served_model_name=['coder'], qlora_adapter_name_or_path=None, otlp_traces_endpoint=None, collect_detailed_traces=None, disable_async_output_proc=False, scheduling_policy='fcfs', scheduler_cls='vllm.core.scheduler.Scheduler', override_neuron_config=None, override_pooler_config=None, compilation_config=None, kv_transfer_config=None, worker_cls='auto', generation_config=None, override_generation_config=None, enable_sleep_mode=False, calculate_kv_scales=False, additional_config=None, disable_log_requests=False, max_log_len=None, disable_fastapi_docs=False, enable_prompt_tokens_details=False)
+INFO 11-03 01:15:42 api_server.py:209] Started engine process with PID 274581
+INFO 11-03 01:15:42 config.py:208] Replacing legacy 'type' key with 'rope_type'
+WARNING 11-03 01:15:42 config.py:2572] User-specified max_model_len (262144) is greater than the derived max_model_len (max_position_embeddings=163840 or model_max_length=None in model's config.json). This may lead to incorrect model outputs or CUDA errors. Make sure the value is correct and within the model context size.
+INFO 11-03 01:15:47 __init__.py:207] Automatically detected platform cuda.
+INFO 11-03 01:15:47 config.py:208] Replacing legacy 'type' key with 'rope_type'
+WARNING 11-03 01:15:47 config.py:2572] User-specified max_model_len (262144) is greater than the derived max_model_len (max_position_embeddings=163840 or model_max_length=None in model's config.json). This may lead to incorrect model outputs or CUDA errors. Make sure the value is correct and within the model context size.
+INFO 11-03 01:15:51 config.py:549] This model supports multiple tasks: {'embed', 'score', 'generate', 'reward', 'classify'}. Defaulting to 'generate'.
+INFO 11-03 01:15:52 awq_marlin.py:114] The model is convertible to awq_marlin during runtime. Using awq_marlin kernel.
+WARNING 11-03 01:15:52 arg_utils.py:1187] Chunked prefill is enabled by default for models with max_model_len > 32K. Currently, chunked prefill might not work with some features or models. If you encounter any issues, please disable chunked prefill by setting --enable-chunked-prefill=False.
+INFO 11-03 01:15:52 config.py:1555] Chunked prefill is enabled with max_num_batched_tokens=262144.
+INFO 11-03 01:15:52 config.py:3329] MLA is enabled; forcing chunked prefill and prefix caching to be disabled.
+INFO 11-03 01:15:53 config.py:549] This model supports multiple tasks: {'score', 'classify', 'embed', 'reward', 'generate'}. Defaulting to 'generate'.
+INFO 11-03 01:15:54 awq_marlin.py:114] The model is convertible to awq_marlin during runtime. Using awq_marlin kernel.
+WARNING 11-03 01:15:54 arg_utils.py:1187] Chunked prefill is enabled by default for models with max_model_len > 32K. Currently, chunked prefill might not work with some features or models. If you encounter any issues, please disable chunked prefill by setting --enable-chunked-prefill=False.
+INFO 11-03 01:15:54 config.py:1555] Chunked prefill is enabled with max_num_batched_tokens=262144.
+INFO 11-03 01:15:55 config.py:3329] MLA is enabled; forcing chunked prefill and prefix caching to be disabled.
+INFO 11-03 01:15:55 llm_engine.py:234] Initializing a V0 LLM engine (v0.7.3) with config: model='/dev/shm/awq', speculative_config=None, tokenizer='/dev/shm/awq', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, override_neuron_config=None, tokenizer_revision=None, trust_remote_code=True, dtype=torch.float16, max_seq_len=262144, download_dir=None, load_format=LoadFormat.AUTO, tensor_parallel_size=1, pipeline_parallel_size=1, disable_custom_all_reduce=False, quantization=awq_marlin, enforce_eager=False, kv_cache_dtype=auto,  device_config=cuda, decoding_config=DecodingConfig(guided_decoding_backend='xgrammar'), observability_config=ObservabilityConfig(otlp_traces_endpoint=None, collect_model_forward_time=False, collect_model_execute_time=False), seed=0, served_model_name=coder, num_scheduler_steps=1, multi_step_stream_outputs=True, enable_prefix_caching=False, chunked_prefill_enabled=False, use_async_output_proc=True, disable_mm_preprocessor_cache=False, mm_processor_kwargs=None, pooler_config=None, compilation_config={"splitting_ops":[],"compile_sizes":[],"cudagraph_capture_sizes":[1],"max_capture_size":1}, use_cached_outputs=True, 
+INFO 11-03 01:15:55 cuda.py:160] Using Triton MLA backend.
+WARNING 11-03 01:15:55 triton_decode_attention.py:44] The following error message 'operation scheduled before its operands' can be ignored.
+INFO 11-03 01:15:56 model_runner.py:1110] Starting to load model /dev/shm/awq...
+WARNING 11-03 01:15:56 utils.py:168] The model class DeepseekV2ForCausalLM has not defined `packed_modules_mapping`, this may lead to incorrect mapping of quantized or ignored modules
+INFO 11-03 01:15:56 cuda.py:160] Using Triton MLA backend.
+WARNING 11-03 01:15:56 awq_marlin.py:132] Layer 'model.layers.0.mlp.down_proj' is not supported by AWQMarlin. Falling back to unoptimized AWQ kernels.
+
+Loading safetensors checkpoint shards:   0% Completed | 0/2 [00:00<?, ?it/s]
+
+Loading safetensors checkpoint shards:  50% Completed | 1/2 [00:03<00:03,  3.56s/it]
+
+Loading safetensors checkpoint shards: 100% Completed | 2/2 [00:06<00:00,  2.97s/it]
+
+Loading safetensors checkpoint shards: 100% Completed | 2/2 [00:06<00:00,  3.05s/it]
+
+INFO 11-03 01:16:03 model_runner.py:1115] Loading model weights took 10.4155 GB
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [64,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [65,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [66,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [67,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [68,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [69,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [70,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [71,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [72,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [73,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [74,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [75,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [76,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [77,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [78,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [79,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [80,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [81,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [82,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [83,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [84,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [85,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [86,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [87,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [88,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [89,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [90,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [91,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [92,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [93,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [94,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [95,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20609,0,0], thread: [96,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20609,0,0], thread: [97,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20609,0,0], thread: [98,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20609,0,0], thread: [99,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20609,0,0], thread: [100,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20609,0,0], thread: [101,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20609,0,0], thread: [102,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20609,0,0], thread: [103,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20609,0,0], thread: [104,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20609,0,0], thread: [105,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20609,0,0], thread: [106,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20609,0,0], thread: [107,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20609,0,0], thread: [108,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20609,0,0], thread: [109,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20609,0,0], thread: [110,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20609,0,0], thread: [111,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20609,0,0], thread: [112,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20609,0,0], thread: [113,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20609,0,0], thread: [114,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20609,0,0], thread: [115,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20609,0,0], thread: [116,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20609,0,0], thread: [117,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20609,0,0], thread: [118,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20609,0,0], thread: [119,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20609,0,0], thread: [120,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20609,0,0], thread: [121,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20609,0,0], thread: [122,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20609,0,0], thread: [123,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20609,0,0], thread: [124,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20609,0,0], thread: [125,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20609,0,0], thread: [126,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20609,0,0], thread: [127,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20633,0,0], thread: [0,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20633,0,0], thread: [1,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20633,0,0], thread: [2,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20633,0,0], thread: [3,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20633,0,0], thread: [4,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20633,0,0], thread: [5,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20633,0,0], thread: [6,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20633,0,0], thread: [7,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20633,0,0], thread: [8,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20633,0,0], thread: [9,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20633,0,0], thread: [10,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20633,0,0], thread: [11,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20633,0,0], thread: [12,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20633,0,0], thread: [13,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20633,0,0], thread: [14,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20633,0,0], thread: [15,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20633,0,0], thread: [16,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20633,0,0], thread: [17,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20633,0,0], thread: [18,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20633,0,0], thread: [19,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20633,0,0], thread: [20,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20633,0,0], thread: [21,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20633,0,0], thread: [22,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20633,0,0], thread: [23,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20633,0,0], thread: [24,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20633,0,0], thread: [25,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20633,0,0], thread: [26,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20633,0,0], thread: [27,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20633,0,0], thread: [28,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20633,0,0], thread: [29,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20633,0,0], thread: [30,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20633,0,0], thread: [31,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [32,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [33,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [34,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [35,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [36,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [37,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [38,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [39,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [40,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [41,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [42,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [43,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [44,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [45,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [46,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [47,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [48,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [49,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [50,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [51,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [52,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [53,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [54,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [55,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [56,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [57,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [58,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [59,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [60,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [61,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [62,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+../aten/src/ATen/native/cuda/IndexKernel.cu:93: operator(): block: [20540,0,0], thread: [63,0,0] Assertion `-sizes[i] <= index && index < sizes[i] && "index out of bounds"` failed.
+ERROR 11-03 01:16:03 engine.py:400] CUDA error: device-side assert triggered
+ERROR 11-03 01:16:03 engine.py:400] CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+ERROR 11-03 01:16:03 engine.py:400] For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+ERROR 11-03 01:16:03 engine.py:400] Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+ERROR 11-03 01:16:03 engine.py:400] Traceback (most recent call last):
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/engine/multiprocessing/engine.py", line 391, in run_mp_engine
+ERROR 11-03 01:16:03 engine.py:400]     engine = MQLLMEngine.from_engine_args(engine_args=engine_args,
+ERROR 11-03 01:16:03 engine.py:400]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/engine/multiprocessing/engine.py", line 124, in from_engine_args
+ERROR 11-03 01:16:03 engine.py:400]     return cls(ipc_path=ipc_path,
+ERROR 11-03 01:16:03 engine.py:400]            ^^^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/engine/multiprocessing/engine.py", line 76, in __init__
+ERROR 11-03 01:16:03 engine.py:400]     self.engine = LLMEngine(*args, **kwargs)
+ERROR 11-03 01:16:03 engine.py:400]                   ^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/engine/llm_engine.py", line 276, in __init__
+ERROR 11-03 01:16:03 engine.py:400]     self._initialize_kv_caches()
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/engine/llm_engine.py", line 421, in _initialize_kv_caches
+ERROR 11-03 01:16:03 engine.py:400]     self.model_executor.determine_num_available_blocks())
+ERROR 11-03 01:16:03 engine.py:400]     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/executor/executor_base.py", line 102, in determine_num_available_blocks
+ERROR 11-03 01:16:03 engine.py:400]     results = self.collective_rpc("determine_num_available_blocks")
+ERROR 11-03 01:16:03 engine.py:400]               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/executor/uniproc_executor.py", line 56, in collective_rpc
+ERROR 11-03 01:16:03 engine.py:400]     answer = run_method(self.driver_worker, method, args, kwargs)
+ERROR 11-03 01:16:03 engine.py:400]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/utils.py", line 2196, in run_method
+ERROR 11-03 01:16:03 engine.py:400]     return func(*args, **kwargs)
+ERROR 11-03 01:16:03 engine.py:400]            ^^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/miniconda3/lib/python3.12/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
+ERROR 11-03 01:16:03 engine.py:400]     return func(*args, **kwargs)
+ERROR 11-03 01:16:03 engine.py:400]            ^^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/worker/worker.py", line 229, in determine_num_available_blocks
+ERROR 11-03 01:16:03 engine.py:400]     self.model_runner.profile_run()
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/miniconda3/lib/python3.12/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
+ERROR 11-03 01:16:03 engine.py:400]     return func(*args, **kwargs)
+ERROR 11-03 01:16:03 engine.py:400]            ^^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/worker/model_runner.py", line 1235, in profile_run
+ERROR 11-03 01:16:03 engine.py:400]     self._dummy_run(max_num_batched_tokens, max_num_seqs)
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/worker/model_runner.py", line 1346, in _dummy_run
+ERROR 11-03 01:16:03 engine.py:400]     self.execute_model(model_input, kv_caches, intermediate_tensors)
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/miniconda3/lib/python3.12/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
+ERROR 11-03 01:16:03 engine.py:400]     return func(*args, **kwargs)
+ERROR 11-03 01:16:03 engine.py:400]            ^^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/worker/model_runner.py", line 1724, in execute_model
+ERROR 11-03 01:16:03 engine.py:400]     hidden_or_intermediate_states = model_executable(
+ERROR 11-03 01:16:03 engine.py:400]                                     ^^^^^^^^^^^^^^^^^
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+ERROR 11-03 01:16:03 engine.py:400]     return self._call_impl(*args, **kwargs)
+ERROR 11-03 01:16:03 engine.py:400]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+ERROR 11-03 01:16:03 engine.py:400]     return forward_call(*args, **kwargs)
+ERROR 11-03 01:16:03 engine.py:400]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/model_executor/models/deepseek_v2.py", line 677, in forward
+ERROR 11-03 01:16:03 engine.py:400]     hidden_states = self.model(input_ids, positions, kv_caches,
+ERROR 11-03 01:16:03 engine.py:400]                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/compilation/decorators.py", line 172, in __call__
+ERROR 11-03 01:16:03 engine.py:400]     return self.forward(*args, **kwargs)
+ERROR 11-03 01:16:03 engine.py:400]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/model_executor/models/deepseek_v2.py", line 633, in forward
+ERROR 11-03 01:16:03 engine.py:400]     hidden_states, residual = layer(positions, hidden_states,
+ERROR 11-03 01:16:03 engine.py:400]                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+ERROR 11-03 01:16:03 engine.py:400]     return self._call_impl(*args, **kwargs)
+ERROR 11-03 01:16:03 engine.py:400]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+ERROR 11-03 01:16:03 engine.py:400]     return forward_call(*args, **kwargs)
+ERROR 11-03 01:16:03 engine.py:400]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/model_executor/models/deepseek_v2.py", line 550, in forward
+ERROR 11-03 01:16:03 engine.py:400]     hidden_states = self.self_attn(
+ERROR 11-03 01:16:03 engine.py:400]                     ^^^^^^^^^^^^^^^
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+ERROR 11-03 01:16:03 engine.py:400]     return self._call_impl(*args, **kwargs)
+ERROR 11-03 01:16:03 engine.py:400]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+ERROR 11-03 01:16:03 engine.py:400]     return forward_call(*args, **kwargs)
+ERROR 11-03 01:16:03 engine.py:400]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/model_executor/models/deepseek_v2.py", line 469, in forward
+ERROR 11-03 01:16:03 engine.py:400]     return self.mla_attn(hidden_states_or_q_c, kv_c_normed, k_pe, kv_cache,
+ERROR 11-03 01:16:03 engine.py:400]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+ERROR 11-03 01:16:03 engine.py:400]     return self._call_impl(*args, **kwargs)
+ERROR 11-03 01:16:03 engine.py:400]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+ERROR 11-03 01:16:03 engine.py:400]     return forward_call(*args, **kwargs)
+ERROR 11-03 01:16:03 engine.py:400]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/attention/layer.py", line 201, in forward
+ERROR 11-03 01:16:03 engine.py:400]     return torch.ops.vllm.unified_attention(
+ERROR 11-03 01:16:03 engine.py:400]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/miniconda3/lib/python3.12/site-packages/torch/_ops.py", line 1116, in __call__
+ERROR 11-03 01:16:03 engine.py:400]     return self._op(*args, **(kwargs or {}))
+ERROR 11-03 01:16:03 engine.py:400]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/attention/layer.py", line 307, in unified_attention
+ERROR 11-03 01:16:03 engine.py:400]     return self.impl.forward(self, query, key, value, kv_cache, attn_metadata)
+ERROR 11-03 01:16:03 engine.py:400]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/attention/backends/mla/utils.py", line 457, in forward
+ERROR 11-03 01:16:03 engine.py:400]     self.rotary_emb(
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+ERROR 11-03 01:16:03 engine.py:400]     return self._call_impl(*args, **kwargs)
+ERROR 11-03 01:16:03 engine.py:400]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+ERROR 11-03 01:16:03 engine.py:400]     return forward_call(*args, **kwargs)
+ERROR 11-03 01:16:03 engine.py:400]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/model_executor/layers/rotary_embedding.py", line 710, in forward
+ERROR 11-03 01:16:03 engine.py:400]     query_rot = query_rot * cos + rotate_fn(query_rot) * sin
+ERROR 11-03 01:16:03 engine.py:400]                                   ^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 01:16:03 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/model_executor/layers/rotary_embedding.py", line 44, in _rotate_gptj
+ERROR 11-03 01:16:03 engine.py:400]     x = torch.stack((-x2, x1), dim=-1)
+ERROR 11-03 01:16:03 engine.py:400]                      ^^^
+ERROR 11-03 01:16:03 engine.py:400] RuntimeError: CUDA error: device-side assert triggered
+ERROR 11-03 01:16:03 engine.py:400] CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+ERROR 11-03 01:16:03 engine.py:400] For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+ERROR 11-03 01:16:03 engine.py:400] Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+ERROR 11-03 01:16:03 engine.py:400] 
+Process SpawnProcess-1:
+Traceback (most recent call last):
+  File "/root/miniconda3/lib/python3.12/multiprocessing/process.py", line 314, in _bootstrap
+    self.run()
+  File "/root/miniconda3/lib/python3.12/multiprocessing/process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/engine/multiprocessing/engine.py", line 402, in run_mp_engine
+    raise e
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/engine/multiprocessing/engine.py", line 391, in run_mp_engine
+    engine = MQLLMEngine.from_engine_args(engine_args=engine_args,
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/engine/multiprocessing/engine.py", line 124, in from_engine_args
+    return cls(ipc_path=ipc_path,
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/engine/multiprocessing/engine.py", line 76, in __init__
+    self.engine = LLMEngine(*args, **kwargs)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/engine/llm_engine.py", line 276, in __init__
+    self._initialize_kv_caches()
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/engine/llm_engine.py", line 421, in _initialize_kv_caches
+    self.model_executor.determine_num_available_blocks())
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/executor/executor_base.py", line 102, in determine_num_available_blocks
+    results = self.collective_rpc("determine_num_available_blocks")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/executor/uniproc_executor.py", line 56, in collective_rpc
+    answer = run_method(self.driver_worker, method, args, kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/utils.py", line 2196, in run_method
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/worker/worker.py", line 229, in determine_num_available_blocks
+    self.model_runner.profile_run()
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/worker/model_runner.py", line 1235, in profile_run
+    self._dummy_run(max_num_batched_tokens, max_num_seqs)
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/worker/model_runner.py", line 1346, in _dummy_run
+    self.execute_model(model_input, kv_caches, intermediate_tensors)
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/worker/model_runner.py", line 1724, in execute_model
+    hidden_or_intermediate_states = model_executable(
+                                    ^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/model_executor/models/deepseek_v2.py", line 677, in forward
+    hidden_states = self.model(input_ids, positions, kv_caches,
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/compilation/decorators.py", line 172, in __call__
+    return self.forward(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/model_executor/models/deepseek_v2.py", line 633, in forward
+    hidden_states, residual = layer(positions, hidden_states,
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/model_executor/models/deepseek_v2.py", line 550, in forward
+    hidden_states = self.self_attn(
+                    ^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/model_executor/models/deepseek_v2.py", line 469, in forward
+    return self.mla_attn(hidden_states_or_q_c, kv_c_normed, k_pe, kv_cache,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/attention/layer.py", line 201, in forward
+    return torch.ops.vllm.unified_attention(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/_ops.py", line 1116, in __call__
+    return self._op(*args, **(kwargs or {}))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/attention/layer.py", line 307, in unified_attention
+    return self.impl.forward(self, query, key, value, kv_cache, attn_metadata)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/attention/backends/mla/utils.py", line 457, in forward
+    self.rotary_emb(
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/model_executor/layers/rotary_embedding.py", line 710, in forward
+    query_rot = query_rot * cos + rotate_fn(query_rot) * sin
+                                  ^^^^^^^^^^^^^^^^^^^^
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/model_executor/layers/rotary_embedding.py", line 44, in _rotate_gptj
+    x = torch.stack((-x2, x1), dim=-1)
+                     ^^^
+RuntimeError: CUDA error: device-side assert triggered
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+
+[rank0]:[W1103 01:16:04.407479342 ProcessGroupNCCL.cpp:1250] Warning: WARNING: process group has NOT been destroyed before we destruct ProcessGroupNCCL. On normal program exit, the application should call destroy_process_group to ensure that any pending NCCL operations have finished in this process. In rare cases this process can exit before this point and block the progress of another member of the process group. This constraint has always been present,  but this warning has only been added since PyTorch 2.4 (function operator())
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/entrypoints/openai/api_server.py", line 991, in <module>
+    uvloop.run(run_server(args))
+  File "/root/vllm073-venv/lib/python3.12/site-packages/uvloop/__init__.py", line 96, in run
+    return __asyncio.run(
+           ^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/asyncio/runners.py", line 194, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "uvloop/loop.pyx", line 1515, in uvloop.loop.Loop.run_until_complete
+  File "/root/vllm073-venv/lib/python3.12/site-packages/uvloop/__init__.py", line 48, in wrapper
+    return await main
+           ^^^^^^^^^^
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/entrypoints/openai/api_server.py", line 947, in run_server
+    async with build_async_engine_client(args) as engine_client:
+  File "/root/miniconda3/lib/python3.12/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/entrypoints/openai/api_server.py", line 139, in build_async_engine_client
+    async with build_async_engine_client_from_engine_args(
+  File "/root/miniconda3/lib/python3.12/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/entrypoints/openai/api_server.py", line 233, in build_async_engine_client_from_engine_args
+    raise RuntimeError(
+RuntimeError: Engine process failed to start. See stack trace for the root cause.

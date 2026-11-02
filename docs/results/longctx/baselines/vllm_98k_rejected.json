@@ -1,0 +1,513 @@
+{
+ "engine": "vllm",
+ "label": "vLLM 0.7.3, TechxGenus/DeepSeek-Coder-V2-Lite-Instruct-AWQ, max_model_len 100352 --enable-prefix-caching",
+ "tokens": 98304,
+ "seed": 11,
+ "document_sha256": "ba3b71cd21641fbd881f0317d2c48785919440ebbe8dfbf1502976c4e37b78fc",
+ "max_new": 1024,
+ "results": [
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for crimson falcon?",
+   "expected": [
+    "8589669"
+   ],
+   "answer": "",
+   "hits": [],
+   "extras": [],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": "",
+     "prompt_tokens": 98365,
+     "prompt_seconds": null,
+     "new_tokens": 0,
+     "seconds": 0.9273214358836412
+    }
+   ],
+   "seconds": 0.9
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for crimson otter?",
+   "expected": [
+    "8812311"
+   ],
+   "answer": "",
+   "hits": [],
+   "extras": [],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": "",
+     "prompt_tokens": 98365,
+     "prompt_seconds": null,
+     "new_tokens": 0,
+     "seconds": 0.8882160317152739
+    }
+   ],
+   "seconds": 0.9
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for silver falcon?",
+   "expected": [
+    "8580488"
+   ],
+   "answer": "",
+   "hits": [],
+   "extras": [],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": "",
+     "prompt_tokens": 98365,
+     "prompt_seconds": null,
+     "new_tokens": 0,
+     "seconds": 0.8538152649998665
+    }
+   ],
+   "seconds": 0.9
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for silver otter?",
+   "expected": [
+    "9520162"
+   ],
+   "answer": "",
+   "hits": [],
+   "extras": [],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": "",
+     "prompt_tokens": 98365,
+     "prompt_seconds": null,
+     "new_tokens": 0,
+     "seconds": 0.8783265650272369
+    }
+   ],
+   "seconds": 0.9
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for amber lynx?",
+   "expected": [
+    "4186027"
+   ],
+   "answer": "",
+   "hits": [],
+   "extras": [],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": "",
+     "prompt_tokens": 98366,
+     "prompt_seconds": null,
+     "new_tokens": 0,
+     "seconds": 0.8548126388341188
+    }
+   ],
+   "seconds": 0.9
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for amber heron?",
+   "expected": [
+    "4098086"
+   ],
+   "answer": "",
+   "hits": [],
+   "extras": [],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": "",
+     "prompt_tokens": 98365,
+     "prompt_seconds": null,
+     "new_tokens": 0,
+     "seconds": 0.8846874684095383
+    }
+   ],
+   "seconds": 0.9
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for cobalt lynx?",
+   "expected": [
+    "9588401"
+   ],
+   "answer": "",
+   "hits": [],
+   "extras": [],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": "",
+     "prompt_tokens": 98366,
+     "prompt_seconds": null,
+     "new_tokens": 0,
+     "seconds": 0.8609924092888832
+    }
+   ],
+   "seconds": 0.9
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for cobalt heron?",
+   "expected": [
+    "8981982"
+   ],
+   "answer": "",
+   "hits": [],
+   "extras": [],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": "",
+     "prompt_tokens": 98365,
+     "prompt_seconds": null,
+     "new_tokens": 0,
+     "seconds": 0.855569863691926
+    }
+   ],
+   "seconds": 0.9
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for ivory mantis?",
+   "expected": [
+    "4123476"
+   ],
+   "answer": "",
+   "hits": [],
+   "extras": [],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": "",
+     "prompt_tokens": 98365,
+     "prompt_seconds": null,
+     "new_tokens": 0,
+     "seconds": 0.8577715680003166
+    }
+   ],
+   "seconds": 0.9
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for ivory panther?",
+   "expected": [
+    "2579129"
+   ],
+   "answer": "",
+   "hits": [],
+   "extras": [],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": "",
+     "prompt_tokens": 98365,
+     "prompt_seconds": null,
+     "new_tokens": 0,
+     "seconds": 0.8634650502353907
+    }
+   ],
+   "seconds": 0.9
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for jade mantis?",
+   "expected": [
+    "8492589"
+   ],
+   "answer": "",
+   "hits": [],
+   "extras": [],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": "",
+     "prompt_tokens": 98365,
+     "prompt_seconds": null,
+     "new_tokens": 0,
+     "seconds": 0.9322722554206848
+    }
+   ],
+   "seconds": 0.9
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for jade panther?",
+   "expected": [
+    "6090228"
+   ],
+   "answer": "",
+   "hits": [],
+   "extras": [],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": "",
+     "prompt_tokens": 98365,
+     "prompt_seconds": null,
+     "new_tokens": 0,
+     "seconds": 0.8546074237674475
+    }
+   ],
+   "seconds": 0.9
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for scarlet ibis?",
+   "expected": [
+    "3378927"
+   ],
+   "answer": "",
+   "hits": [],
+   "extras": [],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": "",
+     "prompt_tokens": 98365,
+     "prompt_seconds": null,
+     "new_tokens": 0,
+     "seconds": 0.850059824064374
+    }
+   ],
+   "seconds": 0.9
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for scarlet badger?",
+   "expected": [
+    "2521199"
+   ],
+   "answer": "",
+   "hits": [],
+   "extras": [],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": "",
+     "prompt_tokens": 98365,
+     "prompt_seconds": null,
+     "new_tokens": 0,
+     "seconds": 0.849155968055129
+    }
+   ],
+   "seconds": 0.8
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for onyx ibis?",
+   "expected": [
+    "1702635"
+   ],
+   "answer": "",
+   "hits": [],
+   "extras": [],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": "",
+     "prompt_tokens": 98366,
+     "prompt_seconds": null,
+     "new_tokens": 0,
+     "seconds": 0.8574910648167133
+    }
+   ],
+   "seconds": 0.9
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for onyx badger?",
+   "expected": [
+    "7646461"
+   ],
+   "answer": "",
+   "hits": [],
+   "extras": [],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": "",
+     "prompt_tokens": 98366,
+     "prompt_seconds": null,
+     "new_tokens": 0,
+     "seconds": 0.8466296643018723
+    }
+   ],
+   "seconds": 0.8
+  },
+  {
+   "kind": "MV",
+   "question": "What are all the special magic numbers for golden viper?",
+   "expected": [
+    "8599992",
+    "3642312",
+    "1251670",
+    "9864766"
+   ],
+   "answer": "",
+   "hits": [],
+   "extras": [],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": "",
+     "prompt_tokens": 98367,
+     "prompt_seconds": null,
+     "new_tokens": 0,
+     "seconds": 0.8568492606282234
+    }
+   ],
+   "seconds": 0.9
+  },
+  {
+   "kind": "MQ",
+   "question": "What are the special magic numbers for crimson falcon, amber heron, jade mantis and onyx badger?",
+   "expected": [
+    "8589669",
+    "4098086",
+    "8492589",
+    "7646461"
+   ],
+   "answer": "",
+   "hits": [],
+   "extras": [],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": "",
+     "prompt_tokens": 98381,
+     "prompt_seconds": null,
+     "new_tokens": 0,
+     "seconds": 0.8916165456175804
+    }
+   ],
+   "seconds": 0.9
+  },
+  {
+   "kind": "VT",
+   "question": "Find all variables that are assigned the value 14673, directly or through a chain of assignments (VAR B = VAR A gives B the value of A).",
+   "expected": [
+    "GHTAY",
+    "OKOSG",
+    "QHUJP",
+    "AVCOU",
+    "INRCW"
+   ],
+   "answer": "\n\n[union of 3 phrasings]\nAnswer: ",
+   "hits": [],
+   "extras": [],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": "",
+     "prompt_tokens": 98456,
+     "prompt_seconds": null,
+     "new_tokens": 0,
+     "seconds": 0.8793933223932981
+    },
+    {
+     "text": "",
+     "prompt_tokens": 98477,
+     "prompt_seconds": null,
+     "new_tokens": 0,
+     "seconds": 0.8364042937755585
+    },
+    {
+     "text": "",
+     "prompt_tokens": 98461,
+     "prompt_seconds": null,
+     "new_tokens": 0,
+     "seconds": 0.8519564438611269
+    }
+   ],
+   "seconds": 2.6
+  },
+  {
+   "kind": "2H",
+   "question": "What is the employee badge number of the person who holds the vault key of the Orrin observatory?",
+   "expected": [
+    "1877827"
+   ],
+   "answer": "",
+   "hits": [],
+   "extras": [],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": "",
+     "prompt_tokens": 98376,
+     "prompt_seconds": null,
+     "new_tokens": 0,
+     "seconds": 0.8637440986931324
+    }
+   ],
+   "seconds": 0.9
+  },
+  {
+   "kind": "2H",
+   "question": "Which combination opens the personal safe of the architect who designed the Teal Harbor lighthouse?",
+   "expected": [
+    "7667674"
+   ],
+   "answer": "",
+   "hits": [],
+   "extras": [],
+   "forbidden": [],
+   "full": false,
+   "requests": [
+    {
+     "text": "",
+     "prompt_tokens": 98371,
+     "prompt_seconds": null,
+     "new_tokens": 0,
+     "seconds": 0.8534213490784168
+    }
+   ],
+   "seconds": 0.9
+  }
+ ],
+ "first_request_seconds": 0.9,
+ "prefill": {
+  "prompt_tokens": 98365,
+  "prompt_seconds": null
+ },
+ "summary": {
+  "questions_full": "0/21",
+  "items": "0/31",
+  "by_kind": {
+   "MK": "0/16",
+   "MV": "0/1",
+   "MQ": "0/1",
+   "VT": "0/1",
+   "2H": "0/2"
+  },
+  "question_seconds": 20.4
+ }
+}

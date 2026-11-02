@@ -1,0 +1,13 @@
+0.00.122.112 I srv  llama_server: initializing ...
+0.00.122.132 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.122.355 W srv  server_setup: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+0.00.137.865 I srv    load_model: loading model '/root/autodl-tmp/models/DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf'
+0.00.618.604 W load: control-looking token: 100002 '<｜fim▁hole｜>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.00.629.861 W load: control-looking token: 100003 '<｜fim▁begin｜>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.00.634.794 W load: control-looking token: 100004 '<｜fim▁end｜>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.02.893.801 W llama_context: setting new yarn_attn_factor = 1.0000 (mscale == 0.7, mscale_all_dim = 0.7)
+0.03.328.172 I cmn          init: llama threadpool init, n_threads = 64
+0.03.799.204 I srv    load_model: initializing, n_slots = 1, n_ctx_slot = 131072, kv_unified = 'false'
+0.03.804.164 I srv  server_run_i: model loaded
+0.03.804.175 I srv  server_on_li: listening on http://127.0.0.1:8090
+0.05.021.181 I srv    operator(): operator(): cleaning up before exit...

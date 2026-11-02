@@ -1,0 +1,32 @@
+Token indices sequence length is longer than the specified maximum sequence length for this model (27594 > 16384). Running this sequence through the model will result in indexing errors
+document 98,304 tokens with 39 needles (1 s); 21 questions, 31 expected items
+DeepseekV2ForCausalLM has generative capabilities, as `prepare_inputs_for_generation` is explicitly overwritten. However, it doesn't directly inherit from `GenerationMixin`. From 👉v4.50👈 onwards, `PreTrainedModel` will NOT inherit from `GenerationMixin`, and this model will lose the ability to call `generate` and other related functions.
+  - If you're using `trust_remote_code=True`, you can get rid of this warning by loading the model with an auto class. See https://huggingface.co/docs/transformers/en/model_doc/auto#auto-classes
+  - If you are the owner of the model architecture code, please modify your model class such that it inherits from `GenerationMixin` (after `PreTrainedModel`, otherwise you'll get an exception).
+  - If you are not the owner of the model architecture class, please contact the model code owner to update it.
+memory: kv fp8 1.66 GiB; experts pinned; gpu holds 100,352 tokens, host 0
+  prefill 98,304/98,304 tokens, 0.4 min
+prefill 98,304 tokens in 0.4 min
+[feedback]  1 MK FULL 1/1 located 1/1 rounds 2 (8 s) | What is the special magic number for crimson falcon? -> 'The special magic number for crimson falcon is: 8589669.\n\nStep-by-step reasoning:\n1. The text provided lists several spe'
+[feedback]  2 MK FULL 1/1 located 1/1 rounds 2 (7 s) | What is the special magic number for crimson otter? -> 'The special magic number for crimson otter is: 8812311.\n\nReasoning:\n1. The text provides a list of special magic numbers'
+[feedback]  3 MK FULL 1/1 located 1/1 rounds 2 (9 s) | What is the special magic number for silver falcon? -> 'The text provided contains the special magic numbers for various creatures in a game, including the special magic number'
+[feedback]  4 MK FULL 1/1 located 1/1 rounds 2 (12 s) | What is the special magic number for silver otter? -> "First, let's list all the special magic numbers given in the text:\n\n1. Azure Viper: 1999101\n2. Jade Panther: 6090228\n3. "
+[feedback]  5 MK FULL 1/1 located 1/1 rounds 2 (9 s) | What is the special magic number for amber lynx? -> 'The special magic number for amber lynx is: 4186027.\n\nStep-by-step reasoning:\n1. The text provides a list of special mag'
+[feedback]  6 MK FULL 1/1 located 1/1 rounds 2 (9 s) | What is the special magic number for amber heron? -> 'The special magic number for amber heron is: 4098086.\n\nStep-by-step reasoning:\n1. The text provided lists the special ma'
+[feedback]  7 MK FULL 1/1 located 1/1 rounds 2 (8 s) | What is the special magic number for cobalt lynx? -> 'First, we need to find the special magic number for cobalt lynx from the given information. We are provided with several'
+[feedback]  8 MK FULL 1/1 located 1/1 rounds 2 (9 s) | What is the special magic number for cobalt heron? -> 'First, we need to identify the sentence or line that provides the special magic number for cobalt heron. The relevant se'
+[feedback]  9 MK FULL 1/1 located 1/1 rounds 2 (7 s) | What is the special magic number for ivory mantis? -> 'The special magic number for ivory mantis is: 4123476.'
+[feedback] 10 MK FULL 1/1 located 1/1 rounds 2 (11 s) | What is the special magic number for ivory panther? -> "First, let's list all the special magic numbers given in the text:\n\n1. 1999101\n2. 6090228\n3. 8599992\n4. 8981982\n5. 25791"
+[feedback] 11 MK FULL 1/1 located 1/1 rounds 4 (26 s) | What is the special magic number for jade mantis? -> 'The special magic number for jade mantis is: 8492589.\n\nReasoning:\n1. The text provides a list of special magic numbers f'
+[feedback] 12 MK FULL 1/1 located 1/1 rounds 2 (7 s) | What is the special magic number for jade panther? -> 'The text provided contains the special magic numbers for various creatures in the Azure Viper universe. Specifically, it'
+[feedback] 13 MK FULL 1/1 located 1/1 rounds 2 (12 s) | What is the special magic number for scarlet ibis? -> 'The special magic number for scarlet ibis is: 3378927.\n\nHere is the text needed to answer the question:\n1. The special m'
+[feedback] 14 MK FULL 1/1 located 1/1 rounds 2 (9 s) | What is the special magic number for scarlet badger? -> 'First, we need to identify the special magic number for scarlet badger from the given list of special magic numbers. The'
+[feedback] 15 MK FULL 1/1 located 1/1 rounds 2 (13 s) | What is the special magic number for onyx ibis? -> 'To find the special magic number for onyx ibis, we need to locate the line that specifically mentions the number for ony'
+[feedback] 16 MK FULL 1/1 located 1/1 rounds 3 (14 s) | What is the special magic number for onyx badger? -> 'The special magic number for onyx badger is: 7646461.\n\nReasoning:\n1. The text states "The special magic number for onyx '
+[feedback] 17 MV FULL 4/4 located 4/4 rounds 4 (28 s) | What are all the special magic numbers for golden viper? -> 'To find all the special magic numbers for golden viper, we need to extract the numbers that are explicitly mentioned as '
+[feedback] 18 MQ FULL 4/4 located 4/4 rounds 2 (10 s) | What are the special magic numbers for crimson falcon, amber -> 'The special magic numbers for the given creatures are:\n\ncrimson falcon: 8589669\namber heron: 4098086\njade mantis: 849258'
+[feedback] 19 VT MISS 4/5 located 5/5 rounds 8 (147 s) | Find all variables that are assigned the value 14673, direct -> "To solve the problem, we need to follow the assignments in the given code and track the values of the variables. Let's g"
+[feedback] 20 2H FULL 1/1 located 2/2 rounds 2 (10 s) | What is the employee badge number of the person who holds th -> 'The employee badge number of the person who holds the vault key of the Orrin observatory is 1877827.\n\nReasoning:\n1. The '
+[feedback] 21 2H FULL 1/1 located 2/2 rounds 2 (12 s) | Which combination opens the personal safe of the architect w -> 'The text provided is:\n\n1. The vault key of the Orrin observatory is held by Kaila Brenn.\n2. One of the special magic num'
+[feedback] questions fully right 20/21, items 30/31, by kind {'MK': '16/16', 'MV': '1/1', 'MQ': '1/1', 'VT': '0/1', '2H': '2/2'}
+wrote /root/autodl-tmp/llamacpp-vs-deepinfer/longctx/deepinfer_96k_feedback.json

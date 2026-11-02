@@ -1,0 +1,18 @@
+0.00.131.195 I srv  llama_server: initializing ...
+0.00.131.212 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.131.425 W srv  server_setup: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+0.00.145.789 I srv    load_model: loading model '/dev/shm/DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M-mla.gguf'
+0.00.647.692 W common_fit_params: failed to fit params to free device memory: n_gpu_layers already set by user to 99, abort
+0.00.735.854 W load: control-looking token: 100002 '<｜fim▁hole｜>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.00.746.996 W load: control-looking token: 100003 '<｜fim▁begin｜>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.00.751.916 W load: control-looking token: 100004 '<｜fim▁end｜>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.02.566.292 W llama_context: setting new yarn_attn_factor = 1.0000 (mscale == 0.7, mscale_all_dim = 0.7)
+0.02.566.304 W llama_context: n_ctx_seq (3145728) > n_ctx_train (163840) -- possible training context overflow
+0.02.645.060 E ggml_backend_cuda_buffer_type_alloc_buffer: allocating 49572.01 MiB on device 0: cudaMalloc failed: out of memory
+0.02.645.065 E ggml_backend_buft_alloc_buffer_n_default: failed to allocate CUDA0 buffer of size 51980023296
+0.02.651.782 E llama_init_from_model: failed to initialize the context: failed to allocate buffer for kv cache
+0.02.651.788 E cmn  common_init_: failed to create context with model '/dev/shm/DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M-mla.gguf'
+0.02.651.792 E cmn  common_init_: failed to create context with model '/dev/shm/DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M-mla.gguf'
+0.02.651.799 E srv    load_model: failed to create_context with model '/dev/shm/DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M-mla.gguf'
+0.02.651.803 I srv    operator(): operator(): cleaning up before exit...
+0.02.656.271 E srv  server_run_i: exiting due to model loading error

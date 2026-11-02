@@ -1,0 +1,32 @@
+Token indices sequence length is longer than the specified maximum sequence length for this model (27594 > 16384). Running this sequence through the model will result in indexing errors
+document 98,304 tokens with 39 needles (1 s); 21 questions, 31 expected items
+DeepseekV2ForCausalLM has generative capabilities, as `prepare_inputs_for_generation` is explicitly overwritten. However, it doesn't directly inherit from `GenerationMixin`. From 👉v4.50👈 onwards, `PreTrainedModel` will NOT inherit from `GenerationMixin`, and this model will lose the ability to call `generate` and other related functions.
+  - If you're using `trust_remote_code=True`, you can get rid of this warning by loading the model with an auto class. See https://huggingface.co/docs/transformers/en/model_doc/auto#auto-classes
+  - If you are the owner of the model architecture code, please modify your model class such that it inherits from `GenerationMixin` (after `PreTrainedModel`, otherwise you'll get an exception).
+  - If you are not the owner of the model architecture class, please contact the model code owner to update it.
+memory: kv fp8 1.66 GiB; experts pinned; gpu holds 100,352 tokens, host 0
+  prefill 98,304/98,304 tokens, 0.4 min
+prefill 98,304 tokens in 0.4 min
+[plain]  1 MK MISS 0/1 extras ['3642312'] located 0/1 (11 s) | What is the special magic number for crimson falcon? -> 'To find the special magic number for crimson falcon, we need to carefully read and analyze the text provided. The releva'
+[plain]  2 MK MISS 0/1 extras ['4098086'] located 0/1 (9 s) | What is the special magic number for crimson otter? -> 'To find the special magic number for crimson otter, we need to follow the steps outlined in the text provided. The text '
+[plain]  3 MK MISS 0/1 extras ['3642312'] located 0/1 (5 s) | What is the special magic number for silver falcon? -> 'To find the special magic number for silver falcon, we need to carefully read and understand the text provided. The rele'
+[plain]  4 MK MISS 0/1 extras ['7667674'] located 0/1 (10 s) | What is the special magic number for silver otter? -> 'To find the special magic number for silver otter, we need to follow the steps outlined in the task to extract the relev'
+[plain]  5 MK MISS 0/1 extras ['4123476'] located 0/1 (10 s) | What is the special magic number for amber lynx? -> 'To find the special magic number for amber lynx, we need to follow the steps outlined in the text provided. The text men'
+[plain]  6 MK MISS 0/1 extras ['4123476'] located 0/1 (4 s) | What is the special magic number for amber heron? -> 'To find the special magic number for amber heron, we need to follow the steps outlined in the text provided. The text me'
+[plain]  7 MK MISS 0/1 extras ['4123476'] located 0/1 (4 s) | What is the special magic number for cobalt lynx? -> 'To find the special magic number for cobalt lynx, we need to follow the steps outlined in the text provided. The text me'
+[plain]  8 MK MISS 0/1 extras ['4098086'] located 0/1 (5 s) | What is the special magic number for cobalt heron? -> 'To find the special magic number for cobalt heron, we need to look for the 7-digit number mentioned in the text. The rel'
+[plain]  9 MK MISS 0/1 extras ['3642312'] located 0/1 (12 s) | What is the special magic number for ivory mantis? -> 'To find the special magic number for ivory mantis, we need to carefully read and analyze the text provided. The relevant'
+[plain] 10 MK MISS 0/1 extras ['4123476'] located 0/1 (4 s) | What is the special magic number for ivory panther? -> 'To find the special magic number for ivory panther, we need to follow the steps outlined in the text provided. The text '
+[plain] 11 MK MISS 0/1 extras ['3642312'] located 0/1 (10 s) | What is the special magic number for jade mantis? -> 'To find the special magic number for jade mantis, we need to carefully read and understand the text provided. The releva'
+[plain] 12 MK MISS 0/1 extras ['4123476'] located 0/1 (5 s) | What is the special magic number for jade panther? -> 'To find the special magic number for jade panther, we need to look for the 7-digit number mentioned in the text. After c'
+[plain] 13 MK MISS 0/1 extras ['1999101'] located 0/1 (4 s) | What is the special magic number for scarlet ibis? -> 'To find the special magic number for the scarlet ibis, we need to follow the steps outlined in the text provided. The te'
+[plain] 14 MK MISS 0/1 extras ['1702635'] located 0/1 (10 s) | What is the special magic number for scarlet badger? -> 'To find the special magic number for the scarlet badger, we need to follow the steps outlined in the text provided. The '
+[plain] 15 MK MISS 0/1 extras ['1999101'] located 0/1 (4 s) | What is the special magic number for onyx ibis? -> 'To find the special magic number for onyx ibis, we need to follow the steps outlined in the text provided. The text ment'
+[plain] 16 MK MISS 0/1 extras ['1702635'] located 0/1 (8 s) | What is the special magic number for onyx badger? -> 'To find the special magic number for onyx badger, we need to follow the steps outlined in the text provided. The text me'
+[plain] 17 MV MISS 1/4 extras ['4123476', '8580488', '8812311'] located 0/4 (11 s) | What are all the special magic numbers for golden viper? -> 'To find all the special magic numbers for golden viper, we need to extract the numbers from the text provided. Here are '
+[plain] 18 MQ MISS 0/4 extras ['1702635', '4186027', '6090228', '8588401'] located 0/4 (7 s) | What are the special magic numbers for crimson falcon, amber -> 'The special magic numbers for the mentioned animals are:\n\nCrimson falcon: 8588401\nAmber heron: 6090228\nJade mantis: 4186'
+[plain] 19 VT MISS 0/5 located 0/5 (3 s) | Find all variables that are assigned the value 14673, direct -> 'Answer:\n\n[union of 3 phrasings]\nAnswer: '
+[plain] 20 2H MISS 0/1 located 0/2 (3 s) | What is the employee badge number of the person who holds th -> 'The text provided does not contain the employee badge number of the person who holds the vault key of the Orrin observat'
+[plain] 21 2H MISS 0/1 located 0/2 (4 s) | Which combination opens the personal safe of the architect w -> 'To answer the question, we need to find the combination that opens the personal safe of the architect who designed the T'
+[plain] questions fully right 0/21, items 1/31, by kind {'MK': '0/16', 'MV': '0/1', 'MQ': '0/1', 'VT': '0/1', '2H': '0/2'}
+wrote /root/autodl-tmp/llamacpp-vs-deepinfer/longctx/deepinfer_96k_plain.json

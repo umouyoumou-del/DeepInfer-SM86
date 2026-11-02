@@ -1,0 +1,103 @@
+== vllm_cap_3m max_model_len 3145728 : exited, VRAM 0 MiB
+ERROR 11-03 00:38:29 engine.py:400]     raise_if_cache_size_invalid(num_gpu_blocks,
+ERROR 11-03 00:38:29 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/worker/worker.py", line 544, in raise_if_cache_size_invalid
+ERROR 11-03 00:38:29 engine.py:400]     raise ValueError(
+ERROR 11-03 00:38:29 engine.py:400] ValueError: The model's max seq len (3145728) is larger than the maximum number of tokens that can be stored in KV cache (595248). Try increasing `gpu_memory_utilization` or decreasing `max_model_len` when initializing the engine.
+    raise ValueError(
+ValueError: The model's max seq len (3145728) is larger than the maximum number of tokens that can be stored in KV cache (595248). Try increasing `gpu_memory_utilization` or decreasing `max_model_len` when initializing the engine.
+    raise RuntimeError(
+RuntimeError: Engine process failed to start. See stack trace for the root cause.
+== vllm_cap_160k max_model_len 163840 : READY, VRAM 30817 MiB
+WARNING 11-03 00:39:07 triton_decode_attention.py:44] The following error message 'operation scheduled before its operands' can be ignored.
+INFO 11-03 00:39:19 worker.py:267] model weights take 10.42GiB; non_torch_memory takes 0.05GiB; PyTorch activation peak memory takes 0.19GiB; the rest of the memory reserved for KV Cache is 19.24GiB.
+INFO 11-03 00:39:19 executor_base.py:116] Maximum concurrency for 163840 tokens per request: 3.65x
+INFO 11-03 00:39:22 model_runner.py:1434] Capturing cudagraphs for decoding. This may lead to unexpected consequences if the model is not static. To run the model in eager mode, set 'enforce_eager=True' or use '--enforce-eager' in the CLI. If out-of-memory error occurs during cudagraph capture, cons
+Capturing CUDA graph shapes:   0%|          | 0/1 [00:00<?, ?it/s]loc("/root/vllm073-venv/lib/python3.12/site-packages/vllm/attention/ops/triton_decode_attention.py":308:16): error: operation scheduled before its operands
+INFO 11-03 00:39:27 llm_engine.py:436] init engine (profile, create kv cache, warmup model) took 10.89 seconds
+== vllm_98k max_model_len 100352 --enable-prefix-caching: READY, VRAM 30817 MiB
+WARNING 11-03 00:39:59 triton_decode_attention.py:44] The following error message 'operation scheduled before its operands' can be ignored.
+INFO 11-03 00:40:09 worker.py:267] model weights take 10.42GiB; non_torch_memory takes 0.05GiB; PyTorch activation peak memory takes 0.19GiB; the rest of the memory reserved for KV Cache is 19.24GiB.
+INFO 11-03 00:40:09 executor_base.py:116] Maximum concurrency for 100352 tokens per request: 5.96x
+INFO 11-03 00:40:12 model_runner.py:1434] Capturing cudagraphs for decoding. This may lead to unexpected consequences if the model is not static. To run the model in eager mode, set 'enforce_eager=True' or use '--enforce-eager' in the CLI. If out-of-memory error occurs during cudagraph capture, cons
+INFO 11-03 00:40:13 llm_engine.py:436] init engine (profile, create kv cache, warmup model) took 6.19 seconds
+Token indices sequence length is longer than the specified maximum sequence length for this model (27594 > 16384). Running this sequence through the model will result in indexing errors
+vllm: document 98,304 tokens, sha256 ba3b71cd21641fbd
+ 1 MK MISS 0/1 (1 s) What is the special magic number for crimson falco -> ''
+ 2 MK MISS 0/1 (1 s) What is the special magic number for crimson otter -> ''
+ 3 MK MISS 0/1 (1 s) What is the special magic number for silver falcon -> ''
+ 4 MK MISS 0/1 (1 s) What is the special magic number for silver otter? -> ''
+ 5 MK MISS 0/1 (1 s) What is the special magic number for amber lynx? -> ''
+ 6 MK MISS 0/1 (1 s) What is the special magic number for amber heron? -> ''
+ 7 MK MISS 0/1 (1 s) What is the special magic number for cobalt lynx? -> ''
+ 8 MK MISS 0/1 (1 s) What is the special magic number for cobalt heron? -> ''
+ 9 MK MISS 0/1 (1 s) What is the special magic number for ivory mantis? -> ''
+10 MK MISS 0/1 (1 s) What is the special magic number for ivory panther -> ''
+11 MK MISS 0/1 (1 s) What is the special magic number for jade mantis? -> ''
+12 MK MISS 0/1 (1 s) What is the special magic number for jade panther? -> ''
+13 MK MISS 0/1 (1 s) What is the special magic number for scarlet ibis? -> ''
+14 MK MISS 0/1 (1 s) What is the special magic number for scarlet badge -> ''
+15 MK MISS 0/1 (1 s) What is the special magic number for onyx ibis? -> ''
+16 MK MISS 0/1 (1 s) What is the special magic number for onyx badger? -> ''
+17 MV MISS 0/4 (1 s) What are all the special magic numbers for golden  -> ''
+18 MQ MISS 0/4 (1 s) What are the special magic numbers for crimson fal -> ''
+19 VT MISS 0/5 (3 s) Find all variables that are assigned the value 146 -> ''
+20 2H MISS 0/1 (1 s) What is the employee badge number of the person wh -> ''
+21 2H MISS 0/1 (1 s) Which combination opens the personal safe of the a -> ''
+{"questions_full": "0/21", "items": "0/31", "by_kind": {"MK": "0/16", "MV": "0/1", "MQ": "0/1", "VT": "0/1", "2H": "0/2"}, "question_seconds": 20.4}
+== vllm_1m max_model_len 1050624 --enable-prefix-caching: exited, VRAM 0 MiB
+ERROR 11-03 00:41:26 engine.py:400]     raise_if_cache_size_invalid(num_gpu_blocks,
+ERROR 11-03 00:41:26 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/worker/worker.py", line 544, in raise_if_cache_size_invalid
+ERROR 11-03 00:41:26 engine.py:400]     raise ValueError(
+ERROR 11-03 00:41:26 engine.py:400] ValueError: The model's max seq len (1050624) is larger than the maximum number of tokens that can be stored in KV cache (597696). Try increasing `gpu_memory_utilization` or decreasing `max_model_len` when initializing the engine.
+    raise ValueError(
+ValueError: The model's max seq len (1050624) is larger than the maximum number of tokens that can be stored in KV cache (597696). Try increasing `gpu_memory_utilization` or decreasing `max_model_len` when initializing the engine.
+    raise RuntimeError(
+RuntimeError: Engine process failed to start. See stack trace for the root cause.
+== vllm_98k max_model_len 100352 --max-num-batched-tokens 100352: READY, VRAM 23525 MiB
+WARNING 11-03 01:02:39 triton_decode_attention.py:44] The following error message 'operation scheduled before its operands' can be ignored.
+INFO 11-03 01:03:16 worker.py:267] model weights take 10.42GiB; non_torch_memory takes 0.05GiB; PyTorch activation peak memory takes 7.33GiB; the rest of the memory reserved for KV Cache is 12.10GiB.
+INFO 11-03 01:03:16 executor_base.py:116] Maximum concurrency for 100352 tokens per request: 3.75x
+INFO 11-03 01:03:19 model_runner.py:1434] Capturing cudagraphs for decoding. This may lead to unexpected consequences if the model is not static. To run the model in eager mode, set 'enforce_eager=True' or use '--enforce-eager' in the CLI. If out-of-memory error occurs during cudagraph capture, cons
+INFO 11-03 01:03:20 llm_engine.py:436] init engine (profile, create kv cache, warmup model) took 33.04 seconds
+Token indices sequence length is longer than the specified maximum sequence length for this model (27594 > 16384). Running this sequence through the model will result in indexing errors
+vllm: document 98,304 tokens, sha256 ba3b71cd21641fbd
+ 1 MK FULL 1/1 (31 s) What is the special magic number for crimson falco -> 'The special magic number for crimson falcon is 8589669.'
+ 2 MK MISS 0/1 (29 s) What is the special magic number for crimson otter -> 'The special magic number for crimson otter is: 4098086.'
+ 3 MK MISS 0/1 (29 s) What is the special magic number for silver falcon -> 'The special magic number for silver falcon is 8589669.'
+ 4 MK MISS 0/1 (29 s) What is the special magic number for silver otter? -> 'The special magic number for silver otter is: 4098086.'
+ 5 MK MISS 0/1 (29 s) What is the special magic number for amber lynx? -> 'The special magic number for amber lynx is: 1702635.'
+ 6 MK MISS 0/1 (29 s) What is the special magic number for amber heron? -> 'The special magic number for amber heron is 1702635.'
+ 7 MK MISS 0/1 (29 s) What is the special magic number for cobalt lynx? -> 'The special magic number for cobalt lynx is: 1702635.'
+ 8 MK MISS 0/1 (29 s) What is the special magic number for cobalt heron? -> 'The special magic number for cobalt heron is 1702635.'
+ 9 MK FULL 1/1 (29 s) What is the special magic number for ivory mantis? -> 'The special magic number for ivory mantis is: 4123476.'
+10 MK MISS 0/1 (29 s) What is the special magic number for ivory panther -> 'The special magic number for ivory panther is: 1702635.'
+11 MK MISS 0/1 (29 s) What is the special magic number for jade mantis? -> 'The special magic number for jade mantis is: 1702635.'
+12 MK MISS 0/1 (29 s) What is the special magic number for jade panther? -> 'The special magic number for jade panther is 1702635.'
+13 MK MISS 0/1 (32 s) What is the special magic number for scarlet ibis? -> ''
+14 MK MISS 0/1 (35 s) What is the special magic number for scarlet badge -> 'The text provided does not contain a specific 7-digit number for the special mag'
+15 MK MISS 0/1 (29 s) What is the special magic number for onyx ibis? -> 'The text provided does not contain a special magic number for "onyx ibis." There'
+16 MK MISS 0/1 (34 s) What is the special magic number for onyx badger? -> 'The text provided does not contain a specific 7-digit number for the special mag'
+17 MV MISS 1/4 (46 s) What are all the special magic numbers for golden  -> '1251670, 8589669, 2059731, 8981982, 6090228, 4123476, 8580488, 2579127, 1702635,'
+18 MQ MISS 2/4 (40 s) What are the special magic numbers for crimson fal -> 'crimson falcon: 8589669\namber heron: 4098086\njade mantis: 4123476\nonyx badger: 1'
+19 VT MISS 0/5 (90 s) Find all variables that are assigned the value 146 -> ''
+20 2H FULL 1/1 (29 s) What is the employee badge number of the person wh -> 'The employee badge number of the person who holds the vault key of the Orrin obs'
+21 2H MISS 0/1 (36 s) Which combination opens the personal safe of the a -> 'There is no information about the architect who designed the Teal Harbor lightho'
+{"questions_full": "3/21", "items": "6/31", "by_kind": {"MK": "2/16", "MV": "0/1", "MQ": "0/1", "VT": "0/1", "2H": "1/2"}, "question_seconds": 717.7}
+== vllm_cap_256k_batch max_model_len 262144 --max-num-batched-tokens 262144: exited, VRAM 0 MiB
+ERROR 11-03 01:16:03 engine.py:400] CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+ERROR 11-03 01:16:03 engine.py:400] For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+ERROR 11-03 01:16:03 engine.py:400] Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+ERROR 11-03 01:16:03 engine.py:400] 
+RuntimeError: CUDA error: device-side assert triggered
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+    raise RuntimeError(
+RuntimeError: Engine process failed to start. See stack trace for the root cause.
+== vllm_cap_512k_batch max_model_len 524288 --max-num-batched-tokens 524288: exited, VRAM 0 MiB
+ERROR 11-03 01:16:53 engine.py:400] CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+ERROR 11-03 01:16:53 engine.py:400] For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+ERROR 11-03 01:16:53 engine.py:400] Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+ERROR 11-03 01:16:53 engine.py:400] 
+RuntimeError: CUDA error: device-side assert triggered
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+    raise RuntimeError(
+RuntimeError: Engine process failed to start. See stack trace for the root cause.

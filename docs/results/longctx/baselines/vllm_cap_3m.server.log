@@ -1,0 +1,136 @@
+INFO 11-03 00:37:57 __init__.py:207] Automatically detected platform cuda.
+INFO 11-03 00:37:57 api_server.py:912] vLLM API server version 0.7.3
+INFO 11-03 00:37:57 api_server.py:913] args: Namespace(host=None, port=8000, uvicorn_log_level='info', allow_credentials=False, allowed_origins=['*'], allowed_methods=['*'], allowed_headers=['*'], api_key=None, lora_modules=None, prompt_adapters=None, chat_template=None, chat_template_content_format='auto', response_role='assistant', ssl_keyfile=None, ssl_certfile=None, ssl_ca_certs=None, ssl_cert_reqs=0, root_path=None, middleware=[], return_tokens_as_token_ids=False, disable_frontend_multiprocessing=False, enable_request_id_headers=False, enable_auto_tool_choice=False, enable_reasoning=False, reasoning_parser=None, tool_call_parser=None, tool_parser_plugin='', model='/dev/shm/awq', task='auto', tokenizer=None, skip_tokenizer_init=False, revision=None, code_revision=None, tokenizer_revision=None, tokenizer_mode='auto', trust_remote_code=True, allowed_local_media_path=None, download_dir=None, load_format='auto', config_format=<ConfigFormat.AUTO: 'auto'>, dtype='auto', kv_cache_dtype='auto', max_model_len=3145728, guided_decoding_backend='xgrammar', logits_processor_pattern=None, model_impl='auto', distributed_executor_backend=None, pipeline_parallel_size=1, tensor_parallel_size=1, max_parallel_loading_workers=None, ray_workers_use_nsight=False, block_size=None, enable_prefix_caching=None, disable_sliding_window=False, use_v2_block_manager=True, num_lookahead_slots=0, seed=0, swap_space=4, cpu_offload_gb=0, gpu_memory_utilization=0.95, num_gpu_blocks_override=None, max_num_batched_tokens=None, max_num_partial_prefills=1, max_long_partial_prefills=1, long_prefill_token_threshold=0, max_num_seqs=1, max_logprobs=20, disable_log_stats=False, quantization=None, rope_scaling=None, rope_theta=None, hf_overrides=None, enforce_eager=False, max_seq_len_to_capture=8192, disable_custom_all_reduce=False, tokenizer_pool_size=0, tokenizer_pool_type='ray', tokenizer_pool_extra_config=None, limit_mm_per_prompt=None, mm_processor_kwargs=None, disable_mm_preprocessor_cache=False, enable_lora=False, enable_lora_bias=False, max_loras=1, max_lora_rank=16, lora_extra_vocab_size=256, lora_dtype='auto', long_lora_scaling_factors=None, max_cpu_loras=None, fully_sharded_loras=False, enable_prompt_adapter=False, max_prompt_adapters=1, max_prompt_adapter_token=0, device='auto', num_scheduler_steps=1, multi_step_stream_outputs=True, scheduler_delay_factor=0.0, enable_chunked_prefill=None, speculative_model=None, speculative_model_quantization=None, num_speculative_tokens=None, speculative_disable_mqa_scorer=False, speculative_draft_tensor_parallel_size=None, speculative_max_model_len=None, speculative_disable_by_batch_size=None, ngram_prompt_lookup_max=None, ngram_prompt_lookup_min=None, spec_decoding_acceptance_method='rejection_sampler', typical_acceptance_sampler_posterior_threshold=None, typical_acceptance_sampler_posterior_alpha=None, disable_logprobs_during_spec_decoding=None, model_loader_extra_config=None, ignore_patterns=[], preemption_mode=None, served_model_name=['coder'], qlora_adapter_name_or_path=None, otlp_traces_endpoint=None, collect_detailed_traces=None, disable_async_output_proc=False, scheduling_policy='fcfs', scheduler_cls='vllm.core.scheduler.Scheduler', override_neuron_config=None, override_pooler_config=None, compilation_config=None, kv_transfer_config=None, worker_cls='auto', generation_config=None, override_generation_config=None, enable_sleep_mode=False, calculate_kv_scales=False, additional_config=None, disable_log_requests=False, max_log_len=None, disable_fastapi_docs=False, enable_prompt_tokens_details=False)
+INFO 11-03 00:37:57 api_server.py:209] Started engine process with PID 270238
+INFO 11-03 00:37:57 config.py:208] Replacing legacy 'type' key with 'rope_type'
+WARNING 11-03 00:37:57 config.py:2572] User-specified max_model_len (3145728) is greater than the derived max_model_len (max_position_embeddings=163840 or model_max_length=None in model's config.json). This may lead to incorrect model outputs or CUDA errors. Make sure the value is correct and within the model context size.
+INFO 11-03 00:38:04 __init__.py:207] Automatically detected platform cuda.
+INFO 11-03 00:38:04 config.py:208] Replacing legacy 'type' key with 'rope_type'
+WARNING 11-03 00:38:04 config.py:2572] User-specified max_model_len (3145728) is greater than the derived max_model_len (max_position_embeddings=163840 or model_max_length=None in model's config.json). This may lead to incorrect model outputs or CUDA errors. Make sure the value is correct and within the model context size.
+INFO 11-03 00:38:06 config.py:549] This model supports multiple tasks: {'classify', 'reward', 'generate', 'score', 'embed'}. Defaulting to 'generate'.
+INFO 11-03 00:38:07 awq_marlin.py:114] The model is convertible to awq_marlin during runtime. Using awq_marlin kernel.
+WARNING 11-03 00:38:07 arg_utils.py:1187] Chunked prefill is enabled by default for models with max_model_len > 32K. Currently, chunked prefill might not work with some features or models. If you encounter any issues, please disable chunked prefill by setting --enable-chunked-prefill=False.
+INFO 11-03 00:38:07 config.py:1555] Chunked prefill is enabled with max_num_batched_tokens=2048.
+INFO 11-03 00:38:07 config.py:3329] MLA is enabled; forcing chunked prefill and prefix caching to be disabled.
+INFO 11-03 00:38:12 config.py:549] This model supports multiple tasks: {'reward', 'generate', 'embed', 'score', 'classify'}. Defaulting to 'generate'.
+INFO 11-03 00:38:14 awq_marlin.py:114] The model is convertible to awq_marlin during runtime. Using awq_marlin kernel.
+WARNING 11-03 00:38:14 arg_utils.py:1187] Chunked prefill is enabled by default for models with max_model_len > 32K. Currently, chunked prefill might not work with some features or models. If you encounter any issues, please disable chunked prefill by setting --enable-chunked-prefill=False.
+INFO 11-03 00:38:14 config.py:1555] Chunked prefill is enabled with max_num_batched_tokens=2048.
+INFO 11-03 00:38:14 config.py:3329] MLA is enabled; forcing chunked prefill and prefix caching to be disabled.
+INFO 11-03 00:38:14 llm_engine.py:234] Initializing a V0 LLM engine (v0.7.3) with config: model='/dev/shm/awq', speculative_config=None, tokenizer='/dev/shm/awq', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, override_neuron_config=None, tokenizer_revision=None, trust_remote_code=True, dtype=torch.float16, max_seq_len=3145728, download_dir=None, load_format=LoadFormat.AUTO, tensor_parallel_size=1, pipeline_parallel_size=1, disable_custom_all_reduce=False, quantization=awq_marlin, enforce_eager=False, kv_cache_dtype=auto,  device_config=cuda, decoding_config=DecodingConfig(guided_decoding_backend='xgrammar'), observability_config=ObservabilityConfig(otlp_traces_endpoint=None, collect_model_forward_time=False, collect_model_execute_time=False), seed=0, served_model_name=coder, num_scheduler_steps=1, multi_step_stream_outputs=True, enable_prefix_caching=False, chunked_prefill_enabled=False, use_async_output_proc=True, disable_mm_preprocessor_cache=False, mm_processor_kwargs=None, pooler_config=None, compilation_config={"splitting_ops":[],"compile_sizes":[],"cudagraph_capture_sizes":[1],"max_capture_size":1}, use_cached_outputs=True, 
+INFO 11-03 00:38:14 cuda.py:160] Using Triton MLA backend.
+WARNING 11-03 00:38:14 triton_decode_attention.py:44] The following error message 'operation scheduled before its operands' can be ignored.
+INFO 11-03 00:38:15 model_runner.py:1110] Starting to load model /dev/shm/awq...
+WARNING 11-03 00:38:15 utils.py:168] The model class DeepseekV2ForCausalLM has not defined `packed_modules_mapping`, this may lead to incorrect mapping of quantized or ignored modules
+INFO 11-03 00:38:15 cuda.py:160] Using Triton MLA backend.
+WARNING 11-03 00:38:15 awq_marlin.py:132] Layer 'model.layers.0.mlp.down_proj' is not supported by AWQMarlin. Falling back to unoptimized AWQ kernels.
+
+Loading safetensors checkpoint shards:   0% Completed | 0/2 [00:00<?, ?it/s]
+
+Loading safetensors checkpoint shards:  50% Completed | 1/2 [00:03<00:03,  3.50s/it]
+
+Loading safetensors checkpoint shards: 100% Completed | 2/2 [00:06<00:00,  3.02s/it]
+
+Loading safetensors checkpoint shards: 100% Completed | 2/2 [00:06<00:00,  3.09s/it]
+
+INFO 11-03 00:38:22 model_runner.py:1115] Loading model weights took 10.4155 GB
+WARNING 11-03 00:38:27 fused_moe.py:807] Using default MoE config. Performance might be sub-optimal! Config file not found at /root/vllm073-venv/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/configs/E=64,N=704,device_name=NVIDIA_GeForce_RTX_4080_SUPER,dtype=int4_w8a16.json
+INFO 11-03 00:38:29 worker.py:267] Memory profiling takes 6.83 seconds
+INFO 11-03 00:38:29 worker.py:267] the current vLLM instance can use total_gpu_memory (31.47GiB) x gpu_memory_utilization (0.95) = 29.90GiB
+INFO 11-03 00:38:29 worker.py:267] model weights take 10.42GiB; non_torch_memory takes 0.05GiB; PyTorch activation peak memory takes 0.27GiB; the rest of the memory reserved for KV Cache is 19.16GiB.
+INFO 11-03 00:38:29 executor_base.py:111] # cuda blocks: 37203, # CPU blocks: 7767
+INFO 11-03 00:38:29 executor_base.py:116] Maximum concurrency for 3145728 tokens per request: 0.19x
+ERROR 11-03 00:38:29 engine.py:400] The model's max seq len (3145728) is larger than the maximum number of tokens that can be stored in KV cache (595248). Try increasing `gpu_memory_utilization` or decreasing `max_model_len` when initializing the engine.
+ERROR 11-03 00:38:29 engine.py:400] Traceback (most recent call last):
+ERROR 11-03 00:38:29 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/engine/multiprocessing/engine.py", line 391, in run_mp_engine
+ERROR 11-03 00:38:29 engine.py:400]     engine = MQLLMEngine.from_engine_args(engine_args=engine_args,
+ERROR 11-03 00:38:29 engine.py:400]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 00:38:29 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/engine/multiprocessing/engine.py", line 124, in from_engine_args
+ERROR 11-03 00:38:29 engine.py:400]     return cls(ipc_path=ipc_path,
+ERROR 11-03 00:38:29 engine.py:400]            ^^^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 00:38:29 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/engine/multiprocessing/engine.py", line 76, in __init__
+ERROR 11-03 00:38:29 engine.py:400]     self.engine = LLMEngine(*args, **kwargs)
+ERROR 11-03 00:38:29 engine.py:400]                   ^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 00:38:29 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/engine/llm_engine.py", line 276, in __init__
+ERROR 11-03 00:38:29 engine.py:400]     self._initialize_kv_caches()
+ERROR 11-03 00:38:29 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/engine/llm_engine.py", line 434, in _initialize_kv_caches
+ERROR 11-03 00:38:29 engine.py:400]     self.model_executor.initialize_cache(num_gpu_blocks, num_cpu_blocks)
+ERROR 11-03 00:38:29 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/executor/executor_base.py", line 122, in initialize_cache
+ERROR 11-03 00:38:29 engine.py:400]     self.collective_rpc("initialize_cache",
+ERROR 11-03 00:38:29 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/executor/uniproc_executor.py", line 56, in collective_rpc
+ERROR 11-03 00:38:29 engine.py:400]     answer = run_method(self.driver_worker, method, args, kwargs)
+ERROR 11-03 00:38:29 engine.py:400]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 00:38:29 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/utils.py", line 2196, in run_method
+ERROR 11-03 00:38:29 engine.py:400]     return func(*args, **kwargs)
+ERROR 11-03 00:38:29 engine.py:400]            ^^^^^^^^^^^^^^^^^^^^^
+ERROR 11-03 00:38:29 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/worker/worker.py", line 291, in initialize_cache
+ERROR 11-03 00:38:29 engine.py:400]     raise_if_cache_size_invalid(num_gpu_blocks,
+ERROR 11-03 00:38:29 engine.py:400]   File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/worker/worker.py", line 544, in raise_if_cache_size_invalid
+ERROR 11-03 00:38:29 engine.py:400]     raise ValueError(
+ERROR 11-03 00:38:29 engine.py:400] ValueError: The model's max seq len (3145728) is larger than the maximum number of tokens that can be stored in KV cache (595248). Try increasing `gpu_memory_utilization` or decreasing `max_model_len` when initializing the engine.
+Process SpawnProcess-1:
+Traceback (most recent call last):
+  File "/root/miniconda3/lib/python3.12/multiprocessing/process.py", line 314, in _bootstrap
+    self.run()
+  File "/root/miniconda3/lib/python3.12/multiprocessing/process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/engine/multiprocessing/engine.py", line 402, in run_mp_engine
+    raise e
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/engine/multiprocessing/engine.py", line 391, in run_mp_engine
+    engine = MQLLMEngine.from_engine_args(engine_args=engine_args,
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/engine/multiprocessing/engine.py", line 124, in from_engine_args
+    return cls(ipc_path=ipc_path,
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/engine/multiprocessing/engine.py", line 76, in __init__
+    self.engine = LLMEngine(*args, **kwargs)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/engine/llm_engine.py", line 276, in __init__
+    self._initialize_kv_caches()
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/engine/llm_engine.py", line 434, in _initialize_kv_caches
+    self.model_executor.initialize_cache(num_gpu_blocks, num_cpu_blocks)
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/executor/executor_base.py", line 122, in initialize_cache
+    self.collective_rpc("initialize_cache",
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/executor/uniproc_executor.py", line 56, in collective_rpc
+    answer = run_method(self.driver_worker, method, args, kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/utils.py", line 2196, in run_method
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/worker/worker.py", line 291, in initialize_cache
+    raise_if_cache_size_invalid(num_gpu_blocks,
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/worker/worker.py", line 544, in raise_if_cache_size_invalid
+    raise ValueError(
+ValueError: The model's max seq len (3145728) is larger than the maximum number of tokens that can be stored in KV cache (595248). Try increasing `gpu_memory_utilization` or decreasing `max_model_len` when initializing the engine.
+[rank0]:[W1103 00:38:30.776819709 ProcessGroupNCCL.cpp:1250] Warning: WARNING: process group has NOT been destroyed before we destruct ProcessGroupNCCL. On normal program exit, the application should call destroy_process_group to ensure that any pending NCCL operations have finished in this process. In rare cases this process can exit before this point and block the progress of another member of the process group. This constraint has always been present,  but this warning has only been added since PyTorch 2.4 (function operator())
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/entrypoints/openai/api_server.py", line 991, in <module>
+    uvloop.run(run_server(args))
+  File "/root/vllm073-venv/lib/python3.12/site-packages/uvloop/__init__.py", line 96, in run
+    return __asyncio.run(
+           ^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/asyncio/runners.py", line 194, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "uvloop/loop.pyx", line 1515, in uvloop.loop.Loop.run_until_complete
+  File "/root/vllm073-venv/lib/python3.12/site-packages/uvloop/__init__.py", line 48, in wrapper
+    return await main
+           ^^^^^^^^^^
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/entrypoints/openai/api_server.py", line 947, in run_server
+    async with build_async_engine_client(args) as engine_client:
+  File "/root/miniconda3/lib/python3.12/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/entrypoints/openai/api_server.py", line 139, in build_async_engine_client
+    async with build_async_engine_client_from_engine_args(
+  File "/root/miniconda3/lib/python3.12/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/root/vllm073-venv/lib/python3.12/site-packages/vllm/entrypoints/openai/api_server.py", line 233, in build_async_engine_client_from_engine_args
+    raise RuntimeError(
+RuntimeError: Engine process failed to start. See stack trace for the root cause.

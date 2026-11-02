@@ -1,0 +1,155 @@
+INFO 11-03 00:39:44 __init__.py:207] Automatically detected platform cuda.
+INFO 11-03 00:39:45 api_server.py:912] vLLM API server version 0.7.3
+INFO 11-03 00:39:45 api_server.py:913] args: Namespace(host=None, port=8000, uvicorn_log_level='info', allow_credentials=False, allowed_origins=['*'], allowed_methods=['*'], allowed_headers=['*'], api_key=None, lora_modules=None, prompt_adapters=None, chat_template=None, chat_template_content_format='auto', response_role='assistant', ssl_keyfile=None, ssl_certfile=None, ssl_ca_certs=None, ssl_cert_reqs=0, root_path=None, middleware=[], return_tokens_as_token_ids=False, disable_frontend_multiprocessing=False, enable_request_id_headers=False, enable_auto_tool_choice=False, enable_reasoning=False, reasoning_parser=None, tool_call_parser=None, tool_parser_plugin='', model='/dev/shm/awq', task='auto', tokenizer=None, skip_tokenizer_init=False, revision=None, code_revision=None, tokenizer_revision=None, tokenizer_mode='auto', trust_remote_code=True, allowed_local_media_path=None, download_dir=None, load_format='auto', config_format=<ConfigFormat.AUTO: 'auto'>, dtype='auto', kv_cache_dtype='auto', max_model_len=100352, guided_decoding_backend='xgrammar', logits_processor_pattern=None, model_impl='auto', distributed_executor_backend=None, pipeline_parallel_size=1, tensor_parallel_size=1, max_parallel_loading_workers=None, ray_workers_use_nsight=False, block_size=None, enable_prefix_caching=True, disable_sliding_window=False, use_v2_block_manager=True, num_lookahead_slots=0, seed=0, swap_space=4, cpu_offload_gb=0, gpu_memory_utilization=0.95, num_gpu_blocks_override=None, max_num_batched_tokens=None, max_num_partial_prefills=1, max_long_partial_prefills=1, long_prefill_token_threshold=0, max_num_seqs=1, max_logprobs=20, disable_log_stats=False, quantization=None, rope_scaling=None, rope_theta=None, hf_overrides=None, enforce_eager=False, max_seq_len_to_capture=8192, disable_custom_all_reduce=False, tokenizer_pool_size=0, tokenizer_pool_type='ray', tokenizer_pool_extra_config=None, limit_mm_per_prompt=None, mm_processor_kwargs=None, disable_mm_preprocessor_cache=False, enable_lora=False, enable_lora_bias=False, max_loras=1, max_lora_rank=16, lora_extra_vocab_size=256, lora_dtype='auto', long_lora_scaling_factors=None, max_cpu_loras=None, fully_sharded_loras=False, enable_prompt_adapter=False, max_prompt_adapters=1, max_prompt_adapter_token=0, device='auto', num_scheduler_steps=1, multi_step_stream_outputs=True, scheduler_delay_factor=0.0, enable_chunked_prefill=None, speculative_model=None, speculative_model_quantization=None, num_speculative_tokens=None, speculative_disable_mqa_scorer=False, speculative_draft_tensor_parallel_size=None, speculative_max_model_len=None, speculative_disable_by_batch_size=None, ngram_prompt_lookup_max=None, ngram_prompt_lookup_min=None, spec_decoding_acceptance_method='rejection_sampler', typical_acceptance_sampler_posterior_threshold=None, typical_acceptance_sampler_posterior_alpha=None, disable_logprobs_during_spec_decoding=None, model_loader_extra_config=None, ignore_patterns=[], preemption_mode=None, served_model_name=['coder'], qlora_adapter_name_or_path=None, otlp_traces_endpoint=None, collect_detailed_traces=None, disable_async_output_proc=False, scheduling_policy='fcfs', scheduler_cls='vllm.core.scheduler.Scheduler', override_neuron_config=None, override_pooler_config=None, compilation_config=None, kv_transfer_config=None, worker_cls='auto', generation_config=None, override_generation_config=None, enable_sleep_mode=False, calculate_kv_scales=False, additional_config=None, disable_log_requests=False, max_log_len=None, disable_fastapi_docs=False, enable_prompt_tokens_details=False)
+INFO 11-03 00:39:45 api_server.py:209] Started engine process with PID 271222
+INFO 11-03 00:39:45 config.py:208] Replacing legacy 'type' key with 'rope_type'
+INFO 11-03 00:39:51 __init__.py:207] Automatically detected platform cuda.
+INFO 11-03 00:39:51 config.py:208] Replacing legacy 'type' key with 'rope_type'
+INFO 11-03 00:39:53 config.py:549] This model supports multiple tasks: {'embed', 'reward', 'classify', 'score', 'generate'}. Defaulting to 'generate'.
+INFO 11-03 00:39:54 awq_marlin.py:114] The model is convertible to awq_marlin during runtime. Using awq_marlin kernel.
+WARNING 11-03 00:39:54 arg_utils.py:1187] Chunked prefill is enabled by default for models with max_model_len > 32K. Currently, chunked prefill might not work with some features or models. If you encounter any issues, please disable chunked prefill by setting --enable-chunked-prefill=False.
+INFO 11-03 00:39:54 config.py:1555] Chunked prefill is enabled with max_num_batched_tokens=2048.
+INFO 11-03 00:39:54 config.py:3329] MLA is enabled; forcing chunked prefill and prefix caching to be disabled.
+INFO 11-03 00:39:57 config.py:549] This model supports multiple tasks: {'embed', 'generate', 'reward', 'classify', 'score'}. Defaulting to 'generate'.
+INFO 11-03 00:39:58 awq_marlin.py:114] The model is convertible to awq_marlin during runtime. Using awq_marlin kernel.
+WARNING 11-03 00:39:58 arg_utils.py:1187] Chunked prefill is enabled by default for models with max_model_len > 32K. Currently, chunked prefill might not work with some features or models. If you encounter any issues, please disable chunked prefill by setting --enable-chunked-prefill=False.
+INFO 11-03 00:39:58 config.py:1555] Chunked prefill is enabled with max_num_batched_tokens=2048.
+INFO 11-03 00:39:58 config.py:3329] MLA is enabled; forcing chunked prefill and prefix caching to be disabled.
+INFO 11-03 00:39:58 llm_engine.py:234] Initializing a V0 LLM engine (v0.7.3) with config: model='/dev/shm/awq', speculative_config=None, tokenizer='/dev/shm/awq', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, override_neuron_config=None, tokenizer_revision=None, trust_remote_code=True, dtype=torch.float16, max_seq_len=100352, download_dir=None, load_format=LoadFormat.AUTO, tensor_parallel_size=1, pipeline_parallel_size=1, disable_custom_all_reduce=False, quantization=awq_marlin, enforce_eager=False, kv_cache_dtype=auto,  device_config=cuda, decoding_config=DecodingConfig(guided_decoding_backend='xgrammar'), observability_config=ObservabilityConfig(otlp_traces_endpoint=None, collect_model_forward_time=False, collect_model_execute_time=False), seed=0, served_model_name=coder, num_scheduler_steps=1, multi_step_stream_outputs=True, enable_prefix_caching=False, chunked_prefill_enabled=False, use_async_output_proc=True, disable_mm_preprocessor_cache=False, mm_processor_kwargs=None, pooler_config=None, compilation_config={"splitting_ops":[],"compile_sizes":[],"cudagraph_capture_sizes":[1],"max_capture_size":1}, use_cached_outputs=True, 
+INFO 11-03 00:39:59 cuda.py:160] Using Triton MLA backend.
+WARNING 11-03 00:39:59 triton_decode_attention.py:44] The following error message 'operation scheduled before its operands' can be ignored.
+INFO 11-03 00:39:59 model_runner.py:1110] Starting to load model /dev/shm/awq...
+WARNING 11-03 00:39:59 utils.py:168] The model class DeepseekV2ForCausalLM has not defined `packed_modules_mapping`, this may lead to incorrect mapping of quantized or ignored modules
+INFO 11-03 00:39:59 cuda.py:160] Using Triton MLA backend.
+WARNING 11-03 00:39:59 awq_marlin.py:132] Layer 'model.layers.0.mlp.down_proj' is not supported by AWQMarlin. Falling back to unoptimized AWQ kernels.
+
+Loading safetensors checkpoint shards:   0% Completed | 0/2 [00:00<?, ?it/s]
+
+Loading safetensors checkpoint shards:  50% Completed | 1/2 [00:03<00:03,  3.67s/it]
+
+Loading safetensors checkpoint shards: 100% Completed | 2/2 [00:06<00:00,  3.02s/it]
+
+Loading safetensors checkpoint shards: 100% Completed | 2/2 [00:06<00:00,  3.12s/it]
+
+INFO 11-03 00:40:07 model_runner.py:1115] Loading model weights took 10.4155 GB
+WARNING 11-03 00:40:08 fused_moe.py:807] Using default MoE config. Performance might be sub-optimal! Config file not found at /root/vllm073-venv/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/configs/E=64,N=704,device_name=NVIDIA_GeForce_RTX_4080_SUPER,dtype=int4_w8a16.json
+INFO 11-03 00:40:09 worker.py:267] Memory profiling takes 1.74 seconds
+INFO 11-03 00:40:09 worker.py:267] the current vLLM instance can use total_gpu_memory (31.47GiB) x gpu_memory_utilization (0.95) = 29.90GiB
+INFO 11-03 00:40:09 worker.py:267] model weights take 10.42GiB; non_torch_memory takes 0.05GiB; PyTorch activation peak memory takes 0.19GiB; the rest of the memory reserved for KV Cache is 19.24GiB.
+INFO 11-03 00:40:09 executor_base.py:111] # cuda blocks: 37356, # CPU blocks: 7767
+INFO 11-03 00:40:09 executor_base.py:116] Maximum concurrency for 100352 tokens per request: 5.96x
+INFO 11-03 00:40:12 model_runner.py:1434] Capturing cudagraphs for decoding. This may lead to unexpected consequences if the model is not static. To run the model in eager mode, set 'enforce_eager=True' or use '--enforce-eager' in the CLI. If out-of-memory error occurs during cudagraph capture, consider decreasing `gpu_memory_utilization` or switching to eager mode. You can also reduce the `max_num_seqs` as needed to decrease memory usage.
+
+Capturing CUDA graph shapes:   0%|          | 0/1 [00:00<?, ?it/s]
+Capturing CUDA graph shapes: 100%|██████████| 1/1 [00:00<00:00,  1.14it/s]
+Capturing CUDA graph shapes: 100%|██████████| 1/1 [00:00<00:00,  1.14it/s]
+INFO 11-03 00:40:13 model_runner.py:1562] Graph capturing finished in 1 secs, took 0.07 GiB
+INFO 11-03 00:40:13 llm_engine.py:436] init engine (profile, create kv cache, warmup model) took 6.19 seconds
+INFO 11-03 00:40:14 api_server.py:958] Starting vLLM API server on http://0.0.0.0:8000
+INFO 11-03 00:40:14 launcher.py:23] Available routes are:
+INFO 11-03 00:40:14 launcher.py:31] Route: /openapi.json, Methods: GET, HEAD
+INFO 11-03 00:40:14 launcher.py:31] Route: /docs, Methods: GET, HEAD
+INFO 11-03 00:40:14 launcher.py:31] Route: /docs/oauth2-redirect, Methods: GET, HEAD
+INFO 11-03 00:40:14 launcher.py:31] Route: /redoc, Methods: GET, HEAD
+INFO:     Started server process [271140]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:47648 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47650 - "GET /v1/models HTTP/1.1" 200 OK
+INFO 11-03 00:40:25 logger.py:39] Received request cmpl-d1c0e52dc86c4b5dace5da08b3c0272f-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,066 characters]
+INFO 11-03 00:40:25 engine.py:280] Added request cmpl-d1c0e52dc86c4b5dace5da08b3c0272f-0.
+WARNING 11-03 00:40:25 scheduler.py:1091] Input prompt (98365 tokens) is too long and exceeds limit of 2048
+INFO:     127.0.0.1:50832 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 00:40:26 logger.py:39] Received request cmpl-4ab21bd05b91404badf7b05e0bbb7c43-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,065 characters]
+INFO 11-03 00:40:26 engine.py:280] Added request cmpl-4ab21bd05b91404badf7b05e0bbb7c43-0.
+WARNING 11-03 00:40:26 scheduler.py:1091] Input prompt (98365 tokens) is too long and exceeds limit of 2048
+INFO:     127.0.0.1:50840 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 00:40:27 logger.py:39] Received request cmpl-8dc15a153cd044b6b4aaca22998fa08e-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,065 characters]
+INFO 11-03 00:40:27 engine.py:280] Added request cmpl-8dc15a153cd044b6b4aaca22998fa08e-0.
+WARNING 11-03 00:40:27 scheduler.py:1091] Input prompt (98365 tokens) is too long and exceeds limit of 2048
+INFO:     127.0.0.1:50856 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 00:40:28 logger.py:39] Received request cmpl-2fd9f383f75b4315b2c9743108066482-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,064 characters]
+INFO 11-03 00:40:28 engine.py:280] Added request cmpl-2fd9f383f75b4315b2c9743108066482-0.
+WARNING 11-03 00:40:28 scheduler.py:1091] Input prompt (98365 tokens) is too long and exceeds limit of 2048
+INFO:     127.0.0.1:50872 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 00:40:29 logger.py:39] Received request cmpl-cca23c46036e406c81bdfa82bc5e22d0-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,065 characters]
+INFO 11-03 00:40:29 engine.py:280] Added request cmpl-cca23c46036e406c81bdfa82bc5e22d0-0.
+WARNING 11-03 00:40:29 scheduler.py:1091] Input prompt (98366 tokens) is too long and exceeds limit of 2048
+INFO:     127.0.0.1:50884 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 00:40:30 logger.py:39] Received request cmpl-f3465bb26662450dbd5e83cd9336d086-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,061 characters]
+INFO 11-03 00:40:30 engine.py:280] Added request cmpl-f3465bb26662450dbd5e83cd9336d086-0.
+WARNING 11-03 00:40:30 scheduler.py:1091] Input prompt (98365 tokens) is too long and exceeds limit of 2048
+INFO:     127.0.0.1:50886 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 00:40:31 logger.py:39] Received request cmpl-f7770f8e66924e18a6c5e69238e93826-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,066 characters]
+INFO 11-03 00:40:31 engine.py:280] Added request cmpl-f7770f8e66924e18a6c5e69238e93826-0.
+WARNING 11-03 00:40:31 scheduler.py:1091] Input prompt (98366 tokens) is too long and exceeds limit of 2048
+INFO:     127.0.0.1:50892 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 00:40:32 logger.py:39] Received request cmpl-49e133510ea44e1e80e9af3d3074ebc2-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,062 characters]
+INFO 11-03 00:40:32 engine.py:280] Added request cmpl-49e133510ea44e1e80e9af3d3074ebc2-0.
+WARNING 11-03 00:40:32 scheduler.py:1091] Input prompt (98365 tokens) is too long and exceeds limit of 2048
+INFO:     127.0.0.1:48098 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 00:40:32 logger.py:39] Received request cmpl-623c1694665940d2813d30aeb3f72b74-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,063 characters]
+INFO 11-03 00:40:33 engine.py:280] Added request cmpl-623c1694665940d2813d30aeb3f72b74-0.
+WARNING 11-03 00:40:33 scheduler.py:1091] Input prompt (98365 tokens) is too long and exceeds limit of 2048
+INFO:     127.0.0.1:48110 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 00:40:33 logger.py:39] Received request cmpl-9182d36cad074ae798cabeec3e3bd072-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,065 characters]
+INFO 11-03 00:40:33 engine.py:280] Added request cmpl-9182d36cad074ae798cabeec3e3bd072-0.
+WARNING 11-03 00:40:33 scheduler.py:1091] Input prompt (98365 tokens) is too long and exceeds limit of 2048
+INFO:     127.0.0.1:48118 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 00:40:34 logger.py:39] Received request cmpl-deec00dfdc654710b146a8f8b6d405fb-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,062 characters]
+INFO 11-03 00:40:34 engine.py:280] Added request cmpl-deec00dfdc654710b146a8f8b6d405fb-0.
+WARNING 11-03 00:40:34 scheduler.py:1091] Input prompt (98365 tokens) is too long and exceeds limit of 2048
+INFO:     127.0.0.1:48126 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 00:40:35 logger.py:39] Received request cmpl-4255acde5b3442b0bd592466d0e05056-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,064 characters]
+INFO 11-03 00:40:35 engine.py:280] Added request cmpl-4255acde5b3442b0bd592466d0e05056-0.
+WARNING 11-03 00:40:35 scheduler.py:1091] Input prompt (98365 tokens) is too long and exceeds limit of 2048
+INFO:     127.0.0.1:48140 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 00:40:36 logger.py:39] Received request cmpl-a80944b0052340d5b437c8f3aeae8136-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,064 characters]
+INFO 11-03 00:40:36 engine.py:280] Added request cmpl-a80944b0052340d5b437c8f3aeae8136-0.
+WARNING 11-03 00:40:36 scheduler.py:1091] Input prompt (98365 tokens) is too long and exceeds limit of 2048
+INFO:     127.0.0.1:48144 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 00:40:37 logger.py:39] Received request cmpl-4be6c176c89847279fefacdf09ca0102-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,066 characters]
+INFO 11-03 00:40:37 engine.py:280] Added request cmpl-4be6c176c89847279fefacdf09ca0102-0.
+WARNING 11-03 00:40:37 scheduler.py:1091] Input prompt (98365 tokens) is too long and exceeds limit of 2048
+INFO:     127.0.0.1:48160 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 00:40:38 logger.py:39] Received request cmpl-17f77a6b453b4f3ca2fe3b369f71f7f2-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,066 characters]
+INFO 11-03 00:40:38 engine.py:280] Added request cmpl-17f77a6b453b4f3ca2fe3b369f71f7f2-0.
+WARNING 11-03 00:40:38 scheduler.py:1091] Input prompt (98366 tokens) is too long and exceeds limit of 2048
+INFO:     127.0.0.1:48170 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 00:40:39 logger.py:39] Received request cmpl-f354859c5f4c4780bc21a39ddb90912d-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,068 characters]
+INFO 11-03 00:40:39 engine.py:280] Added request cmpl-f354859c5f4c4780bc21a39ddb90912d-0.
+WARNING 11-03 00:40:39 scheduler.py:1091] Input prompt (98366 tokens) is too long and exceeds limit of 2048
+INFO:     127.0.0.1:48186 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 00:40:40 logger.py:39] Received request cmpl-2e2da1b74cc74544ab88d926f87824c9-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,099 characters]
+INFO 11-03 00:40:40 engine.py:280] Added request cmpl-2e2da1b74cc74544ab88d926f87824c9-0.
+WARNING 11-03 00:40:40 scheduler.py:1091] Input prompt (98367 tokens) is too long and exceeds limit of 2048
+INFO:     127.0.0.1:48196 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 00:40:41 logger.py:39] Received request cmpl-dc87a00cfb31408abb54ee9b9c517140-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,217 characters]
+INFO 11-03 00:40:41 engine.py:280] Added request cmpl-dc87a00cfb31408abb54ee9b9c517140-0.
+WARNING 11-03 00:40:41 scheduler.py:1091] Input prompt (98381 tokens) is too long and exceeds limit of 2048
+INFO:     127.0.0.1:48210 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 00:40:41 logger.py:39] Received request cmpl-f241da19ecc14344aef98fbcb1b8ec93-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,908 characters]
+INFO 11-03 00:40:42 engine.py:280] Added request cmpl-f241da19ecc14344aef98fbcb1b8ec93-0.
+WARNING 11-03 00:40:42 scheduler.py:1091] Input prompt (98456 tokens) is too long and exceeds limit of 2048
+INFO:     127.0.0.1:47198 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 00:40:42 logger.py:39] Received request cmpl-9b3ad28d5dc2460a8f94d8bf69696064-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 880,113 characters]
+INFO 11-03 00:40:42 engine.py:280] Added request cmpl-9b3ad28d5dc2460a8f94d8bf69696064-0.
+WARNING 11-03 00:40:42 scheduler.py:1091] Input prompt (98477 tokens) is too long and exceeds limit of 2048
+INFO:     127.0.0.1:47200 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 00:40:43 logger.py:39] Received request cmpl-af8562b740fb405187f539ce19fad594-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,956 characters]
+INFO 11-03 00:40:43 engine.py:280] Added request cmpl-af8562b740fb405187f539ce19fad594-0.
+WARNING 11-03 00:40:43 scheduler.py:1091] Input prompt (98461 tokens) is too long and exceeds limit of 2048
+INFO:     127.0.0.1:47202 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 00:40:44 logger.py:39] Received request cmpl-84bf5af0744a42619e42409f9646b78d-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,171 characters]
+INFO 11-03 00:40:44 engine.py:280] Added request cmpl-84bf5af0744a42619e42409f9646b78d-0.
+WARNING 11-03 00:40:44 scheduler.py:1091] Input prompt (98376 tokens) is too long and exceeds limit of 2048
+INFO:     127.0.0.1:47210 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 00:40:45 logger.py:39] Received request cmpl-8be7a68ef8764bbcbca6a347b4f53263-0: prompt: '<｜begin▁of▁sentence｜>User: \n# __future__.py\n"""Record of phased-in incompatible language changes. ... [prompt trimmed, 879,148 characters]
+INFO 11-03 00:40:45 engine.py:280] Added request cmpl-8be7a68ef8764bbcbca6a347b4f53263-0.
+WARNING 11-03 00:40:45 scheduler.py:1091] Input prompt (98371 tokens) is too long and exceeds limit of 2048
+INFO:     127.0.0.1:47214 - "POST /v1/completions HTTP/1.1" 200 OK
+INFO 11-03 00:40:46 launcher.py:62] Shutting down FastAPI HTTP server.
+[rank0]:[W1103 00:40:46.116070767 ProcessGroupNCCL.cpp:1250] Warning: WARNING: process group has NOT been destroyed before we destruct ProcessGroupNCCL. On normal program exit, the application should call destroy_process_group to ensure that any pending NCCL operations have finished in this process. In rare cases this process can exit before this point and block the progress of another member of the process group. This constraint has always been present,  but this warning has only been added since PyTorch 2.4 (function operator())
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.

@@ -1,0 +1,26 @@
+server ready: -fa on -ctk q8_0 -ctv q8_0 -c 1050624 --override-kv deepseek2.context_length=int:1050624 (VRAM 28967 MiB)
+Token indices sequence length is longer than the specified maximum sequence length for this model (27594 > 16384). Running this sequence through the model will result in indexing errors
+llama.cpp: document 1,048,576 tokens, sha256 23fbe11335568470
+ 1 MK MISS 0/1 (6096 s) What is the special magic number for crimson falco -> 'res =\n        if\n        res =\n    res\n            res =\n    res =\n    res =\n   '
+ 2 MK MISS 0/1 (140 s) What is the special magic number for crimson otter -> 'res =\n    =\n        res =\n    res\n    res =\n    res =\n    res =\n        if\n    i'
+ 3 MK MISS 0/1 (140 s) What is the special magic number for silver falcon -> 'res =\n    =\n        res =\n    res\n    res =\n    res =\n    res =\n        if\n    i'
+ 4 MK MISS 0/1 (139 s) What is the special magic number for silver otter? -> 'res =\n        if\n        res =\n    res\n    res =\n        if\n    res\n        if\n '
+ 5 MK MISS 0/1 (140 s) What is the special magic number for amber lynx? -> 'res =\n        if\n        res\n    res\n            res =\n        if\n    res\n      '
+ 6 MK MISS 0/1 (140 s) What is the special magic number for amber heron? -> 'res =\n        if\n        res =\n    res\n    res =\n        if\n    res\n        if\n '
+ 7 MK MISS 0/1 (140 s) What is the special magic number for cobalt lynx? -> 'res =\n        if\n        res\n    res\n            res =\n        if\n    res\n      '
+ 8 MK MISS 0/1 (139 s) What is the special magic number for cobalt heron? -> 'res =\n    =\n        res =\n    res\n            res =\n        if\n    res\n        i'
+ 9 MK MISS 0/1 (139 s) What is the special magic number for ivory mantis? -> 'res =\n    =\n        res =\n    res\n    res =\n    res =\n    res =\n        if\n    i'
+10 MK MISS 0/1 (139 s) What is the special magic number for ivory panther -> 'res =\n        if\n        res =\n    res\n            res =\n        if\n    res\n    '
+11 MK MISS 0/1 (139 s) What is the special magic number for jade mantis? -> 'res =\n        if\n        res =\n    res\n    res =\n        if\n    res\n        if\n '
+12 MK MISS 0/1 (139 s) What is the special magic number for jade panther? -> 'res =\n        if\n        res =\n    res\n            res =\n        if\n    res\n    '
+13 MK MISS 0/1 (139 s) What is the special magic number for scarlet ibis? -> 'res =\n        if\n        res =\n    res\n    res =\n        if\n    res\n        if\n '
+14 MK MISS 0/1 (139 s) What is the special magic number for scarlet badge -> 'res =\n        if\n        res =\n    res\n    res =\n        if\n    res\n        if\n '
+15 MK MISS 0/1 (140 s) What is the special magic number for onyx ibis? -> 'res =\n        if\n        res\n    res\n            res =\n        if\n    res\n      '
+16 MK MISS 0/1 (139 s) What is the special magic number for onyx badger? -> 'res =\n        if\n        res\n    res\n    res =\n            #\n    res\n        if\n'
+17 MV MISS 0/4 (139 s) What are all the special magic numbers for golden  -> 'res =\n        if\n        res =\n            res =\n            if\n        if\n    i'
+18 MQ MISS 0/4 (140 s) What are the special magic numbers for crimson fal -> 'if\n    res\n    res =\n    if\n    =\n            if\n            if\n\n        if\n    '
+19 VT MISS 0/5 (419 s) Find all variables that are assigned the value 146 -> ''
+20 2H MISS 0/1 (140 s) What is the employee badge number of the person wh -> 'res\n    res =\n        if\n    res =\n        if\n    if\n            if\n            '
+21 2H MISS 0/1 (139 s) Which combination opens the personal safe of the a -> 'if\n        res =\n        res =\n            if\n        if\n    if\n        if\n    i'
+{"questions_full": "0/21", "items": "0/31", "by_kind": {"MK": "0/16", "MV": "0/1", "MQ": "0/1", "VT": "0/1", "2H": "0/2"}, "question_seconds": 9164.3}
+done: /root/autodl-tmp/llamacpp-vs-deepinfer/longctx/llama_mla_1m_q8kv.json

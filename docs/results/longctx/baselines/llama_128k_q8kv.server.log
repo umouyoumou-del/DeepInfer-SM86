@@ -1,0 +1,17 @@
+0.00.124.969 I srv  llama_server: initializing ...
+0.00.124.988 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.125.228 W srv  server_setup: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+0.00.140.656 I srv    load_model: loading model '/root/autodl-tmp/models/DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf'
+0.00.615.674 W load: control-looking token: 100002 '<｜fim▁hole｜>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.00.626.774 W load: control-looking token: 100003 '<｜fim▁begin｜>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.00.631.646 W load: control-looking token: 100004 '<｜fim▁end｜>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.02.878.397 W llama_context: setting new yarn_attn_factor = 1.0000 (mscale == 0.7, mscale_all_dim = 0.7)
+0.03.324.478 I cmn          init: llama threadpool init, n_threads = 64
+0.03.632.615 I srv    load_model: initializing, n_slots = 1, n_ctx_slot = 133120, kv_unified = 'false'
+0.03.641.701 I srv  server_run_i: model loaded
+0.03.641.723 I srv  server_on_li: listening on http://127.0.0.1:8090
+0.10.708.294 I slot get_availabl: id  0 | task -1 | selected slot by LRU, n_tokens = 0, t_last = -1
+0.10.708.801 I slot launch_slot_: id  0 | task 0 | processing task, is_child = 0
+0.34.448.321 I slot print_timing: id  0 | task 0 | prompt processing, n_tokens =   2048, progress = 0.02, t =  23.74 s / 86.27 tokens per second
+1.37.256.717 I slot print_timing: id  0 | task 0 | prompt processing, n_tokens =   4096, progress = 0.03, t =  86.55 s / 47.33 tokens per second
+2.48.769.790 W srv          stop: cancel task, id_task = 0

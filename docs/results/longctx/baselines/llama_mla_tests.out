@@ -1,0 +1,20 @@
+== speed (MLA layout)
+| deepseek2 16B Q4_K - Medium    |   9.72 GiB |    15.71 B | CUDA       |  99 |   1 |          pp2048 |       8673.34 ± 0.00 |
+| deepseek2 16B Q4_K - Medium    |   9.72 GiB |    15.71 B | CUDA       |  99 |   1 | pp2048 @ d16384 |       3555.63 ± 0.00 |
+[-fa 1 -ctk f16] exit 0
+[-fa 1 -ctk q8_0] exit 1
+| deepseek2 16B Q4_K - Medium    |   9.72 GiB |    15.71 B | CUDA       |  99 |   0 |          pp2048 |       7552.03 ± 0.00 |
+| deepseek2 16B Q4_K - Medium    |   9.72 GiB |    15.71 B | CUDA       |  99 |   0 | pp2048 @ d16384 |       1747.25 ± 0.00 |
+[-fa 0 -ctk f16] exit 0
+== capacity (MLA layout, FlashAttention)
+== mla_3m_f16 (-fa on -c 3145728): exited, VRAM 0 MiB
+0.02.870.147 E ggml_backend_cuda_buffer_type_alloc_buffer: allocating 93312.00 MiB on device 0: cudaMalloc failed: out of memory
+0.02.870.154 E ggml_backend_buft_alloc_buffer_n_default: failed to allocate CUDA0 buffer of size 97844723712
+0.02.883.671 E llama_init_from_model: failed to initialize the context: failed to allocate buffer for kv cache
+== mla_3m_q8 (-fa on -ctk q8_0 -c 3145728): exited, VRAM 0 MiB
+== mla_1m_q8 (-fa on -ctk q8_0 -c 1050624): exited, VRAM 0 MiB
+== mla_1m_f16 (-fa on -c 1050624): exited, VRAM 0 MiB
+0.02.620.355 E ggml_backend_cuda_buffer_type_alloc_buffer: allocating 31164.75 MiB on device 0: cudaMalloc failed: out of memory
+0.02.620.361 E ggml_backend_buft_alloc_buffer_n_default: failed to allocate CUDA0 buffer of size 32678608896
+0.02.622.545 E llama_init_from_model: failed to initialize the context: failed to allocate buffer for kv cache
+== mla_512k_f16 (-fa on -c 526336): READY, VRAM 26349 MiB

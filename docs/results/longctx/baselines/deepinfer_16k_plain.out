@@ -1,0 +1,31 @@
+document 16,384 tokens with 39 needles (0 s); 21 questions, 31 expected items
+DeepseekV2ForCausalLM has generative capabilities, as `prepare_inputs_for_generation` is explicitly overwritten. However, it doesn't directly inherit from `GenerationMixin`. From 👉v4.50👈 onwards, `PreTrainedModel` will NOT inherit from `GenerationMixin`, and this model will lose the ability to call `generate` and other related functions.
+  - If you're using `trust_remote_code=True`, you can get rid of this warning by loading the model with an auto class. See https://huggingface.co/docs/transformers/en/model_doc/auto#auto-classes
+  - If you are the owner of the model architecture code, please modify your model class such that it inherits from `GenerationMixin` (after `PreTrainedModel`, otherwise you'll get an exception).
+  - If you are not the owner of the model architecture class, please contact the model code owner to update it.
+memory: kv fp8 0.30 GiB; experts pinned; gpu holds 18,432 tokens, host 0
+  prefill 16,384/16,384 tokens, 0.0 min
+prefill 16,384 tokens in 0.0 min
+[plain]  1 MK FULL 1/1 located 0/1 (2 s) | What is the special magic number for crimson falcon? -> 'The special magic number for crimson falcon is: 8589669.\n\nAnswer: 8589669'
+[plain]  2 MK FULL 1/1 located 0/1 (2 s) | What is the special magic number for crimson otter? -> 'The special magic number for crimson otter is: 8812311.\n\nAnswer: 8812311'
+[plain]  3 MK FULL 1/1 located 0/1 (2 s) | What is the special magic number for silver falcon? -> 'The special magic number for silver falcon is: 8580488.\n\nAnswer: 8580488'
+[plain]  4 MK FULL 1/1 located 0/1 (2 s) | What is the special magic number for silver otter? -> 'The special magic number for silver otter is: 9520162.\n\nAnswer: 9520162'
+[plain]  5 MK FULL 1/1 located 0/1 (2 s) | What is the special magic number for amber lynx? -> 'The special magic number for amber lynx is: 4186027.\n\nAnswer: 4186027'
+[plain]  6 MK FULL 1/1 located 0/1 (2 s) | What is the special magic number for amber heron? -> 'The special magic number for amber heron is: 4098086.\n\nAnswer: 4098086'
+[plain]  7 MK FULL 1/1 located 0/1 (2 s) | What is the special magic number for cobalt lynx? -> 'The special magic number for cobalt lynx is: 9588401.\n\nAnswer: 9588401'
+[plain]  8 MK FULL 1/1 located 0/1 (2 s) | What is the special magic number for cobalt heron? -> 'The special magic number for cobalt heron is: 8981982.\n\nAnswer: 8981982'
+[plain]  9 MK FULL 1/1 located 0/1 (2 s) | What is the special magic number for ivory mantis? -> 'The special magic number for ivory mantis is: 4123476.\n\nAnswer: 4123476'
+[plain] 10 MK FULL 1/1 located 0/1 (2 s) | What is the special magic number for ivory panther? -> 'The special magic number for ivory panther is: 2579129.\n\nAnswer: 2579129'
+[plain] 11 MK FULL 1/1 located 0/1 (2 s) | What is the special magic number for jade mantis? -> 'The special magic number for jade mantis is: 8492589.\n\nAnswer: 8492589'
+[plain] 12 MK FULL 1/1 located 0/1 (2 s) | What is the special magic number for jade panther? -> 'The special magic number for jade panther is: 6090228.\n\nAnswer: 6090228'
+[plain] 13 MK MISS 0/1 extras ['2521199'] located 0/1 (2 s) | What is the special magic number for scarlet ibis? -> 'The special magic number for scarlet ibis is: 2521199.\n\nAnswer: 2521199'
+[plain] 14 MK FULL 1/1 located 0/1 (2 s) | What is the special magic number for scarlet badger? -> 'The special magic number for scarlet badger is: 2521199.\n\nAnswer: 2521199'
+[plain] 15 MK FULL 1/1 located 0/1 (2 s) | What is the special magic number for onyx ibis? -> 'The special magic number for onyx ibis is: 1702635.\n\nAnswer: 1702635'
+[plain] 16 MK FULL 1/1 located 0/1 (2 s) | What is the special magic number for onyx badger? -> 'The special magic number for onyx badger is: 7646461.\n\nAnswer: 7646461'
+[plain] 17 MV MISS 0/4 extras ['1999101', '6090228'] located 0/4 (60 s) | What are all the special magic numbers for golden viper? -> 'The special magic numbers for golden viper are:\n\n1999101, 6090228, 1999101, 1999101, 1999101, 1999101, 1999101, 1999101,'
+[plain] 18 MQ FULL 4/4 located 0/4 (6 s) | What are the special magic numbers for crimson falcon, amber -> 'The special magic numbers for the given entities are:\n\n- crimson falcon: 8589669\n- amber heron: 4098086\n- jade mantis: 8'
+[plain] 19 VT MISS 5/5 extras ['ACSYD', 'AVAGG', 'KYHQJ', 'MDJMC'] DECOY ['ACSYD', 'AVAGG', 'KYHQJ', 'MDJMC'] located 0/5 (134 s) | Find all variables that are assigned the value 14673, direct -> 'To find all variables that are assigned the value 14673, we need to parse the text for lines of the form `VAR X = <numbe'
+[plain] 20 2H MISS 0/1 located 0/2 (5 s) | What is the employee badge number of the person who holds th -> 'The text provided does not contain an employee badge number for the person who holds the vault key of the Orrin observat'
+[plain] 21 2H MISS 0/1 located 0/2 (3 s) | Which combination opens the personal safe of the architect w -> 'The text provided does not contain any information about the combination for the personal safe of the architect who desi'
+[plain] questions fully right 16/21, items 24/31, by kind {'MK': '15/16', 'MV': '0/1', 'MQ': '1/1', 'VT': '0/1', '2H': '0/2'}
+wrote /root/autodl-tmp/llamacpp-vs-deepinfer/longctx/deepinfer_16k_plain.json
