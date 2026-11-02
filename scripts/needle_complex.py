@@ -330,6 +330,112 @@ def rank_report(
     return {"rows": rows, "summary": summary}
 
 
+def answer_questions(session, tok, questions: list[dict], needles: list[dict], args, *, baseline=None):
+    """Answer ``questions`` against a ready session; ``args`` carries the answering options of the CLI.
+
+    Returns ``(results, summary)``.  Also used on a session kept alive by
+    ``scripts/longctx_workbench.py``, where a SimpleNamespace stands in for ``args``.
+    """
+
+    header = header_ids(tok)
+    separator = tok.encode("\n...\n", add_special_tokens=False)
+    stop = [tok.eos_token_id]
+    reduce = args.score.split("-")[0]
+    contrast_mode = "ratio" if args.score.endswith("ratio") else "difference"
+    if baseline is None and args.score.endswith(("contrast", "ratio")):
+        baseline = neutral_baseline(session, tok.encode(NEUTRAL_PROMPT, add_special_tokens=False), reduce=reduce)
+    modes = ["single", "feedback"] if args.mode == "both" else [args.mode]
+    results = []
+    for mode in modes:
+        for number, question in enumerate(questions):
+            started = time.perf_counter()
+            bare = tok.encode(f"\n\n{question['question']}\n\nAssistant:", add_special_tokens=False)
+            refine = None
+            if args.refine:
+                refine = Refine(
+                    tok, bare, tok.encode(NEUTRAL_PROMPT, add_special_tokens=False), keep=args.refine, order=args.order
+                )
+            if mode == "single":
+                q_ids = tok.encode(
+                    f"\n\n{question['question']} {question['instruction']}\n\nAssistant:", add_special_tokens=False
+                )
+                produced, spans = locate_and_reread(
+                    session, q_ids, header_ids=header, separator_ids=separator, top=args.top,
+                    neighbors=args.neighbors, max_new_tokens=args.max_new, stop_ids=stop,
+                    reduce=reduce, baseline=baseline, locate_ids=bare, refine=refine,
+                )
+                detail = {"spans": spans}
+            else:
+                detail = feedback_locate_and_reread(
+                    session, tok, question["question"], answer_instruction=question["instruction"],
+                    header_ids=header, separator_ids=separator, baseline=baseline, reduce=reduce,
+                    top=args.top, follow_top=args.follow_top, neighbors=args.neighbors,
+                    rounds=args.rounds, max_new_tokens=args.max_new, stop_ids=stop, refine=refine,
+                    contrast_mode=contrast_mode, near_window=args.near_window, follow_final=args.follow_final,
+                    final_with_question=getattr(args, "final_with_question", False),
+                    final_entity_rows=getattr(args, "final_entity_rows", False),
+                )
+                produced, spans = detail.pop("answer_ids"), detail["spans"]
+                variants = []
+                for instruction in question.get("variants", []):
+                    # the same converged context, the final pick asked another way
+                    extra = reread(
+                        session, spans,
+                        tok.encode(f"\n\n{question['question']} {instruction}\n\nAssistant:", add_special_tokens=False),
+                        header_ids=header, separator_ids=separator, max_new_tokens=args.max_new, stop_ids=stop,
+                        refine=refine, refine_query=detail["refine_query"],
+                    )
+                    variants.append(tok.decode(extra, skip_special_tokens=True).strip())
+                if variants:
+                    detail["variant_answers"] = variants
+            seconds = time.perf_counter() - started
+            answer = tok.decode(produced, skip_special_tokens=True).strip()
+            if detail.get("variant_answers"):
+                # union of the names the three phrasings pick
+                picked = set()
+                for text in [answer, *detail["variant_answers"]]:
+                    picked |= set(re.findall(r"\b[A-Z]{5}\b", final_answer(text)))
+                answer = answer + "\n\n[union of 3 phrasings]\nAnswer: " + ", ".join(sorted(picked))
+            result = score(question, answer)
+            located = [
+                any(lo < needles[i]["position"] + needles[i]["length"] and needles[i]["position"] < hi for lo, hi in spans)
+                for i in question["needles"]
+            ]
+            record = {
+                "mode": mode, "kind": question["kind"], "question": question["question"],
+                "expected": question["expected"], "answer": answer, **result,
+                "located": located, "seconds": round(seconds, 1),
+                "rounds": len(detail.get("rounds", [])) or None,
+                "trace": detail.get("rounds"), "variant_answers": detail.get("variant_answers"),
+                "reread_tokens": detail.get("reread_tokens", sum(hi - lo for lo, hi in spans)),
+            }
+            results.append(record)
+            print(
+                f"[{mode}] {number + 1:>2} {question['kind']:<2} {'FULL' if result['full'] else 'MISS'} "
+                f"{len(result['hits'])}/{len(question['expected'])}"
+                + (f" extras {result['extras']}" if result["extras"] else "")
+                + (f" DECOY {result['forbidden']}" if result["forbidden"] else "")
+                + f" located {sum(located)}/{len(located)}"
+                + (f" rounds {record['rounds']}" if record["rounds"] else "")
+                + f" ({seconds:.0f} s) | {question['question'][:60]} -> {answer[:120]!r}",
+                flush=True,
+            )
+    summary = {}
+    for mode in modes:
+        rows = [r for r in results if r["mode"] == mode]
+        summary[mode] = {
+            "questions_full": f"{sum(r['full'] for r in rows)}/{len(rows)}",
+            "items": f"{sum(len(r['hits']) for r in rows)}/{sum(len(r['expected']) for r in rows)}",
+            "by_kind": {
+                kind: f"{sum(r['full'] for r in rows if r['kind'] == kind)}/{sum(1 for r in rows if r['kind'] == kind)}"
+                for kind in dict.fromkeys(r["kind"] for r in rows)
+            },
+        }
+        print(f"[{mode}] questions fully right {summary[mode]['questions_full']}, items {summary[mode]['items']}, "
+              f"by kind {summary[mode]['by_kind']}", flush=True)
+    return results, summary
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--model", choices=sorted(MODELS), default="coder")
@@ -353,7 +459,13 @@ def main() -> None:
     )
     parser.add_argument("--top", type=int, default=32, help="blocks re-read in the first round")
     parser.add_argument("--follow-top", type=int, default=8, help="new blocks per later round")
-    parser.add_argument("--rounds", type=int, default=6)
+    parser.add_argument("--rounds", type=int, default=8)
+    parser.add_argument(
+        "--follow-final", type=int, default=32,
+        help="later rounds also read the N best blocks for the final answer alone (0 = off)",
+    )
+    parser.add_argument("--final-with-question", action="store_true", help="that locate also carries the question")
+    parser.add_argument("--final-entity-rows", action="store_true", help="score it with the answer's tokens only")
     parser.add_argument("--neighbors", type=int, default=1)
     parser.add_argument("--order", choices=("score", "document"), default="document", help="order of the refined lines")
     parser.add_argument(
@@ -472,101 +584,7 @@ def main() -> None:
         if not args.then_answer:
             return
 
-    header = header_ids(tok)
-    separator = tok.encode("\n...\n", add_special_tokens=False)
-    stop = [tok.eos_token_id]
-    reduce = args.score.split("-")[0]
-    contrast_mode = "ratio" if args.score.endswith("ratio") else "difference"
-    baseline = None
-    if args.score.endswith(("contrast", "ratio")):
-        baseline = neutral_baseline(session, tok.encode(NEUTRAL_PROMPT, add_special_tokens=False), reduce=reduce)
-    modes = ["single", "feedback"] if args.mode == "both" else [args.mode]
-    results = []
-    for mode in modes:
-        for number, question in enumerate(questions):
-            started = time.perf_counter()
-            bare = tok.encode(f"\n\n{question['question']}\n\nAssistant:", add_special_tokens=False)
-            refine = None
-            if args.refine:
-                refine = Refine(
-                    tok, bare, tok.encode(NEUTRAL_PROMPT, add_special_tokens=False), keep=args.refine, order=args.order
-                )
-            if mode == "single":
-                q_ids = tok.encode(
-                    f"\n\n{question['question']} {question['instruction']}\n\nAssistant:", add_special_tokens=False
-                )
-                produced, spans = locate_and_reread(
-                    session, q_ids, header_ids=header, separator_ids=separator, top=args.top,
-                    neighbors=args.neighbors, max_new_tokens=args.max_new, stop_ids=stop,
-                    reduce=reduce, baseline=baseline, locate_ids=bare, refine=refine,
-                )
-                detail = {"spans": spans}
-            else:
-                detail = feedback_locate_and_reread(
-                    session, tok, question["question"], answer_instruction=question["instruction"],
-                    header_ids=header, separator_ids=separator, baseline=baseline, reduce=reduce,
-                    top=args.top, follow_top=args.follow_top, neighbors=args.neighbors,
-                    rounds=args.rounds, max_new_tokens=args.max_new, stop_ids=stop, refine=refine,
-                    contrast_mode=contrast_mode, near_window=args.near_window,
-                )
-                produced, spans = detail.pop("answer_ids"), detail["spans"]
-                variants = []
-                for instruction in question.get("variants", []):
-                    # the same converged context, the final pick asked another way
-                    extra = reread(
-                        session, spans,
-                        tok.encode(f"\n\n{question['question']} {instruction}\n\nAssistant:", add_special_tokens=False),
-                        header_ids=header, separator_ids=separator, max_new_tokens=args.max_new, stop_ids=stop,
-                        refine=refine, refine_query=detail["refine_query"],
-                    )
-                    variants.append(tok.decode(extra, skip_special_tokens=True).strip())
-                if variants:
-                    detail["variant_answers"] = variants
-            seconds = time.perf_counter() - started
-            answer = tok.decode(produced, skip_special_tokens=True).strip()
-            if detail.get("variant_answers"):
-                # union of the names the three phrasings pick
-                picked = set()
-                for text in [answer, *detail["variant_answers"]]:
-                    picked |= set(re.findall(r"\b[A-Z]{5}\b", final_answer(text)))
-                answer = answer + "\n\n[union of 3 phrasings]\nAnswer: " + ", ".join(sorted(picked))
-            result = score(question, answer)
-            located = [
-                any(lo < needles[i]["position"] + needles[i]["length"] and needles[i]["position"] < hi for lo, hi in spans)
-                for i in question["needles"]
-            ]
-            record = {
-                "mode": mode, "kind": question["kind"], "question": question["question"],
-                "expected": question["expected"], "answer": answer, **result,
-                "located": located, "seconds": round(seconds, 1),
-                "rounds": len(detail.get("rounds", [])) or None,
-                "trace": detail.get("rounds"), "variant_answers": detail.get("variant_answers"),
-                "reread_tokens": detail.get("reread_tokens", sum(hi - lo for lo, hi in spans)),
-            }
-            results.append(record)
-            print(
-                f"[{mode}] {number + 1:>2} {question['kind']:<2} {'FULL' if result['full'] else 'MISS'} "
-                f"{len(result['hits'])}/{len(question['expected'])}"
-                + (f" extras {result['extras']}" if result["extras"] else "")
-                + (f" DECOY {result['forbidden']}" if result["forbidden"] else "")
-                + f" located {sum(located)}/{len(located)}"
-                + (f" rounds {record['rounds']}" if record["rounds"] else "")
-                + f" ({seconds:.0f} s) | {question['question'][:60]} -> {answer[:120]!r}",
-                flush=True,
-            )
-    summary = {}
-    for mode in modes:
-        rows = [r for r in results if r["mode"] == mode]
-        summary[mode] = {
-            "questions_full": f"{sum(r['full'] for r in rows)}/{len(rows)}",
-            "items": f"{sum(len(r['hits']) for r in rows)}/{sum(len(r['expected']) for r in rows)}",
-            "by_kind": {
-                kind: f"{sum(r['full'] for r in rows if r['kind'] == kind)}/{sum(1 for r in rows if r['kind'] == kind)}"
-                for kind in dict.fromkeys(r["kind"] for r in rows)
-            },
-        }
-        print(f"[{mode}] questions fully right {summary[mode]['questions_full']}, items {summary[mode]['items']}, "
-              f"by kind {summary[mode]['by_kind']}", flush=True)
+    results, summary = answer_questions(session, tok, questions, needles, args)
     if args.out:
         os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
         with open(args.out, "w", encoding="utf-8") as handle:
@@ -579,7 +597,7 @@ def main() -> None:
                     "prefill_seconds": None if prefill_seconds is None else round(prefill_seconds, 1),
                     "load_seconds": None if load_seconds is None else round(load_seconds, 1),
                     "save_seconds": None if save_seconds is None else round(save_seconds, 1),
-                    "score": args.score, "near_window": args.near_window, "refine": args.refine, "order": args.order, "top": args.top, "follow_top": args.follow_top, "rounds": args.rounds,
+                    "score": args.score, "near_window": args.near_window, "refine": args.refine, "order": args.order, "top": args.top, "follow_top": args.follow_top, "follow_final": args.follow_final, "rounds": args.rounds,
                     "neighbors": args.neighbors, "seed": args.seed, "summary": summary,
                     "needles": needles, "results": results,
                 },

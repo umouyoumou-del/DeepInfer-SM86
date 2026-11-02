@@ -77,7 +77,10 @@ def moe_prefill(store, mlp, x: torch.Tensor, layer_idx: int, *, group: int = 16)
 
     Same math as the official ``moe_infer`` (routing weights applied and summed
     in fp32), but each expert is dequantized once per call and its tokens go
-    through three cuBLAS GEMMs.
+    through three cuBLAS GEMMs.  Each expert's weighted output is added into
+    the fp32 sum as soon as it is computed: gathering every routed copy first
+    held 2 GB of temporaries for a 16K-token block (top-6 copies in fp16 in and
+    out, plus their fp32 product), enough to run out of memory beside a 2M cache.
     """
 
     tokens, hidden = x.shape
@@ -88,24 +91,22 @@ def moe_prefill(store, mlp, x: torch.Tensor, layer_idx: int, *, group: int = 16)
     expert_count = int(mlp.gate.weight.shape[0])
     counts = torch.bincount(flat, minlength=expert_count).tolist()
     token_of = order // top_k
-    routed_inputs = x.index_select(0, token_of)
-    routed_outputs = torch.empty_like(routed_inputs)
+    weights = topk_weight.reshape(-1).index_select(0, order).float().unsqueeze(-1)
     offsets = [0]
     for count in counts:
         offsets.append(offsets[-1] + count)
     active = [expert for expert, count in enumerate(counts) if count]
+    combined = torch.zeros((tokens, hidden), dtype=torch.float32, device=x.device)
     for first in range(0, len(active), group):
         ids = active[first : first + group]
         gate_w, up_w, down_w = resident_experts(store, layer_idx, ids)
         for slot, expert in enumerate(ids):
             lo, hi = offsets[expert], offsets[expert + 1]
-            segment = routed_inputs[lo:hi]
+            rows = token_of[lo:hi]
+            segment = x.index_select(0, rows)
             activated = F.silu(segment @ gate_w[slot].t()) * (segment @ up_w[slot].t())
-            routed_outputs[lo:hi] = activated @ down_w[slot].t()
+            combined.index_add_(0, rows, (activated @ down_w[slot].t()).float() * weights[lo:hi])
         del gate_w, up_w, down_w
-    weights = topk_weight.reshape(-1).index_select(0, order)
-    combined = torch.zeros((tokens, hidden), dtype=torch.float32, device=x.device)
-    combined.index_add_(0, token_of, routed_outputs.float() * weights.unsqueeze(-1))
     return combined.to(x.dtype) + mlp.shared_experts(x)
 
 

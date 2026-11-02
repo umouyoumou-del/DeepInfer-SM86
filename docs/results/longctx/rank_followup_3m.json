@@ -1,0 +1,143 @@
+{
+ "tokens": 3145728,
+ "encode_window": 98304,
+ "hops": [
+  {
+   "names": "GHTAY",
+   "next": "OKOSG",
+   "question+final": {
+    "VAR KYHQJ = 43291": 155,
+    "VAR GHTAY = 14673": -1,
+    "VAR OKOSG = VAR GHTAY": 76,
+    "VAR ACSYD = VAR KYHQJ": 111,
+    "VAR QHUJP = VAR OKOSG": 568,
+    "VAR MDJMC = VAR ACSYD": 165,
+    "VAR AVCOU = VAR QHUJP": 1763,
+    "VAR AVAGG = VAR MDJMC": 48993,
+    "VAR INRCW = VAR AVCOU": 132
+   },
+   "final": {
+    "VAR KYHQJ = 43291": 46,
+    "VAR GHTAY = 14673": -1,
+    "VAR OKOSG = VAR GHTAY": 14,
+    "VAR ACSYD = VAR KYHQJ": 139,
+    "VAR QHUJP = VAR OKOSG": 173,
+    "VAR MDJMC = VAR ACSYD": 152,
+    "VAR AVCOU = VAR QHUJP": 180,
+    "VAR AVAGG = VAR MDJMC": 49081,
+    "VAR INRCW = VAR AVCOU": 181
+   },
+   "answer0": {
+    "VAR KYHQJ = 43291": 121,
+    "VAR GHTAY = 14673": -1,
+    "VAR OKOSG = VAR GHTAY": 154,
+    "VAR ACSYD = VAR KYHQJ": 343,
+    "VAR QHUJP = VAR OKOSG": 164,
+    "VAR MDJMC = VAR ACSYD": 104,
+    "VAR AVCOU = VAR QHUJP": 523,
+    "VAR AVAGG = VAR MDJMC": 49053,
+    "VAR INRCW = VAR AVCOU": 55
+   },
+   "answer1": {
+    "VAR KYHQJ = 43291": 270,
+    "VAR GHTAY = 14673": -1,
+    "VAR OKOSG = VAR GHTAY": 241,
+    "VAR ACSYD = VAR KYHQJ": 315,
+    "VAR QHUJP = VAR OKOSG": 127,
+    "VAR MDJMC = VAR ACSYD": 100,
+    "VAR AVCOU = VAR QHUJP": 1383,
+    "VAR AVAGG = VAR MDJMC": 49053,
+    "VAR INRCW = VAR AVCOU": 121
+   }
+  },
+  {
+   "names": "GHTAY, OKOSG",
+   "next": "QHUJP",
+   "question+final": {
+    "VAR KYHQJ = 43291": 160,
+    "VAR GHTAY = 14673": -1,
+    "VAR OKOSG = VAR GHTAY": -1,
+    "VAR ACSYD = VAR KYHQJ": 113,
+    "VAR QHUJP = VAR OKOSG": 121,
+    "VAR MDJMC = VAR ACSYD": 179,
+    "VAR AVCOU = VAR QHUJP": 1887,
+    "VAR AVAGG = VAR MDJMC": 49000,
+    "VAR INRCW = VAR AVCOU": 135
+   },
+   "final": {
+    "VAR KYHQJ = 43291": 26,
+    "VAR GHTAY = 14673": -1,
+    "VAR OKOSG = VAR GHTAY": -1,
+    "VAR ACSYD = VAR KYHQJ": 211,
+    "VAR QHUJP = VAR OKOSG": 22,
+    "VAR MDJMC = VAR ACSYD": 366,
+    "VAR AVCOU = VAR QHUJP": 177,
+    "VAR AVAGG = VAR MDJMC": 49077,
+    "VAR INRCW = VAR AVCOU": 229
+   }
+  },
+  {
+   "names": "GHTAY, OKOSG, QHUJP",
+   "next": "AVCOU",
+   "question+final": {
+    "VAR KYHQJ = 43291": 166,
+    "VAR GHTAY = 14673": -1,
+    "VAR OKOSG = VAR GHTAY": -1,
+    "VAR ACSYD = VAR KYHQJ": 118,
+    "VAR QHUJP = VAR OKOSG": -1,
+    "VAR MDJMC = VAR ACSYD": 189,
+    "VAR AVCOU = VAR QHUJP": 25,
+    "VAR AVAGG = VAR MDJMC": 49008,
+    "VAR INRCW = VAR AVCOU": 135
+   },
+   "final": {
+    "VAR KYHQJ = 43291": 31,
+    "VAR GHTAY = 14673": -1,
+    "VAR OKOSG = VAR GHTAY": -1,
+    "VAR ACSYD = VAR KYHQJ": 116,
+    "VAR QHUJP = VAR OKOSG": -1,
+    "VAR MDJMC = VAR ACSYD": 482,
+    "VAR AVCOU = VAR QHUJP": 5,
+    "VAR AVAGG = VAR MDJMC": 49082,
+    "VAR INRCW = VAR AVCOU": 257
+   }
+  },
+  {
+   "names": "GHTAY, OKOSG, QHUJP, AVCOU",
+   "next": "INRCW",
+   "question+final": {
+    "VAR KYHQJ = 43291": 176,
+    "VAR GHTAY = 14673": -1,
+    "VAR OKOSG = VAR GHTAY": -1,
+    "VAR ACSYD = VAR KYHQJ": 122,
+    "VAR QHUJP = VAR OKOSG": -1,
+    "VAR MDJMC = VAR ACSYD": 197,
+    "VAR AVCOU = VAR QHUJP": -1,
+    "VAR AVAGG = VAR MDJMC": 48962,
+    "VAR INRCW = VAR AVCOU": 62
+   },
+   "final": {
+    "VAR KYHQJ = 43291": 37,
+    "VAR GHTAY = 14673": -1,
+    "VAR OKOSG = VAR GHTAY": -1,
+    "VAR ACSYD = VAR KYHQJ": 122,
+    "VAR QHUJP = VAR OKOSG": -1,
+    "VAR MDJMC = VAR ACSYD": 657,
+    "VAR AVCOU = VAR QHUJP": -1,
+    "VAR AVAGG = VAR MDJMC": 74,
+    "VAR INRCW = VAR AVCOU": 26
+   }
+  }
+ ],
+ "round1": {
+  "VAR KYHQJ = 43291": 268,
+  "VAR GHTAY = 14673": 0,
+  "VAR OKOSG = VAR GHTAY": 440,
+  "VAR ACSYD = VAR KYHQJ": 138,
+  "VAR QHUJP = VAR OKOSG": 583,
+  "VAR MDJMC = VAR ACSYD": 186,
+  "VAR AVCOU = VAR QHUJP": 2902,
+  "VAR AVAGG = VAR MDJMC": 49026,
+  "VAR INRCW = VAR AVCOU": 168
+ }
+}

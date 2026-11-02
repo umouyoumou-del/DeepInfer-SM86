@@ -97,6 +97,8 @@ DeepSeek-Coder-V2-Lite-Instruct Q4_K_M（训练到 128K，未做任何训练）�
 这 21 题的问答从 51 分钟降到 8.6 分钟（一遍读完缓存的 Triton 定位、专家不再从主机重传、作答用
 CUDA graph 生成），结果不变；缓存可分到两块盘存下，同一份文档再次使用加载 51 秒、不必 prefill；
 编码窗口缩到 16K 时新文档的 prefill 16.8 → 6.8 分钟。
+**3M（3,145,728 token）**：同样 39 根针、21 题，两次运行（其中一次从头 prefill）都是 21/21、31/31，33 处针全部定位到——KV 51.9 GiB（93 万 token 在显存、221 万在锁页主机
+内存），prefill 25 分钟，21 题约 15 分钟。
 问题直接对 1M 个 key 做全量注意力只有 1–2/9——细节、更正与边界见
 [`docs/LONG_CONTEXT_1M.md`](docs/LONG_CONTEXT_1M.md)。
 

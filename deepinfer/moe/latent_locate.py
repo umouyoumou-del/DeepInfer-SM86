@@ -389,6 +389,7 @@ def locate_attention(
     num_warps: int = 8,
     num_stages: int = 1,
     target_programs: int = 640,
+    keep_tokens: list[int] | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """``(attended [n, H, v_dim] fp16, block mass [blocks])`` for a query block at logical ``start``.
 
@@ -397,7 +398,8 @@ def locate_attention(
     keys, causal); the mass is what ``latent_reread.block_mass`` returns for the
     regions below ``length`` (each (token, head) row normalized over those
     slots), summed or maxed over rows per block of 64.  Regions below ``length``
-    must be block-aligned (:func:`aligned`).
+    must be block-aligned (:func:`aligned`).  ``keep_tokens`` limits the
+    (token, head) rows that count towards the mass; all of them attend.
 
     The cache is read in tiles of ``tile`` slots: GPU-resident ones in place,
     the rest copied over PCIe on a side stream one tile ahead; an fp8 tile is
@@ -456,8 +458,13 @@ def locate_attention(
     attended = torch.bmm(
         acc.view(n, heads, -1).transpose(0, 1).to(weights.w_uv.dtype), weights.w_uv.transpose(1, 2)
     ).transpose(0, 1)
-    if cached_lse is None:
+    if cached_lse is None or (keep_tokens is not None and not keep_tokens):
         return attended.to(q_nope.dtype), torch.zeros(blocks, dtype=torch.float32, device=device)
+    if keep_tokens is not None:
+        keep = torch.tensor(
+            [token * heads + head for token in keep_tokens for head in range(heads)], dtype=torch.long, device=device
+        )
+        lbm, cached_lse = lbm.index_select(1, keep), cached_lse.index_select(0, keep)
     lbm.sub_(cached_lse.unsqueeze(0))
     mass = lbm.amax(dim=1).exp_() if reduce == "max" else lbm.exp_().sum(dim=1)
     return attended.to(q_nope.dtype), mass

@@ -68,6 +68,7 @@ def block_mass(
     blocks: int,
     tile: int = 65536,
     reduce: str = "sum",
+    keep_tokens: Sequence[int] | None = None,
 ) -> torch.Tensor:
     """``[blocks]`` attention mass of ``n`` queries over the slots in ``regions``.
 
@@ -76,14 +77,15 @@ def block_mass(
     the region slots and summed per block of ``block`` slots; ``reduce`` then
     combines the (query, head) rows: ``"sum"`` (total mass) or ``"max"`` (the
     sharpest row - a head that looks at one block counts even if most heads
-    spread their mass by position).
+    spread their mass by position).  ``keep_tokens`` (indices into the ``n``
+    queries) limits the rows that count.
     """
 
     n, heads, _ = q_nope.shape
     device = q_nope.device
     # a long query (a question plus a fed-back answer) means many rows: keep a score
-    # tile near 2**27 entries so memory does not grow with the query
-    tile = min(tile, max(4096, (1 << 27) // max(1, n * heads)))
+    # tile near 2**25 entries (128 MB in fp32) so memory does not grow with the query
+    tile = min(tile, max(1024, (1 << 25) // max(1, n * heads)))
     q_abs = torch.bmm(q_nope.transpose(0, 1).to(weights.w_uk.dtype), weights.w_uk)
     q_abs = q_abs.transpose(0, 1).reshape(n * heads, -1)  # [n*H, 512]
     absolute = torch.arange(query_start, query_start + n, device=device)
@@ -94,6 +96,15 @@ def block_mass(
         for relation in {relation for _, _, relation in regions}
     }
     scale = weights.softmax_scale
+    if keep_tokens is not None:
+        keep = torch.tensor(
+            [token * heads + head for token in keep_tokens for head in range(heads)], dtype=torch.long, device=device
+        )
+        q_abs = q_abs.index_select(0, keep)
+        rotated = {relation: rows.index_select(0, keep) for relation, rows in rotated.items()}
+        n = len(keep_tokens) if keep_tokens else 0
+    if n == 0:
+        return torch.zeros(blocks, dtype=torch.float32, device=device)
 
     def tiles():
         for start, end, relation in regions:
@@ -108,6 +119,13 @@ def block_mass(
     for _, _, scores in tiles():
         part = torch.logsumexp(scores, dim=-1)
         lse = part if lse is None else torch.logaddexp(lse, part)
+    if reduce == "max" and block == 1:
+        # one slot per block: the sharpest row per slot, without a rows x slots buffer
+        sharpest = torch.zeros(blocks, dtype=torch.float32, device=device)
+        for lo, hi, scores in tiles():
+            peak = torch.exp(scores - lse.unsqueeze(-1)).amax(dim=0)
+            sharpest[lo:hi] = torch.maximum(sharpest[lo:hi], peak)
+        return sharpest
     if reduce == "max":
         rows = torch.zeros(n * heads, blocks, dtype=torch.float32, device=device)
         for lo, hi, scores in tiles():
@@ -211,19 +229,33 @@ def _logical(extents, slot: int) -> int:
 
 @torch.inference_mode()
 def locate(
-    session, query_ids: Sequence[int], *, block: int = BLOCK, reduce: str = "sum"
+    session,
+    query_ids: Sequence[int],
+    *,
+    block: int = BLOCK,
+    reduce: str = "sum",
+    score_tokens: Sequence[int] | None = None,
 ) -> torch.Tensor:
     """Per-block attention mass of ``query_ids`` over the whole cached sequence.
 
     The query is run at the end of the sequence with full attention (every
     layer, every cached slot) and removed again; the session is unchanged.
     Layers are summed; within a layer ``reduce`` combines (query, head) rows.
+    ``score_tokens`` (indices into ``query_ids``) limits which tokens' rows count;
+    every token still runs, so the scored ones keep their context.
     """
 
     state = session.snapshot()
     length = session.length
     blocks = -(-length // block)
     total = torch.zeros(blocks, dtype=torch.float32, device=session.device)
+    query_start = session.next_position
+
+    def local(block_start: int, count: int) -> list[int] | None:
+        if score_tokens is None:
+            return None
+        offset = block_start - query_start
+        return [token - offset for token in score_tokens if 0 <= token - offset < count]
     if _fused_locate(session, block):
         # one pass over the cache per layer: the query's attention and its block mass together
         def attend(index, q_nope, q_pe_raw, latent, pe, block_start, regions):
@@ -231,7 +263,7 @@ def locate(
             attended, mass = latent_locate.locate_attention(
                 session.weights[index], session.cache, index, q_nope, q_pe_raw, latent, pe,
                 block_start, regions, positions=session.positions, rope=session.rope,
-                length=length, blocks=blocks, reduce=reduce,
+                length=length, blocks=blocks, reduce=reduce, keep_tokens=local(block_start, q_nope.shape[0]),
             )
             total += mass
             return attended
@@ -261,6 +293,7 @@ def locate(
             block=block,
             blocks=blocks,
             reduce=reduce,
+            keep_tokens=local(block_start, q_nope.shape[0]),
         )
 
     session._run(
@@ -447,10 +480,11 @@ def score_blocks(
     baseline: torch.Tensor | None = None,
     sink: int = 64,
     contrast_mode: str = "difference",
+    score_tokens: Sequence[int] | None = None,
 ) -> torch.Tensor:
     """Per-block relevance of ``query_ids``: located mass, contrasted with the baseline if given; sink at -inf."""
 
-    scores = locate(session, query_ids, block=BLOCK, reduce=reduce)
+    scores = locate(session, query_ids, block=BLOCK, reduce=reduce, score_tokens=score_tokens)
     if baseline is not None:
         scores = contrast(scores, baseline, contrast_mode)
     scores[: sink // BLOCK] = float("-inf")
@@ -548,6 +582,10 @@ def feedback_locate_and_reread(
     answer_tokens: int = 256,
     contrast_mode: str = "difference",
     near_window: int = 0,
+    follow_final: int = 32,
+    final_tokens: int = 64,
+    final_with_question: bool = False,
+    final_entity_rows: bool = False,
 ) -> dict:
     """Locate, re-read and answer; then locate again with the question *and the answer*.
 
@@ -562,6 +600,16 @@ def feedback_locate_and_reread(
     tends to confirm it rather than extend it).  Stops
     when the final answer (after the last ``Answer:``) no longer changes, or
     after ``rounds``.  The session is unchanged.
+
+    Each later round also adds the ``follow_final`` best blocks for the final
+    answer alone ("Answer: GHTAY").  The whole answer is what reaches a fact named
+    only in its reasoning (the key holder of a two-hop question), but its many
+    rows also light up code that shares its wording: at 3M slots the next link of
+    a variable chain ranked 154-241 under the whole answer, 76 with the question
+    in front of the final answer and 5-26 under the final answer alone, over four
+    hops (scripts/rank_followup.py) - hence 32 such blocks a round, left to the
+    line-level refine to sort out.  Scoring only the answer's own tokens
+    (``final_entity_rows``) did not rank better.
     """
 
     def encode(text: str) -> list[int]:
@@ -570,6 +618,8 @@ def feedback_locate_and_reread(
     length = session.length
     prompt = encode(f"\n\n{question} {answer_instruction}".rstrip() + "\n\nAssistant:")
     query = encode(f"\n\n{question}\n\nAssistant:")
+    final_query: list[int] = []
+    final_rows: list[int] | None = None
     chosen: list[int] = []
     answers: list[str] = []
     trace: list[dict] = []
@@ -580,10 +630,21 @@ def feedback_locate_and_reread(
         scores = score_blocks(
             session, query, reduce=reduce, baseline=baseline, sink=sink, contrast_mode=contrast_mode
         )
+        near_start = max(0, length - near_window) // BLOCK if near_window else None
         new = pick_blocks(
             scores, block=BLOCK, top=top if round_index == 0 else follow_top, exclude=chosen,
-            near_start=max(0, length - near_window) // BLOCK if near_window else None,
+            near_start=near_start,
         )
+        final_new: list[int] = []
+        if round_index > 0 and follow_final and final_query:
+            final_scores = score_blocks(
+                session, final_query, reduce=reduce, baseline=baseline, sink=sink, contrast_mode=contrast_mode,
+                score_tokens=final_rows,
+            )
+            final_new = pick_blocks(
+                final_scores, block=BLOCK, top=follow_final, exclude=chosen + new, near_start=near_start
+            )
+            new = new + final_new
         located = time.perf_counter()
         chosen.extend(new)
         spans = spans_from_blocks(chosen, block=BLOCK, neighbors=neighbors, length=length)
@@ -605,7 +666,7 @@ def feedback_locate_and_reread(
         )
         answer = tokenizer.decode(produced, skip_special_tokens=True).strip()
         trace.append({
-            "round": round_index + 1, "new_blocks": new, "lines": kept, "answer": answer,
+            "round": round_index + 1, "new_blocks": new, "final_blocks": final_new, "lines": kept, "answer": answer,
             "query_tokens": len(query), "answer_tokens": len(produced),
             "seconds": {"locate": round(located - began, 2), "reread": round(time.perf_counter() - located, 2)},
         })
@@ -624,6 +685,12 @@ def feedback_locate_and_reread(
         room = session.cache.capacity - session.length - len(head) - len(tail) - 8
         # the end of the answer holds its conclusion; cap what is located with
         query = head + encode(answer)[-min(answer_tokens, max(0, room)) :] + tail
+        conclusion = final_answer(answer) if "answer:" in answer.lower() else ", ".join(answer_items(answer))
+        named = encode(f" {conclusion}")[: min(final_tokens, max(0, room))] if conclusion else []
+        lead = (head if final_with_question else encode("\n\n")) + encode("Answer:")
+        final_query = lead + named + tail if named else []
+        # optionally only the named things' rows score (did not rank the next link better at 3M)
+        final_rows = list(range(len(lead), len(lead) + len(named))) if final_entity_rows else None
     return {
         "answer_ids": produced,
         "spans": spans,

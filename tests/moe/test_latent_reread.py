@@ -97,6 +97,25 @@ def test_block_mass_is_the_softmax_mass_summed_per_block(positions) -> None:
             rows.append(torch.zeros(-(-n // block)).index_add_(0, torch.arange(n) // block, p))
     assert torch.allclose(sharpest, torch.stack(rows).max(dim=0).values, atol=2e-2, rtol=2e-2)
 
+    # block = 1 (the line-level refine): one slot per block, taken without a rows x slots buffer
+    per_slot = block_mass(
+        weights, cache, 0, q_nope, q_pe_raw, start, regions,
+        positions=positions, rope=rope, block=1, blocks=n, tile=64, reduce="max",
+    )
+    slot_rows = []
+    for row in range(3):
+        position = torch.tensor([start + row])
+        for head in range(4):
+            q_abs = q_nope[row, head].float() @ weights.w_uk[head].float()
+            scores = stored_latent.float() @ q_abs
+            for k0, k1, relation in regions:
+                q_pe = rope.apply(
+                    q_pe_raw[row, head].view(1, 64), positions.query_positions(position, relation)
+                )[0]
+                scores[k0:k1] += stored_pe[k0:k1].float() @ q_pe
+            slot_rows.append(torch.softmax(scores * weights.softmax_scale, dim=0))
+    assert torch.allclose(per_slot, torch.stack(slot_rows).max(dim=0).values, atol=2e-3, rtol=2e-2)
+
 
 def test_pick_spans_skips_the_sink_and_merges_neighbours() -> None:
     mass = torch.zeros(20)
