@@ -15,7 +15,9 @@ its own forward:
   would take 13.8 GiB at 2M tokens).
 
 Decode attends over the whole cache with the absorbed form; the MoE of a single
-token goes through the runtime's own decode path.
+token goes through the runtime's own decode path.  ``generate`` on a short fp16
+context (a re-read answer) runs each step as one CUDA graph instead
+(:mod:`deepinfer.moe.graph_decode`).
 """
 
 from __future__ import annotations
@@ -43,6 +45,32 @@ from deepinfer.moe.latent_retrieval import (
 )
 
 
+def resident_experts(store, layer_idx: int, expert_ids: Sequence[int]):
+    """fp16 ``(gate, up, down)`` ``[E, out, in]`` for ``expert_ids``.
+
+    When the store keeps every routed expert packed in VRAM (the runtime pins
+    them all when they fit), dequantize from those bytes; ``load_experts``
+    stages its input from pinned host memory instead - 31 ms of PCIe per layer
+    for 64 experts, which was most of a prefill block's MoE time.  Falls back to
+    ``load_experts`` when any expert is not resident.
+    """
+
+    from deepinfer.moe.gpu_quant import dequantize_matrix
+
+    entries = [store._gpu_cache_get(layer_idx, int(e)) for e in expert_ids] if store.gpu_cache_enabled() else []
+    if not entries or any(entry is None for entry in entries):
+        return store.load_experts(layer_idx, expert_ids)
+    weights = []
+    for index, projection in enumerate(("gate", "up", "down")):
+        spec = store._specs[(layer_idx, projection)]
+        packed = torch.cat([entry[index].reshape(-1) for entry in entries])
+        matrix = dequantize_matrix(
+            packed, spec.quant_type, out_features=len(entries) * spec.out_features, in_features=spec.in_features,
+        )
+        weights.append(matrix.view(len(entries), spec.out_features, spec.in_features))
+    return tuple(weights)
+
+
 @torch.inference_mode()
 def moe_prefill(store, mlp, x: torch.Tensor, layer_idx: int, *, group: int = 16) -> torch.Tensor:
     """DeepseekV2MoE for many tokens: ``x [T, hidden] -> [T, hidden]``.
@@ -68,7 +96,7 @@ def moe_prefill(store, mlp, x: torch.Tensor, layer_idx: int, *, group: int = 16)
     active = [expert for expert, count in enumerate(counts) if count]
     for first in range(0, len(active), group):
         ids = active[first : first + group]
-        gate_w, up_w, down_w = store.load_experts(layer_idx, ids)
+        gate_w, up_w, down_w = resident_experts(store, layer_idx, ids)
         for slot, expert in enumerate(ids):
             lo, hi = offsets[expert], offsets[expert + 1]
             segment = routed_inputs[lo:hi]
@@ -83,6 +111,13 @@ def moe_prefill(store, mlp, x: torch.Tensor, layer_idx: int, *, group: int = 16)
 
 class DeepSeekLongContext:
     """One long sequence over a DeepSeekV2LiteGGUFRuntime's weights."""
+
+    # Up to this many tokens a prefill block's MoE goes through the runtime's
+    # fused kernels on the packed experts: moe_prefill dequantizes every routed
+    # expert of the layer first, ~0.2 s over 26 layers whatever the block holds
+    # (moe_prefill vs fused, 26 layers, 4080 SUPER, experts resident: 17 tokens
+    # 179 vs 104 ms; 162: 226 vs 306; 274: 229 vs 487; 7684: 673 vs 13626).
+    small_moe_tokens = 64
 
     def __init__(
         self,
@@ -380,13 +415,15 @@ class DeepSeekLongContext:
         self.slot_tokens[slot : slot + len(ids)] = ids
 
     def _run(
-        self, ids, start: int, *, context, progress, observe=None, bounded: bool = True
+        self, ids, start: int, *, context, progress, observe=None, bounded: bool = True, attend=None
     ) -> torch.Tensor:
         """Forward ``ids`` at logical ``start`` into fresh slots.
 
         ``context`` limits which earlier extents they attend to (``None``: all).
         ``observe(layer, q_nope, q_pe_raw, block_start, regions)`` is called with
-        each layer's queries, before attention.
+        each layer's queries, before attention.  ``attend(layer, q_nope, q_pe_raw,
+        latent, pe, block_start, regions)``, if given, replaces
+        :func:`prefill_attention` and returns the same ``[n, H, v_dim]``.
         """
 
         ids = torch.as_tensor(ids, dtype=torch.long).view(-1)
@@ -414,20 +451,23 @@ class DeepSeekLongContext:
                 self.cache.write(index, slot, latent, pe)
                 if observe is not None:
                     observe(index, q_nope, q_pe, block_start, regions)
-                attended = prefill_attention(
-                    self.weights[index],
-                    self.cache,
-                    index,
-                    q_nope,
-                    q_pe,
-                    latent,
-                    pe,
-                    block_start,
-                    positions=self.positions,
-                    rope=self.rope,
-                    tile_tokens=self.tile_tokens,
-                    regions=regions,
-                )
+                if attend is not None:
+                    attended = attend(index, q_nope, q_pe, latent, pe, block_start, regions)
+                else:
+                    attended = prefill_attention(
+                        self.weights[index],
+                        self.cache,
+                        index,
+                        q_nope,
+                        q_pe,
+                        latent,
+                        pe,
+                        block_start,
+                        positions=self.positions,
+                        rope=self.rope,
+                        tile_tokens=self.tile_tokens,
+                        regions=regions,
+                    )
                 hidden = hidden + layer.self_attn.o_proj(
                     attended.reshape(block_length, self.num_heads * self.v_dim)
                 )
@@ -435,8 +475,10 @@ class DeepSeekLongContext:
                 torch.cuda.synchronize()
                 started = self._tick("prefill_attention", started)
                 x = layer.post_attention_layernorm(hidden)
-                if index in self.moe_layers:
+                if index in self.moe_layers and block_length > self.small_moe_tokens:
                     hidden = hidden + moe_prefill(store, layer.mlp, x, index)
+                elif index in self.moe_layers:
+                    hidden = hidden + layer.mlp(x.unsqueeze(0))[0]
                 else:
                     hidden = hidden + layer.mlp(x)
                 del x
@@ -537,13 +579,20 @@ class DeepSeekLongContext:
         """Greedy continuation of ``prompt_ids`` appended to the cache.
 
         With retrieval on, the prompt is fed token by token so that it, too,
-        only sees the retrieved blocks.
+        only sees the retrieved blocks.  A short fp16 context in VRAM decodes
+        through :class:`~deepinfer.moe.graph_decode.GraphDecoder` (one CUDA
+        graph per step, no host round trip inside it).
         """
+
+        from deepinfer.moe import graph_decode
 
         if self.retrieval is not None:
             logits = self.feed(prompt_ids)
         else:
             logits = self.prefill(prompt_ids, bounded=False)
+        if int(max_new_tokens) > 1 and graph_decode.usable(self):
+            decoder = graph_decode.GraphDecoder(self, steps=int(max_new_tokens))
+            return decoder.greedy(logits, max_new_tokens=int(max_new_tokens), stop_ids=stop_ids)
         produced: list[int] = []
         stops = {int(token) for token in stop_ids}
         for _ in range(int(max_new_tokens)):

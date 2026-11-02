@@ -1,0 +1,93 @@
+{
+ "tokens": 2097152,
+ "gpu_tokens": 933525,
+ "kv": "fp8",
+ "gpu": "NVIDIA GeForce RTX 4080 SUPER",
+ "locate": {
+  "neutral": {
+   "query_tokens": 16,
+   "runs": [
+    {
+     "seconds": 3.89,
+     "peak_extra_gib": 0.94
+    },
+    {
+     "seconds": 2.68,
+     "peak_extra_gib": 0.94
+    }
+   ]
+  },
+  "question": {
+   "query_tokens": 17,
+   "runs": [
+    {
+     "seconds": 2.76,
+     "peak_extra_gib": 0.95
+    },
+    {
+     "seconds": 2.76,
+     "peak_extra_gib": 0.95
+    }
+   ]
+  },
+  "question+answer": {
+   "query_tokens": 274,
+   "runs": [
+    {
+     "seconds": 13.87,
+     "moe": 0.435,
+     "peak_extra_gib": 1.47
+    },
+    {
+     "seconds": 13.66,
+     "moe": 0.298,
+     "peak_extra_gib": 1.47
+    }
+   ]
+  }
+ },
+ "refine": {
+  "document_tokens": 7684,
+  "compact_tokens": 162,
+  "runs": [
+   {
+    "seconds": 2.2,
+    "attention": 0.29,
+    "moe": 1.087,
+    "short_prefill": 1.05,
+    "block_mass": 0.248
+   },
+   {
+    "seconds": 2.62,
+    "attention": 0.318,
+    "moe": 1.482,
+    "short_prefill": 1.154,
+    "block_mass": 0.262
+   }
+  ]
+ },
+ "answer": {
+  "compact_tokens": 162,
+  "decode_tokens": 200,
+  "graph": {
+   "prefill_seconds": [
+    0.432,
+    0.44
+   ],
+   "generate_ms_per_token": [
+    20.1,
+    16.3
+   ]
+  },
+  "steps": {
+   "prefill_seconds": [
+    0.433,
+    0.464
+   ],
+   "generate_ms_per_token": [
+    113.7,
+    146.1
+   ]
+  }
+ }
+}

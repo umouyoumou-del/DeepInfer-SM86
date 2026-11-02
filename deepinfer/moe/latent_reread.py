@@ -33,16 +33,20 @@ been found, and the next locate runs with question + answer.
 
 from __future__ import annotations
 
+import os
 import re
+import time
 from collections.abc import Sequence
 
 import torch
 
+from deepinfer.moe import latent_locate
 from deepinfer.moe.latent_mla import (
     DualChunkPositions,
     LatentKVCache,
     LatentRope,
     MLAWeights,
+    extent_regions,
 )
 
 BLOCK = 64
@@ -187,6 +191,17 @@ def pick_spans(
     return spans_from_blocks(chosen, block=block, neighbors=neighbors, length=length)
 
 
+def _fused_locate(session, block: int) -> bool:
+    """Whether :func:`locate` can take the one-pass Triton path (``DEEPINFER_FUSED_LOCATE=0`` turns it off)."""
+
+    if os.environ.get("DEEPINFER_FUSED_LOCATE", "1") == "0" or block != latent_locate.BLOCK:
+        return False
+    if not latent_locate.available() or torch.device(session.device).type != "cuda":
+        return False
+    regions = extent_regions(session.extents, session.next_position, session.positions)
+    return latent_locate.aligned(regions, session.length)
+
+
 def _logical(extents, slot: int) -> int:
     for p0, p1, l0 in extents:
         if p0 <= slot < p1:
@@ -209,6 +224,26 @@ def locate(
     length = session.length
     blocks = -(-length // block)
     total = torch.zeros(blocks, dtype=torch.float32, device=session.device)
+    if _fused_locate(session, block):
+        # one pass over the cache per layer: the query's attention and its block mass together
+        def attend(index, q_nope, q_pe_raw, latent, pe, block_start, regions):
+            nonlocal total
+            attended, mass = latent_locate.locate_attention(
+                session.weights[index], session.cache, index, q_nope, q_pe_raw, latent, pe,
+                block_start, regions, positions=session.positions, rope=session.rope,
+                length=length, blocks=blocks, reduce=reduce,
+            )
+            total += mass
+            return attended
+
+        try:
+            session._run(
+                query_ids, session.next_position, context=None, progress=None,
+                attend=attend, bounded=False,
+            )
+        finally:
+            session.restore(state)
+        return total
 
     def observe(index, q_nope, q_pe_raw, block_start, regions):
         nonlocal total
@@ -541,6 +576,7 @@ def feedback_locate_and_reread(
     produced: list[int] = []
     spans: list[tuple[int, int]] = []
     for round_index in range(int(rounds)):
+        began = time.perf_counter()
         scores = score_blocks(
             session, query, reduce=reduce, baseline=baseline, sink=sink, contrast_mode=contrast_mode
         )
@@ -548,6 +584,7 @@ def feedback_locate_and_reread(
             scores, block=BLOCK, top=top if round_index == 0 else follow_top, exclude=chosen,
             near_start=max(0, length - near_window) // BLOCK if near_window else None,
         )
+        located = time.perf_counter()
         chosen.extend(new)
         spans = spans_from_blocks(chosen, block=BLOCK, neighbors=neighbors, length=length)
         kept: list[str] = []
@@ -567,7 +604,11 @@ def feedback_locate_and_reread(
             refine_query=None if round_index == 0 else query,
         )
         answer = tokenizer.decode(produced, skip_special_tokens=True).strip()
-        trace.append({"round": round_index + 1, "new_blocks": new, "lines": kept, "answer": answer})
+        trace.append({
+            "round": round_index + 1, "new_blocks": new, "lines": kept, "answer": answer,
+            "query_tokens": len(query), "answer_tokens": len(produced),
+            "seconds": {"locate": round(located - began, 2), "reread": round(time.perf_counter() - located, 2)},
+        })
         final = answer_key(answer)
         # a round that neither wrote "Answer: ..." nor named a code / identifier (it ran
         # out, or talked about something else) has not committed and cannot end the search
