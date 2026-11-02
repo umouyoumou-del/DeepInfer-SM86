@@ -32,6 +32,7 @@ exactly ordinary RoPE.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 import torch
@@ -411,31 +412,69 @@ class LatentKVCache:
         if self.gpu_scale is not None:
             yield "scale", self.gpu_scale, self.host_scale
 
-    def save(self, directory: str, *, meta: dict | None = None) -> None:
+    def _write_layer(self, handle, gpu: torch.Tensor, host, layer: int, count: int) -> None:
+        for where, lo, hi, offset in self._segments(0, count):
+            rows = (gpu if where == "gpu" else host)[layer, offset : offset + hi - lo]
+            handle.write(rows.view(torch.uint8).cpu().numpy())
+
+    def save(
+        self,
+        directory: str,
+        *,
+        meta: dict | None = None,
+        spill: Sequence[str] = (),
+        margin: int = 1 << 30,
+    ) -> None:
         """Write the first ``length`` positions of every layer to ``directory``.
 
         Raw rows, layer-major, one file per array, plus ``cache.json``.
         Loading it back skips the prefill that produced it.
+
+        With ``spill`` directories (other disks) every array is written as one
+        file per layer instead, each into the first directory - ``directory``
+        first - that keeps ``margin`` bytes free after it; ``cache.json`` records
+        where each went.  A 2M fp8 cache is 34.6 GiB, more than either disk of
+        the test host has.  Written pages are flushed and dropped from the page
+        cache file by file, which a container's memory limit counts.
         """
 
         import json
         import os
 
         os.makedirs(directory, exist_ok=True)
+        for folder in spill:
+            os.makedirs(folder, exist_ok=True)
+        directories = [directory, *spill]
         count = self.length
+        files: dict[str, list[int]] = {}
         for name, gpu, host in self._arrays():
-            with open(os.path.join(directory, f"{name}.bin"), "wb") as handle:
-                for layer in range(self.num_layers):
-                    for where, lo, hi, offset in self._segments(0, count):
-                        source = gpu if where == "gpu" else host
-                        rows = source[layer, offset : offset + hi - lo]
-                        handle.write(rows.view(torch.uint8).cpu().numpy().tobytes())
+            if not spill:
+                with open(os.path.join(directory, f"{name}.bin"), "wb") as handle:
+                    for layer in range(self.num_layers):
+                        self._write_layer(handle, gpu, host, layer, count)
+                    _drop_pages(handle, written=True)
+                continue
+            size = count * gpu.shape[-1] * gpu.element_size()
+            files[name] = []
+            for layer in range(self.num_layers):
+                index = next(
+                    (i for i, folder in enumerate(directories) if _free_bytes(folder) >= size + margin), None
+                )
+                if index is None:
+                    raise OSError(f"no room for {name} layer {layer} ({size / 2**30:.2f} GiB) in {directories}")
+                with open(os.path.join(directories[index], f"{name}.{layer:02d}.bin"), "wb") as handle:
+                    self._write_layer(handle, gpu, host, layer, count)
+                    _drop_pages(handle, written=True)
+                files[name].append(index)
         info = {
             "num_layers": self.num_layers,
             "length": count,
             "kv_dtype": self.kv_dtype,
             "meta": meta or {},
         }
+        if spill:
+            info["directories"] = [os.path.abspath(folder) for folder in directories]
+            info["files"] = files
         with open(os.path.join(directory, "cache.json"), "w", encoding="utf-8") as handle:
             json.dump(info, handle, indent=2)
 
@@ -448,12 +487,15 @@ class LatentKVCache:
         gpu_tokens: int | None = None,
         device: torch.device | str = "cuda",
     ) -> tuple[LatentKVCache, dict]:
-        """Inverse of :meth:`save`; returns the cache and the saved ``meta``."""
+        """Inverse of :meth:`save`; returns the cache and the saved ``meta``.
+
+        Host-memory rows are read straight into the (pinned) cache; GPU rows go
+        through a bounded staging buffer.  A per-layer cache's first directory is
+        ``directory`` itself, wherever it was saved.
+        """
 
         import json
         import os
-
-        import numpy as np
 
         with open(os.path.join(directory, "cache.json"), encoding="utf-8") as handle:
             info = json.load(handle)
@@ -465,22 +507,68 @@ class LatentKVCache:
             kv_dtype=info["kv_dtype"],
             device=device,
         )
+        files = info.get("files")
+        directories = info.get("directories") or [directory]
         for name, gpu, host in cache._arrays():
             row_bytes = gpu.shape[-1] * gpu.element_size()
-            path = os.path.join(directory, f"{name}.bin")
             for layer in range(cache.num_layers):
-                for where, lo, hi, offset in cache._segments(0, count):
-                    raw = np.fromfile(
-                        path,
-                        dtype=np.uint8,
-                        count=(hi - lo) * row_bytes,
-                        offset=(layer * count + lo) * row_bytes,
-                    )
-                    rows = torch.from_numpy(raw).view(gpu.dtype).view(hi - lo, gpu.shape[-1])
-                    target = gpu if where == "gpu" else host
-                    target[layer, offset : offset + hi - lo].copy_(rows)
+                if files is None:
+                    path, base = os.path.join(directory, f"{name}.bin"), layer * count * row_bytes
+                else:
+                    index = int(files[name][layer])
+                    folder = directory if index == 0 else directories[index]
+                    path, base = os.path.join(folder, f"{name}.{layer:02d}.bin"), 0
+                with open(path, "rb", buffering=0) as handle:
+                    for where, lo, hi, offset in cache._segments(0, count):
+                        handle.seek(base + lo * row_bytes)
+                        target = (gpu if where == "gpu" else host)[layer, offset : offset + hi - lo]
+                        _read_rows(handle, target)
+                    _drop_pages(handle, written=False)
         cache.length = count
         return cache, info.get("meta", {})
+
+
+def _free_bytes(directory: str) -> int:
+    import shutil
+
+    return int(shutil.disk_usage(directory).free)
+
+
+def _drop_pages(handle, *, written: bool) -> None:
+    """Flush a file and let the kernel drop its pages (no-op where posix_fadvise is missing)."""
+
+    import os
+
+    if written:
+        handle.flush()
+        os.fsync(handle.fileno())
+    if hasattr(os, "posix_fadvise"):
+        os.posix_fadvise(handle.fileno(), 0, 0, os.POSIX_FADV_DONTNEED)
+
+
+def _read_rows(handle, target: torch.Tensor, *, staging: int = 256 << 20) -> None:
+    """Fill ``target`` (contiguous rows) from the file position: host rows in place, GPU rows via a staging buffer."""
+
+    import numpy as np
+
+    def read_exact(view: memoryview) -> None:
+        while len(view):
+            got = handle.readinto(view)
+            if not got:
+                raise OSError("cache file ended early")
+            view = view[got:]
+
+    if target.device.type == "cpu":
+        read_exact(memoryview(target.view(torch.uint8).numpy()).cast("B"))
+        return
+    row_bytes = target.shape[-1] * target.element_size()
+    step = max(1, staging // row_bytes)
+    buffer = np.empty(min(target.shape[0], step) * row_bytes, dtype=np.uint8)
+    for first in range(0, target.shape[0], step):
+        rows = min(step, target.shape[0] - first)
+        chunk = buffer[: rows * row_bytes]
+        read_exact(memoryview(chunk))
+        target[first : first + rows].copy_(torch.from_numpy(chunk).view(target.dtype).view(rows, -1))
 
 
 # ---------------------------------------------------------------- attention

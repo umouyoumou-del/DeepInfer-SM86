@@ -242,6 +242,39 @@ def test_cache_save_load_round_trip(tmp_path, kv_dtype: str) -> None:
             assert torch.equal(got, want)
 
 
+@pytest.mark.parametrize("kv_dtype", ["fp16", "fp8"])
+@pytest.mark.parametrize("device", ["cpu", pytest.param("cuda", marks=pytest.mark.skipif(not CUDA, reason="CUDA"))])
+def test_cache_save_spills_layers_to_a_second_directory(tmp_path, monkeypatch, kv_dtype: str, device: str) -> None:
+    import json
+
+    from deepinfer.moe import latent_mla
+
+    torch.manual_seed(0)
+    # on CUDA 25 of the 40 rows sit on the GPU and the rest in pinned host memory
+    gpu_tokens = 25 if device == "cuda" else None
+    cache = LatentKVCache(num_layers=3, capacity=50, gpu_tokens=gpu_tokens, kv_dtype=kv_dtype, device=device)
+    for layer in range(3):
+        latent = torch.randn(40, 512, device=device).half() * (layer + 1)
+        cache.write(layer, 0, latent, torch.randn(40, 64, device=device).half())
+    primary, spare = tmp_path / "a", tmp_path / "b"
+    latent_file = 40 * 512 * (1 if kv_dtype == "fp8" else 2)
+    room = {str(primary): 2 * latent_file, str(spare): 1 << 40}  # the first disk takes two latent layers
+
+    def free_bytes(directory: str) -> int:
+        used = sum(path.stat().st_size for path in tmp_path.glob(f"{directory[-1]}/*.bin"))
+        return room[directory] - used
+
+    monkeypatch.setattr(latent_mla, "_free_bytes", free_bytes)
+    cache.save(str(primary), meta={"document": "abc"}, spill=[str(spare)], margin=0)
+    info = json.loads((primary / "cache.json").read_text(encoding="utf-8"))
+    assert info["files"]["latent"] == [0, 0, 1] and info["files"]["pe"] == [1, 1, 1]
+    loaded, meta = LatentKVCache.load(str(primary), capacity=60, gpu_tokens=gpu_tokens, device=device)
+    assert meta == {"document": "abc"} and loaded.length == 40 and loaded.capacity == 60
+    for layer in range(3):
+        for got, want in zip(loaded.tile(layer, 0, 40), cache.tile(layer, 0, 40), strict=True):
+            assert torch.equal(got, want)
+
+
 @pytest.mark.skipif(not CUDA, reason="pinned host tier needs CUDA")
 @pytest.mark.parametrize("kv_dtype", ["fp16", "fp8"])
 def test_host_tier_reads_back_what_was_written(kv_dtype: str) -> None:

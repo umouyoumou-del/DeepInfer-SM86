@@ -366,6 +366,12 @@ def main() -> None:
         "--near-window", type=int, default=0,
         help="give the last N tokens a share of the located blocks in proportion to their length (0 = off)",
     )
+    parser.add_argument("--save-cache", default="", help="after prefilling, save the latent cache here")
+    parser.add_argument(
+        "--save-spill", default="",
+        help="comma-separated directories (other disks) for the layers that do not fit in --save-cache",
+    )
+    parser.add_argument("--load-cache", default="", help="load a cache saved by --save-cache instead of prefilling")
     parser.add_argument("--plan-only", action="store_true")
     parser.add_argument("--diagnose", action="store_true", help="rank needles under each locate scoring, then stop")
     parser.add_argument("--then-answer", action="store_true", help="with --diagnose: answer the questions afterwards")
@@ -414,22 +420,47 @@ def main() -> None:
         DualChunkPositions.plain() if args.positions == "plain"
         else DualChunkPositions(trained, trained * 3 // 4, args.far)
     )
-    session = DeepSeekLongContext(
-        rt, capacity=capacity, gpu_tokens=gpu_tokens, kv_dtype=args.kv, positions=positions,
-        prefill_chunk=args.chunk, tile_tokens=args.tile, encode_window=args.encode_window or None,
-    )
-    last = [0.0]
+    # what a saved cache must have been built with to stand in for this run's prefill
+    built = {
+        "model": args.model, "document_sha256": document_hash(document), "tokens": len(document),
+        "encode_window": args.encode_window or None, "trained": positions.trained, "chunk": positions.chunk,
+    }
+    prefill_seconds = load_seconds = save_seconds = None
+    if args.load_cache:
+        started = time.perf_counter()
+        session, saved = DeepSeekLongContext.load(
+            rt, args.load_cache, capacity=capacity, gpu_tokens=gpu_tokens, far=positions.far,
+            prefill_chunk=args.chunk, tile_tokens=args.tile, encode_window=args.encode_window or None,
+        )
+        torch.cuda.synchronize()
+        load_seconds = time.perf_counter() - started
+        mismatched = {key: (saved.get(key), value) for key, value in built.items() if saved.get(key) != value}
+        if mismatched or session.cache.kv_dtype != args.kv:
+            raise SystemExit(f"the saved cache was built differently (saved, wanted): {mismatched}")
+        print(f"loaded {session.length:,}-token cache in {load_seconds:.1f} s (prefill skipped)", flush=True)
+    else:
+        session = DeepSeekLongContext(
+            rt, capacity=capacity, gpu_tokens=gpu_tokens, kv_dtype=args.kv, positions=positions,
+            prefill_chunk=args.chunk, tile_tokens=args.tile, encode_window=args.encode_window or None,
+        )
+        last = [0.0]
 
-    def progress(done: int, total: int, elapsed: float) -> None:
-        if elapsed - last[0] >= 120 or done == total:
-            last[0] = elapsed
-            print(f"  prefill {done:,}/{total:,} tokens, {elapsed / 60:.1f} min", flush=True)
+        def progress(done: int, total: int, elapsed: float) -> None:
+            if elapsed - last[0] >= 120 or done == total:
+                last[0] = elapsed
+                print(f"  prefill {done:,}/{total:,} tokens, {elapsed / 60:.1f} min", flush=True)
 
-    started = time.perf_counter()
-    session.prefill(document, progress=progress)
-    torch.cuda.synchronize()
-    prefill_seconds = time.perf_counter() - started
-    print(f"prefill {session.length:,} tokens in {prefill_seconds / 60:.1f} min", flush=True)
+        started = time.perf_counter()
+        session.prefill(document, progress=progress)
+        torch.cuda.synchronize()
+        prefill_seconds = time.perf_counter() - started
+        print(f"prefill {session.length:,} tokens in {prefill_seconds / 60:.1f} min", flush=True)
+        if args.save_cache:
+            started = time.perf_counter()
+            spill = [folder for folder in args.save_spill.split(",") if folder]
+            session.save(args.save_cache, meta=built, spill=spill)
+            save_seconds = time.perf_counter() - started
+            print(f"saved the cache to {[args.save_cache, *spill]} in {save_seconds:.0f} s", flush=True)
     if args.diagnose:
         report = rank_report(session, tok, questions, needles, near_window=args.encode_window or 98304)
         if args.out:
@@ -544,7 +575,10 @@ def main() -> None:
                     "model": args.model, "tokens": len(document), "document_sha256": document_hash(document),
                     "positions": args.positions, "trained": trained if args.positions == "dca" else None,
                     "kv": args.kv, "encode_window": args.encode_window or None, "gpu_tokens": gpu_tokens,
-                    "experts": "streamed" if unpin else "pinned", "prefill_seconds": round(prefill_seconds, 1),
+                    "experts": "streamed" if unpin else "pinned",
+                    "prefill_seconds": None if prefill_seconds is None else round(prefill_seconds, 1),
+                    "load_seconds": None if load_seconds is None else round(load_seconds, 1),
+                    "save_seconds": None if save_seconds is None else round(save_seconds, 1),
                     "score": args.score, "near_window": args.near_window, "refine": args.refine, "order": args.order, "top": args.top, "follow_top": args.follow_top, "rounds": args.rounds,
                     "neighbors": args.neighbors, "seed": args.seed, "summary": summary,
                     "needles": needles, "results": results,

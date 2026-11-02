@@ -207,8 +207,12 @@ class DeepSeekLongContext:
         if self.bounds is not None:
             self.bounds.ready = min(self.bounds.ready, int(length) // self.bounds.block)
 
-    def save(self, directory: str, *, meta: dict | None = None) -> None:
-        """Persist the cache with its layout, so a later session skips the prefill."""
+    def save(self, directory: str, *, meta: dict | None = None, spill: Sequence[str] = ()) -> None:
+        """Persist the cache with its layout, so a later session skips the prefill.
+
+        ``spill``: more directories (disks) to spread a cache over that does not
+        fit in ``directory`` (see :meth:`LatentKVCache.save`).
+        """
 
         import os
 
@@ -224,6 +228,7 @@ class DeepSeekLongContext:
                 "chunk": self.positions.chunk,
                 "far": self.positions.far,
             },
+            spill=spill,
         )
         tokens = self.slot_tokens[: self.length]
         if len(tokens) == self.length:  # lets a loaded session re-read located text
