@@ -135,6 +135,7 @@ class LongContextChat:
         self.state = "idle"
         self.rate = 0.0  # tokens / s of the last chunks
         self.turns = 0
+        self.history: list[tuple[str, str]] = []  # (question, final answer), all turns
         self.last: dict = {}
         self._baseline = None
         self._baseline_length = -1
@@ -168,11 +169,15 @@ class LongContextChat:
         self.jobs.put(INGEST, ("ingest", source, ids))
         return source
 
-    def ask(self, question: str, *, deep: bool = False) -> queue.Queue:
-        """Queue a question; events (dicts) arrive on the returned queue, ``done`` or ``error`` last."""
+    def ask(self, question: str, *, deep: bool = False, instruction: str | None = None) -> queue.Queue:
+        """Queue a question; events (dicts) arrive on the returned queue, ``done`` or ``error`` last.
+
+        ``instruction`` replaces the default quote-then-answer one (the demo's questions
+        carry the instructions they were evaluated with).
+        """
 
         events: queue.Queue = queue.Queue()
-        self.jobs.put(ASK, ("ask", question, deep, events))
+        self.jobs.put(ASK, ("ask", question, deep, events, instruction))
         return events
 
     def reset(self) -> None:
@@ -205,7 +210,7 @@ class LongContextChat:
                 if job[0] == "ingest":
                     self._ingest(seq, job[1], job[2])
                 elif job[0] == "ask":
-                    self._answer(job[1], job[2], job[3])
+                    self._answer(job[1], job[2], job[3], job[4])
                 elif job[0] == "reset":
                     self._reset(job[1])
             except Exception as error:  # noqa: BLE001 - the worker must survive a failed job
@@ -250,7 +255,7 @@ class LongContextChat:
             self._baseline_length = self.session.length
         return self._baseline
 
-    def _answer(self, question: str, deep: bool, events: queue.Queue) -> None:
+    def _answer(self, question: str, deep: bool, events: queue.Queue, instruction: str | None = None) -> None:
         from deepinfer.moe.latent_reread import (
             BLOCK,
             Refine,
@@ -305,7 +310,7 @@ class LongContextChat:
                 })
 
         detail = feedback_locate_and_reread(
-            session, self.tok, question, answer_instruction=QUOTE_FIRST,
+            session, self.tok, question, answer_instruction=instruction or QUOTE_FIRST, preamble=self._recent(),
             header_ids=self.header_ids, separator_ids=self.separator_ids, baseline=baseline, reduce="max",
             top=32, follow_top=8, neighbors=1, rounds=8 if deep else 1, max_new_tokens=1024,
             stop_ids=[self.tok.eos_token_id], refine=refine, near_window=self.near_window, follow_final=32,
@@ -335,8 +340,22 @@ class LongContextChat:
         }
         with self.lock:
             self.turns += 1
+            self.history.append((question, final_answer(answer)))
             self.last = summary
         events.put({"event": "done", "answer": answer, "final": final_answer(answer), **summary})
+
+    def _recent(self, turns: int = 16, answer_chars: int = 300) -> str:
+        """The latest turns, numbered from the start, for the answer prompt: located text alone
+        does not say which question came first."""
+
+        if not self.history:
+            return ""
+        first = max(0, len(self.history) - turns)
+        lines = ["Earlier in this conversation:"]
+        for number, (question, answer) in enumerate(self.history[first:], start=first + 1):
+            lines.append(f"Q{number}: {question}")
+            lines.append(f"A{number}: {answer[:answer_chars]}")
+        return "\n".join(lines)
 
     def _reset(self, done: threading.Event) -> None:
         with self.lock:
@@ -345,6 +364,7 @@ class LongContextChat:
             self.sources = []
             self.queued_tokens = 0
             self.turns = 0
+            self.history = []
             self.last = {}
         self.session.truncate(len(self.header_ids))
         self._baseline_length = -1

@@ -20,6 +20,7 @@ class _Service:
 
     def __init__(self) -> None:
         self.added: list[tuple[str, str]] = []
+        self.instructions: list[str | None] = []
 
     def status(self) -> dict:
         return {"context": 7, "capacity": 100, "queued": 0, "sources": []}
@@ -30,7 +31,8 @@ class _Service:
         self.added.append((name, text))
         return types.SimpleNamespace(name=name, tokens=len(text))
 
-    def ask(self, question: str, *, deep: bool = False) -> queue.Queue:
+    def ask(self, question: str, *, deep: bool = False, instruction: str | None = None) -> queue.Queue:
+        self.instructions.append(instruction)
         events: queue.Queue = queue.Queue()
         events.put({"event": "start", "question": question, "context": 7, "deep": deep})
         events.put({"event": "text", "round": 1, "text": "Answer: 42"})
@@ -87,6 +89,16 @@ def test_ask_streams_events_until_done(server) -> None:
     events = [json.loads(line[6:]) for line in body.decode().split("\n\n") if line.startswith("data: ")]
     assert [event["event"] for event in events] == ["start", "text", "done"]
     assert events[0]["deep"] is True and events[-1]["final"] == "42"
+
+
+def test_demo_questions_carry_their_evaluation_instruction(server) -> None:
+    longctx_chat.DEMO["instructions"] = {"Which VAR?": "Simulate the VAR lines."}
+    try:
+        for question in ("Which VAR?", "Something else?"):
+            _post(server + "/ask?key=secret", json.dumps({"question": question}).encode())
+    finally:
+        longctx_chat.DEMO["instructions"] = {}
+    assert longctx_chat.SERVICE.instructions == ["Simulate the VAR lines.", None]
 
 
 def test_an_empty_question_is_a_bad_request(server) -> None:

@@ -106,7 +106,7 @@ async function poll() {
       (s.segments.length ? ` · 从第 ${fmt(s.segments[0][0])} 个 token 起` : '') + '</span></div>').join('');
     if (status.demo_questions && status.demo_questions.length && !$('samples').dataset.filled) {
       $('samples').dataset.filled = '1';
-      $('samples').innerHTML = '<h3 style="margin-top:14px">演示问题（点击填入）</h3>' + status.demo_questions.map(q =>
+      $('samples').innerHTML = '<h3 style="margin-top:14px">演示问题（点击填入）</h3><div class="sub">这些问题会带上评测时用的作答指令；自己的问题用通用指令。</div>' + status.demo_questions.map(q =>
         `<button type="button">${esc(q)}</button>`).join('');
       [...$('samples').querySelectorAll('button')].forEach(b => b.onclick = () => { $('question').value = b.textContent; $('question').focus(); });
     }

@@ -6,7 +6,7 @@ Serves a page and a small JSON / server-sent-events API over one
     GET  /?key=K                 the page
     GET  /status?key=K           context length, queue, read rate, sources, last answer
     POST /ingest?key=K&name=N    body: UTF-8 text, queued for encoding (the page sends files in pieces)
-    POST /ask?key=K              {"question": ..., "deep": false} -> text/event-stream
+    POST /ask?key=K              {"question": ..., "deep": true, "instruction": optional} -> text/event-stream
     POST /demo?key=K             {"tokens": 3145728} -> the complex suite's haystack and its 39 needles
     POST /reset?key=K            back to an empty context
 
@@ -40,7 +40,7 @@ from deepinfer.moe.longctx_service import LongContextChat, Source, build_session
 PAGE = Path(__file__).with_name("longctx_chat.html")
 SERVICE: LongContextChat | None = None
 KEY = ""
-DEMO: dict = {"questions": []}
+DEMO: dict = {"questions": [], "instructions": {}}
 MAX_BODY = 64 << 20
 
 
@@ -111,13 +111,15 @@ class Handler(BaseHTTPRequestHandler):
                 question = str(request.get("question", "")).strip()
                 if not question:
                     raise ValueError("empty question")
-                self._stream(SERVICE.ask(question, deep=bool(request.get("deep"))))
+                # the demo's questions are answered with the instructions they were evaluated with
+                instruction = request.get("instruction") or DEMO["instructions"].get(question)
+                self._stream(SERVICE.ask(question, deep=bool(request.get("deep")), instruction=instruction))
             elif path == "/demo":
                 request = json.loads(body or b"{}")
                 self._json(HTTPStatus.OK, load_demo(int(request.get("tokens") or 3145728)))
             elif path == "/reset":
                 SERVICE.reset()
-                DEMO["questions"] = []
+                DEMO["questions"], DEMO["instructions"] = [], {}
                 self._json(HTTPStatus.OK, {"context": SERVICE.session.length})
             else:
                 self._json(HTTPStatus.NOT_FOUND, {"error": "no such endpoint"})
@@ -156,6 +158,7 @@ def load_demo(tokens: int) -> dict:
     body = document[len(header_ids(SERVICE.tok)):]
     source = SERVICE.add_ids(body, f"演示：Python 标准库草堆 + 39 根针（{len(document):,} token）", kind="demo")
     DEMO["questions"] = [q["question"] for q in questions]
+    DEMO["instructions"] = {q["question"]: q["instruction"] for q in questions}
     return {"name": source.name, "tokens": source.tokens, "questions": DEMO["questions"]}
 
 

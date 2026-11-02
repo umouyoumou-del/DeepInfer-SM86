@@ -617,6 +617,7 @@ def feedback_locate_and_reread(
     final_with_question: bool = False,
     final_entity_rows: bool = False,
     on_event=None,
+    preamble: str = "",
 ) -> dict:
     """Locate, re-read and answer; then locate again with the question *and the answer*.
 
@@ -645,14 +646,17 @@ def feedback_locate_and_reread(
     ``on_event(dict)``, if given, follows the search as it happens: ``located``
     (a round's new blocks and the time it took), ``tokens`` (the round's answer
     ids as they are generated) and ``answer`` (the round's answer, the lines it
-    read with their positions, and whether the search stops).
+    read with their positions, and whether the search stops).  ``preamble`` goes
+    between the re-read text and the question in the answer prompt (a chat's
+    recent turns); it is not located with.
     """
 
     def encode(text: str) -> list[int]:
         return tokenizer.encode(text, add_special_tokens=False)
 
     length = session.length
-    prompt = encode(f"\n\n{question} {answer_instruction}".rstrip() + "\n\nAssistant:")
+    lead = f"\n\n{preamble.strip()}" if preamble.strip() else ""
+    prompt = encode(f"{lead}\n\n{question} {answer_instruction}".rstrip() + "\n\nAssistant:")
     query = encode(f"\n\n{question}\n\nAssistant:")
     final_query: list[int] = []
     final_rows: list[int] | None = None
