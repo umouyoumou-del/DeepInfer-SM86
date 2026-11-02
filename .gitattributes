@@ -1,0 +1,2 @@
+# sh refuses CRLF: keep the installer LF in Windows checkouts too
+install.sh text eol=lf

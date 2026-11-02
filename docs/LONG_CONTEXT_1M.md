@@ -492,7 +492,8 @@ prefill 要 25 分钟。工作台读一次，之后把实验脚本丢进一个�
 
 ### 4.10 流式输入：边读边问的 3M 对话
 
-`apps/longctx_chat.py`（页面 `longctx_chat.html`，命令行 `scripts/longctx_client.py`），核心在
+`deepinfer-server` 命令（`deepinfer/cli/serve.py`，页面 `deepinfer/cli/static/longctx_chat.html`；
+`apps/longctx_chat.py` 保留旧命令行，命令行客户端 `scripts/longctx_client.py`），核心在
 `deepinfer/moe/longctx_service.py`：
 
 - **一个工作线程独占 GPU**。文本一到就分词、排队；工作线程每次编码 16K token（有界编码，与 prefill 相同），

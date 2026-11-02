@@ -45,6 +45,72 @@ engine。当前重点是：
 
 ---
 
+## 安装与使用（和 llama.cpp 一样：一行装好，几个命令）
+
+装好后有四个命令，对应 llama.cpp 的 `llama-cli` / `llama-server` / `llama-bench`：
+
+| 命令 | 作用 | 对应 |
+|---|---|---|
+| `deepinfer-cli` | 终端里对话；`-p` 回答一个问题就退出 | `llama-cli` |
+| `deepinfer-server` | 网页 + API，上下文可到几百万 token，边读边问 | `llama-server` |
+| `deepinfer-bench` | prompt 处理（pp）和生成（tg）速度表 | `llama-bench` |
+| `deepinfer` | 总入口：`deepinfer cli / server / bench / pull / info` | |
+
+**一行安装**（NVIDIA GPU、CUDA 12 驱动；装进独立环境，不动系统里的 Python）：
+
+```bash
+# Linux / WSL
+curl -fsSL https://raw.githubusercontent.com/umouyoumou-del/DeepInfer-SM86/main/install.sh | sh
+```
+
+```powershell
+# Windows（PowerShell）
+powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/umouyoumou-del/DeepInfer-SM86/main/install.ps1 | iex"
+```
+
+脚本做的事：找 Python 3.10+ → 在 `~/.deepinfer`（Windows 为 `%LOCALAPPDATA%\deepinfer`）建虚拟环境 →
+按驱动支持的 CUDA 版本装 PyTorch（cu121 / cu124 / cu126 / cu128；所用 Python 本身已有 CUDA 版 PyTorch 时直接共用，
+AutoDL 之类的镜像就是这样，省掉 3 GB 下载）→ 装本包和 CuPy（`[cuda]`）→ 把命令放进 `~/.local/bin`
+（Windows 为 `%LOCALAPPDATA%\deepinfer\bin`）并加进 PATH。再跑一次就是更新。可选环境变量写在脚本开头：
+`DEEPINFER_REF`（分支、标签或提交）、`DEEPINFER_SOURCE`（本地 checkout 或压缩包，GitHub 访问慢时用）、
+`TORCH_INDEX_URL`、`PYTHON` 等。已经有 CUDA 版 PyTorch 的环境也可以直接 pip：
+
+```bash
+pip install "deepinfer-sm86[cuda] @ git+https://github.com/umouyoumou-del/DeepInfer-SM86.git"
+pip install -e ".[cuda]"          # 或者在 clone 下来的仓库里
+```
+
+**用法**——模型用 `-m` 给本地 GGUF，或用 `-hf` 从 Hugging Face 拉（huggingface.co 连不上时自动改走 hf-mirror.com）：
+
+```bash
+deepinfer-cli -hf coder                              # 终端对话；第一次会下载 DeepSeek-Coder-V2-Lite-Instruct Q4_K_M（10 GB）
+deepinfer-cli -m DeepSeek-V2-Lite-Chat-Q4_K_M.gguf -p "法国的首都是哪里？"
+deepinfer-server -hf coder                           # 打开 http://127.0.0.1:8080/ ，上下文默认取显存放得下的长度
+deepinfer-server -hf coder -c 3407872 --host 0.0.0.0 --port 6006   # 3M 上下文（约 41 GiB 锁页内存）；对外监听时自动生成访问密钥
+deepinfer-bench -hf coder -p 512,4096 -n 128
+deepinfer pull -hf chat                              # 只下载
+deepinfer info                                       # GPU、CUDA、Triton、CuPy 是否就绪
+```
+
+`-hf` 接受预设 `coder`（DeepSeek-Coder-V2-Lite-Instruct，训练长度 128K）和 `chat`（DeepSeek-V2-Lite-Chat，32K），
+也接受 `组织/仓库[:量化]`（默认 `Q4_K_M`）。运行还需要原模型的 config 和 tokenizer：预设会自动从原仓库下载
+（几 MB）；其它 GGUF 用 `--meta 目录` 或 `--meta-hf 组织/仓库` 指定，`-m` 的文件名能认出预设时也会自动下载。
+下载缓存在 `~/.cache/deepinfer`（`DEEPINFER_CACHE` 可改）。目前支持 DeepSeek-V2-Lite 系列（MLA + MoE）的 GGUF。
+
+用安装脚本装出来的命令实测（2026-11-02，Windows、RTX 3050 Laptop 4 GB，专家放不下显存，从内存流式读入）：
+
+| 命令 | 结果 |
+|---|---|
+| `deepinfer-cli -m DeepSeek-V2-Lite-Chat-Q4_K_M.gguf -p "What is the capital of France? ..."` | "The capital of France is Paris."，约 2 token/s |
+| `deepinfer-cli`（交互，两轮后 `/reset`） | 第二轮记得第一轮给的名字；`/reset` 之后答 "unknown" |
+| `deepinfer-bench -p 128,512 -n 16 -r 2` | pp128 49.1 ± 0.7、pp512 168.9 ± 1.6、tg16 2.5 token/s |
+| `deepinfer-server`（65,536 token 上下文，KV 全在主机内存） | 42 s 启动；读入 1,321 token 后提问，答对并引出依据行 |
+
+Windows 版 PyTorch 不带 FlashAttention：长上下文的分块注意力在那里自动改用 memory-efficient kernel（结果一致，
+见 `tests/moe/test_latent_mla.py`）；Triton 缺席时定位走 PyTorch 实现。
+
+---
+
 ## 结果速览
 
 测试环境：Windows、RTX 3050 Laptop 4 GB、Python 3.10.3、torch 2.5.1+cu121、CUDA 12.1、CuPy 14.2。
@@ -105,7 +171,8 @@ CUDA graph 生成），结果不变；缓存可分到两块盘存下，同一份
 ### 3M 上下文对话：边读边问（2026-11-03）
 
 ```
-python apps/longctx_chat.py --port 6006 --capacity 3407872
+deepinfer-server -hf coder -c 3407872 --host 0.0.0.0 --port 6006
+python apps/longctx_chat.py --port 6006 --capacity 3407872   # 仓库里的旧写法，仍可用（默认 AutoDL 上的模型路径）
 ```
 
 启动后打印一个带访问密钥的地址；在 AutoDL 控制台点「自定义服务」（6006 端口），或用 SSH 端口转发打开。
@@ -523,6 +590,10 @@ buffer 地址和 chunk 数，当前不是可安全 capture 的静态图。代码
 
 ### 6.2 PyPI 独立库打包
 
+> 0.3.0 起，仓库根目录的 `pyproject.toml` 把整个 `deepinfer` 包（含长上下文和
+> `deepinfer-cli` / `deepinfer-server` / `deepinfer-bench` 命令）打成 `deepinfer-sm86`，
+> 安装见上文「安装与使用」。下面的 `pypi/deepinfer-sm86/` 是 0.1 / 0.2 的库子集打包，留作记录。
+
 仓库主体是应用/benchmark workspace；可复用库已单独放在
 `pypi/deepinfer-sm86/`，包名 `deepinfer-sm86`，import 名仍为 `deepinfer`。
 
@@ -574,10 +645,8 @@ git clone https://github.com/umouyoumou-del/DeepInfer-SM86.git
 pip install -e .\DeepInfer-SM86\pypi\deepinfer-sm86
 ```
 
-注意：仓库根目录仍是 application/benchmark workspace，没有根级
-`pyproject.toml`，因此 `pip install git+https://.../DeepInfer-SM86.git`
-（不带 `subdirectory`）**不是**库安装方式；必须使用上面的
-`#subdirectory=pypi/deepinfer-sm86`，或者直接安装 PyPI 包。
+注意：不带 `subdirectory` 的 `pip install git+https://.../DeepInfer-SM86.git`
+装的是仓库根目录的 0.3.0 完整包（带命令行工具），不是这里的 0.2.0 库子集。
 
 Wheel 已在隔离 target 中验证：
 
@@ -1273,7 +1342,13 @@ lm_head           : 3-bit, group 128
 ## 目录
 
 ```text
+pyproject.toml                          deepinfer-sm86 包与四个命令
+install.sh / install.ps1                一行安装（Linux、WSL / Windows）
 deepinfer/
+  cli/                                  deepinfer-cli / -server / -bench、-m / -hf 模型解析、网页
+  longctx_suite.py                      长上下文评测题库（needle 脚本与 server 演示共用）
+  moe/deepseek_longctx.py               长上下文会话：latent MLA 缓存、DCA、有界编码
+  moe/longctx_service.py                边读边问的对话服务
   hugging_face/qwen2_config.py          Qwen2 HF config -> DeepInfer AttrDict
   hugging_face/config.py                配置分派修改
   model_config_loader.py                允许纯文本 Qwen2/Llama/Mistral/Gemma

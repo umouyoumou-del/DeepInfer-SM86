@@ -1,5 +1,6 @@
-"""Command-line client for apps/longctx_chat.py: stream files in, ask, watch the answer arrive.
+"""Command-line client for deepinfer-server: stream files in, ask, watch the answer arrive.
 
+    python scripts/longctx_client.py --url http://127.0.0.1:8080 status   # deepinfer-server on this machine
     python scripts/longctx_client.py --url http://127.0.0.1:6006 --key K status
     python scripts/longctx_client.py --url ... --key K ingest book.txt notes.md
     python scripts/longctx_client.py --url ... --key K demo --tokens 3145728
@@ -94,7 +95,7 @@ def ask(base: str, key: str, question: str, deep: bool) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--url", default="http://127.0.0.1:6006")
-    parser.add_argument("--key", required=True)
+    parser.add_argument("--key", default="", help="the key the server printed (none for one on 127.0.0.1)")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("status")
     files = sub.add_parser("ingest")

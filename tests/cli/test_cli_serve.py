@@ -1,7 +1,8 @@
-"""The long-context chat server's HTTP layer, over a stand-in service."""
+"""deepinfer-server's HTTP layer, over a stand-in service."""
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import queue
 import threading
@@ -9,10 +10,14 @@ import types
 import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
+from pathlib import Path
 
 import pytest
 
-from apps import longctx_chat
+from deepinfer.cli import main as cli
+from deepinfer.cli import serve
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 class _Service:
@@ -46,9 +51,9 @@ class _Service:
 
 @pytest.fixture
 def server():
-    longctx_chat.SERVICE = _Service()
-    longctx_chat.KEY = "secret"
-    httpd = ThreadingHTTPServer(("127.0.0.1", 0), longctx_chat.Handler)
+    serve.SERVICE = _Service()
+    serve.KEY = "secret"
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), serve.Handler)
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
     yield f"http://127.0.0.1:{httpd.server_address[1]}"
@@ -81,7 +86,7 @@ def test_page_status_and_ingest(server) -> None:
     assert json.loads(body)["context"] == 7
     status, body = _post(server + "/ingest?key=secret&name=%E4%B9%A6", "第一章".encode())
     assert json.loads(body) == {"name": "书", "tokens": 3}
-    assert longctx_chat.SERVICE.added == [("书", "第一章")]
+    assert serve.SERVICE.added == [("书", "第一章")]
 
 
 def test_ask_streams_events_until_done(server) -> None:
@@ -93,17 +98,39 @@ def test_ask_streams_events_until_done(server) -> None:
 
 
 def test_demo_questions_carry_their_evaluation_instruction(server) -> None:
-    longctx_chat.DEMO["instructions"] = {"Which VAR?": "Simulate the VAR lines."}
+    serve.DEMO["instructions"] = {"Which VAR?": "Simulate the VAR lines."}
     try:
         for question in ("Which VAR?", "Something else?"):
             _post(server + "/ask?key=secret", json.dumps({"question": question}).encode())
-        assert longctx_chat.SERVICE.rounds is None  # a user's question: the service's default cap
+        assert serve.SERVICE.rounds is None  # a user's question: the service's default cap
     finally:
-        longctx_chat.DEMO["instructions"] = {}
-    assert longctx_chat.SERVICE.instructions == ["Simulate the VAR lines.", None]
+        serve.DEMO["instructions"] = {}
+    assert serve.SERVICE.instructions == ["Simulate the VAR lines.", None]
 
 
 def test_an_empty_question_is_a_bad_request(server) -> None:
     with pytest.raises(urllib.error.HTTPError) as error:
         _post(server + "/ask?key=secret", json.dumps({"question": " "}).encode())
     assert error.value.code == 400
+
+
+def test_without_a_key_every_request_is_served(server) -> None:
+    serve.KEY = ""
+    status, body = _get(server + "/status")
+    assert status == 200 and json.loads(body)["context"] == 7
+
+
+def test_only_loopback_addresses_go_without_a_key() -> None:
+    assert serve._loopback("127.0.0.1") and serve._loopback("::1") and serve._loopback("localhost")
+    assert not serve._loopback("0.0.0.0") and not serve._loopback("192.168.1.5")
+
+
+def test_the_earlier_script_keeps_its_defaults_and_takes_overrides() -> None:
+    spec = importlib.util.spec_from_file_location("old_chat", ROOT / "apps" / "longctx_chat.py")
+    old = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(old)
+    args = cli.build_parser().parse_args(old.server_argv(["--models-dir", "/m", "--port", "7000", "--key", "k"]))
+    assert args.handler is serve.run
+    assert (args.host, args.port, args.api_key, args.ctx_size) == ("0.0.0.0", 7000, "k", 3407872)
+    assert Path(args.model) == Path("/m/DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf")
+    assert Path(args.meta) == Path("/root/autodl-tmp/meta_coder")
