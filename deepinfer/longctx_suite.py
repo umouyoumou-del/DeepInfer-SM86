@@ -22,23 +22,31 @@ from deepinfer.moe.latent_reread import final_answer
 
 
 def haystack_tokens(tok, root: str, count: int) -> list[int]:
-    """The first ``count`` tokens of the concatenated standard library."""
+    """The first ``count`` tokens of the concatenated standard library, read again from the top when it runs out.
 
-    files = sorted(glob.glob(os.path.join(root, "**", "*.py"), recursive=True))
+    Python 3.12's library is about 3.7M tokens, so a 4M document holds its first ~0.5M
+    twice - the way RULER repeats its essays.  Shorter documents are unchanged.
+    """
+
+    files = [
+        path for path in sorted(glob.glob(os.path.join(root, "**", "*.py"), recursive=True))
+        if "site-packages" not in path
+    ]
     body: list[int] = []
-    for path in files:
-        if "site-packages" in path:
-            continue
-        try:
-            with open(path, encoding="utf-8", errors="ignore") as handle:
-                text = handle.read()
-        except OSError:
-            continue
-        ids = tok.encode(f"\n# {os.path.relpath(path, root)}\n{text}", add_special_tokens=False)
-        body.extend(ids[: count - len(body)])
-        if len(body) >= count:
-            return body
-    raise RuntimeError(f"haystack has only {len(body):,} tokens, {count:,} needed")
+    while True:
+        start = len(body)
+        for path in files:
+            try:
+                with open(path, encoding="utf-8", errors="ignore") as handle:
+                    text = handle.read()
+            except OSError:
+                continue
+            ids = tok.encode(f"\n# {os.path.relpath(path, root)}\n{text}", add_special_tokens=False)
+            body.extend(ids[: count - len(body)])
+            if len(body) >= count:
+                return body
+        if len(body) == start:
+            raise RuntimeError(f"no Python source under {root}")
 
 
 def line_start(pieces: list[str], depth: float, length: int) -> int:

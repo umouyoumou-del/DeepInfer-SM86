@@ -294,6 +294,23 @@ def test_host_tier_reads_back_what_was_written(kv_dtype: str) -> None:
     assert float((got_latent.float() - latent[100:260].float()).abs().max()) <= tolerance
 
 
+@pytest.mark.skipif(not CUDA, reason="pinning needs CUDA")
+def test_host_tier_is_pinned_at_its_exact_size() -> None:
+    import gc
+
+    cache = LatentKVCache(num_layers=2, capacity=300, gpu_tokens=128, kv_dtype="fp8", device="cuda")
+    for host, row_bytes in ((cache.host_latent, 512), (cache.host_pe, 64 * 2), (cache.host_scale, 4 * 4)):
+        assert host.is_pinned()
+        # torch's own pinned allocator would round each array up to a power of two
+        assert host.untyped_storage().nbytes() == 2 * 172 * row_bytes
+    del cache, host
+    gc.collect()  # unregistering on the way out must leave CUDA usable
+    again = latent_mla.pinned_empty((4, 3), torch.float32)
+    again.copy_(torch.ones(4, 3, device="cuda"), non_blocking=True)
+    torch.cuda.synchronize()
+    assert again.is_pinned() and torch.equal(again, torch.ones(4, 3))
+
+
 # ------------------------------------------------------------------ attention
 
 

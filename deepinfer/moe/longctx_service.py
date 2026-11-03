@@ -414,11 +414,17 @@ def build_session(rt, *, capacity: int, trained: int, encode_window: int, kv_dty
     import torch
 
     from deepinfer.moe.deepseek_longctx import DeepSeekLongContext
-    from deepinfer.moe.latent_mla import DualChunkPositions, LatentKVCache
+    from deepinfer.moe.latent_mla import (
+        DualChunkPositions,
+        LatentKVCache,
+        drop_page_cache,
+    )
 
     per_token = LatentKVCache.bytes_per_token(len(rt.model.model.layers), kv_dtype)
     free = torch.cuda.mem_get_info()[0]
     gpu_tokens = min(capacity, int(max(0, free - workspace_gib * 2**30) // per_token))
+    if gpu_tokens < capacity and getattr(rt, "pin_active", False):
+        drop_page_cache(str(rt.gguf_path))  # the experts are in VRAM; the pinned host tier needs the room
     return DeepSeekLongContext(
         rt, capacity=capacity, gpu_tokens=gpu_tokens, kv_dtype=kv_dtype,
         positions=DualChunkPositions(trained, trained * 3 // 4, -1), prefill_chunk=chunk, encode_window=encode_window,

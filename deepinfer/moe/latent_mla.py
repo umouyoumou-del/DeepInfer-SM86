@@ -241,6 +241,47 @@ def dequantize_fp8_groups(
 # -------------------------------------------------------------------- cache
 
 
+def pinned_empty(shape: Sequence[int], dtype: torch.dtype) -> torch.Tensor:
+    """A page-locked host tensor of exactly ``shape``.
+
+    ``torch.empty(..., pin_memory=True)`` rounds every request up to a power of
+    two, so a 4M cache's 42 GiB latent array would pin 64 GiB - past the test
+    host's 62 GiB container limit.  An ordinary allocation registered with CUDA
+    pins only the bytes in use; it is unregistered before it is freed.
+    """
+
+    import weakref
+
+    import numpy as np
+
+    nbytes = math.prod(int(size) for size in shape) * torch.empty(0, dtype=dtype).element_size()
+    if nbytes == 0:
+        return torch.empty(tuple(shape), dtype=dtype)
+    buffer = np.empty(nbytes, dtype=np.uint8)
+    cudart = torch.cuda.cudart()
+    pointer = buffer.ctypes.data
+    error = cudart.cudaHostRegister(pointer, nbytes, 0)
+    if error != cudart.cudaError.success:
+        raise RuntimeError(f"could not pin {nbytes / 2**30:.2f} GiB of host memory: {error}")
+    # runs when the last view of the buffer is gone, before numpy frees the memory
+    weakref.finalize(buffer, cudart.cudaHostUnregister, pointer).atexit = False
+    return torch.from_numpy(buffer).view(dtype).view(tuple(shape))
+
+
+def drop_page_cache(path: str) -> None:
+    """Let the kernel drop a file's cached pages; a container's memory limit counts them."""
+
+    import os
+
+    if not hasattr(os, "posix_fadvise"):
+        return
+    handle = os.open(path, os.O_RDONLY)
+    try:
+        os.posix_fadvise(handle, 0, 0, os.POSIX_FADV_DONTNEED)
+    finally:
+        os.close(handle)
+
+
 class LatentKVCache:
     """Per-layer (latent, k_pe) storage for one long sequence.
 
@@ -274,7 +315,7 @@ class LatentKVCache:
 
         def alloc(shape, dtype, *, host: bool) -> torch.Tensor:
             if host:
-                return torch.empty(shape, dtype=dtype, pin_memory=True)
+                return pinned_empty(shape, dtype)
             return torch.empty(shape, dtype=dtype, device=self.device)
 
         L, G, Hn = self.num_layers, self.gpu_tokens, self.host_tokens

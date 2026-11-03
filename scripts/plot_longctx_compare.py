@@ -12,12 +12,12 @@ from pathlib import Path
 
 # measured points: context length (tokens) -> value; see docs/results/longctx/baselines/
 ACCURACY = {  # questions fully right, of 21
-    "deepinfer": {16384: 21, 65536: 21, 98304: 20, 1048576: 21, 2097152: 21, 3145728: 21},
+    "deepinfer": {16384: 21, 65536: 21, 98304: 20, 1048576: 21, 2097152: 21, 3145728: 21, 4194304: 19},
     "llama": {16384: 15, 65536: 7, 98304: 3, 1048576: 0},
     "plain": {16384: 16, 65536: 6, 98304: 0},
 }
 PREFILL = {  # seconds to read the document
-    "deepinfer": {16384: 2.2, 65536: 13.7, 98304: 26.4, 1048576: 524.9, 2097152: 16.8 * 60, 3145728: 25.3 * 60},
+    "deepinfer": {16384: 2.2, 65536: 13.7, 98304: 26.4, 1048576: 524.9, 2097152: 16.8 * 60, 3145728: 25.3 * 60, 4194304: 2030.4},
     "llama": {16384: 4.4, 65536: 50.5, 98304: 104.5, 1048576: 5957.5},
 }
 SERIES = {  # palette slots 1-3, validated all-pairs (light surface)
@@ -30,11 +30,11 @@ SURFACE, GRID, AXIS, MUTED, INK, INK2 = "#fcfcfb", "#e1e0d9", "#c3c2b7", "#89878
 FONT = "Microsoft YaHei, PingFang SC, sans-serif"
 WIDTH, HEIGHT = 760, 420
 LEFT, RIGHT, TOP, BOTTOM = 72, 132, 70, 64  # plot margins; the right one leaves room for end labels
-X_TICKS = [(16384, "16K"), (65536, "64K"), (262144, "256K"), (1048576, "1M"), (3145728, "3M")]
+X_TICKS = [(16384, "16K"), (65536, "64K"), (262144, "256K"), (1048576, "1M"), (3145728, "3M"), (4194304, "4M")]
 
 
 def x_of(tokens: float) -> float:
-    lo, hi = math.log2(16384), math.log2(3145728)
+    lo, hi = math.log2(16384), math.log2(4194304)
     return LEFT + (math.log2(tokens) - lo) / (hi - lo) * (WIDTH - LEFT - RIGHT)
 
 

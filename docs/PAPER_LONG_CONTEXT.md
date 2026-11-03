@@ -11,7 +11,8 @@
 MLA 注意力，Q4_K_M 量化 10.4 GB）在单张 RTX 4080 SUPER（32 GB）上读入 **3,145,728 个 token**，
 在一套 RULER 式的复杂大海寻针上——39 根针同时在场，16 个相似键、一键多值、一问多键、5 环变量链带干扰链、
 两跳——**21 题全对、31 个条目全对，33 处证据全部定位到**；读入 25.3 分钟，21 题共 14.6 分钟，
-从头重跑一遍，每一轮的回答逐字相同。
+从头重跑一遍，每一轮的回答逐字相同。按实际大小锁页后，同一张卡还读入了 **4,194,304 个 token（4M）**：
+在两份不同的文档上 33 处证据都全部定位到，21 题分别答对 21 题与 19 题，错的两题都出在作答一步。
 
 做到这一点靠四件事：（1）**latent MLA 缓存**：只存共享的 512 维 latent 和 64 维 k_pe，fp8 下每 token
 17.3 KiB，比展开的逐头 K/V 小 19 倍，放不进显存的部分放锁页主机内存；（2）**DCA**（dual chunk attention）
@@ -42,7 +43,9 @@ questions about its details? We report a training-free system in which DeepSeek-
 **3,145,728 tokens** on a single RTX 4080 SUPER and answers a RULER-style needle suite with 39 needles
 present at once — 16 similar keys, one key with many values, many keys in one question, a 5-hop variable
 chain next to a distractor chain, and two-hop questions — **21/21 questions and 31/31 items correct, all 33 needle positions located**. Reading takes 25.3 minutes, the 21 questions 14.6 minutes, and a fresh
-run reproduces every answer word for word.
+run reproduces every answer word for word. With host memory pinned at its exact size, the same GPU also reads
+**4,194,304 tokens (4M)**: on two different documents all 33 needle positions are located and 21/21 and 19/21
+questions are answered correctly; both misses happen in the answering step.
 
 Four parts make this possible: (1) a **latent MLA cache** that stores only the shared 512-dim latent and the
 64-dim rotary key (17.3 KiB per token in fp8, 19× smaller than expanded per-head K/V), with the part that
@@ -151,8 +154,9 @@ Quest [15] 用每块逐维的最小/最大值给注意力分数一个上界。�
 | latent fp16 | 30.4 KiB | 30.4 GiB | 60.8 GiB | 91.1 GiB |
 | **latent fp8 e4m3（每 128 维一个 fp32 scale）+ k_pe fp16** | **17.3 KiB** | **17.3 GiB** | **34.6 GiB** | **51.9 GiB** |
 
-超出显存预算的部分放在锁页主机内存。3M 时 93 万 token 在显存、221 万在主机内存；PyTorch 把锁页分配
-取整到 2 的幂，主机端实占 42 GiB，容器 62 GiB 的上限里用到 58 GB。缓存可以存盘、加载
+超出显存预算的部分放在锁页主机内存。3M 时 93 万 token 在显存、221 万在主机内存。PyTorch 的锁页分配器把每次
+请求取整到 2 的幂（3M 的运行里主机端实占 42 GiB），4M 时要 82 GiB、超过容器 62 GiB 的上限，所以主机端改为按实际
+大小锁页：普通分配再用 `cudaHostRegister` 注册，4M 的 326 万 token 只锁 53.8 GiB（§5.2）。缓存可以存盘、加载
 （2M 的 34.6 GiB 分到两块盘，加载 51 秒，对比重新读入 16.8 分钟），也支持把一段文本插入到指定的逻辑位置。
 
 **prefill** 用展开形式：对每个 query 块，按 tile 从缓存取 latent、用 `kv_b_proj` 展开成逐头 K/V，
@@ -289,7 +293,7 @@ W = 96K 时最大相对距离约 114K，全部在训练范围内。它有两个�
 
 | 引擎 | 每 token 的 KV | 3M 需要 | 在这台机器上最长 | 3M |
 |---|---:|---:|---:|---|
-| **本系统**（latent fp8，显存 + 锁页主机内存） | **17.3 KiB** | **51.9 GiB**（显存 15.4 GiB + 主机 36.5 GiB） | **3.41M**（服务的容量） | **跑通：读入 25.3 min，21/21** |
+| **本系统**（latent fp8，显存 + 锁页主机内存） | **17.3 KiB** | **51.9 GiB**（显存 15.4 GiB + 主机 36.5 GiB） | **4M**（4,194,304，§5.2） | **跑通：读入 25.3 min，21/21** |
 | llama.cpp，同一个 GGUF（逐头展开，K q8_0） | 194 KiB | 582 GiB | 98K | `cudaMalloc` 失败 |
 | llama.cpp，同一个 GGUF（f16） | 270 KiB | 810 GiB | 64K | `cudaMalloc` 失败 |
 | llama.cpp，MLA 布局（f16） | 30.4 KiB | 91.1 GiB | 512K | `cudaMalloc` 失败 |
@@ -309,7 +313,7 @@ llama.cpp 的 MLA 布局在 q8_0 下每 token 16.1 KiB，与本系统的 fp8 lat
 
 ![准确率随长度](figures/fig11_longctx_accuracy.svg)
 
-**图 2** 同一套 39 针题、逐 token 相同的文档上，21 题全对的题数随上下文长度的变化（横轴对数）。llama.cpp 在 1M 以上显存装不下；本系统整段直接回答（对照）测了 16K–98K。
+**图 2** 同一套 39 针题、逐 token 相同的文档上，21 题全对的题数随上下文长度的变化（横轴对数）。llama.cpp 在 1M 以上显存装不下；本系统整段直接回答（对照）测了 16K–98K。4M 画的是与其他长度相同的种子 11（19/21），另一份文档（种子 12）是 21/21。
 
 | 长度 | llama.cpp 整段直接回答 | 本系统整段直接回答（对照） | **本系统 定位 + 重读** |
 |---:|---:|---:|---:|
@@ -319,9 +323,16 @@ llama.cpp 的 MLA 布局在 q8_0 下每 token 16.1 KiB，与本系统的 fp8 lat
 | 1M | 0/21（0/31，输出退化成乱码；MLA 布局） | — | **21/21（31/31）** |
 | 2M | 装不下 | — | **21/21（31/31）** |
 | 3M | 装不下 | — | **21/21（31/31）** |
+| 4M | 装不下 | — | **19/21（29/31）**；另一份文档 21/21（31/31） |
 
 （98K 是 llama.cpp 用原 GGUF 的上限，1M 是 MLA 布局的上限。vLLM 0.7.3 用同一模型的 AWQ 版，98K 整段直接回答
 3/21（6/31），与 llama.cpp 相同。）
+
+**4M。** 按实际大小锁页（§3.1）后 4,194,304 个 token 装得下：KV 69.2 GiB，93 万 token 在显存、326 万在锁页主机内存，
+容器内存峰值 60.0 GiB（上限 62 GiB）；读入 33.8 分钟，21 题 13–14 分钟。Python 标准库只有约 371 万个 token，草堆
+用完后从头再接一遍（一遍读得完的文档逐 token 不变）。两份文档（种子 11、12）上 33 处证据都全部定位到；种子 12
+21/21，种子 11 19/21。错的两题都在作答：一题精读留下的 12 行里同时有 onyx badger 与 onyx ibis 两行，模型抄出了一句
+文中不存在、键与号码错配的句子；另一题变量链的 9 行全部读回，答案漏了一环。定位没有随长度变差，错在短上下文里的作答。
 
 四点观察：
 
@@ -345,10 +356,11 @@ llama.cpp 的 MLA 布局在 q8_0 下每 token 16.1 KiB，与本系统的 fp8 lat
 | 1M | 99.3 min | 8.7 min | |
 | 2M | 装不下 | 16.8 min | 6.8 min |
 | 3M | 装不下 | 25.3 min | |
+| 4M | 装不下 | 33.8 min | |
 
 ![读入时间随长度](figures/fig12_longctx_prefill.svg)
 
-**图 3** 读入文档用的时间（双对数）。llama.cpp 用全量注意力，随长度平方增长（1M 99.3 分钟）；本系统用有界编码，随长度线性增长（1M 8.7 分钟，3M 25.3 分钟）。
+**图 3** 读入文档用的时间（双对数）。llama.cpp 用全量注意力，随长度平方增长（1M 99.3 分钟）；本系统用有界编码，随长度线性增长（1M 8.7 分钟，3M 25.3 分钟，4M 33.8 分钟）。
 
 llama.cpp 用全量注意力读入，时间随长度平方增长；本系统的有界编码随长度线性增长。问答方面，本系统每题要定位
 （可能多轮）、精读再作答：3M 上 21 题共 14.6 分钟、2M 上 8.6 分钟（每题中位 18 s），比整段直接回答慢
@@ -451,7 +463,8 @@ AWQ 版本而非同一个文件；它要求整个序列的 KV 都在显存里，
 而这正是本文的系统部分。
 
 **单卡、单模型、单请求。** 只测了 DeepSeek-V2 系列的 MLA 模型和一种显卡；服务一次只答一个问题。
-4M 需要约 69 GiB 的 KV，主机端锁页约 54 GiB，PyTorch 把锁页分配取整到 2 的幂后超过容器上限，需要按实际大小锁页。
+4M 已经跑通（§5.2），但容器内存峰值 60.0 GiB，离 62 GiB 的上限只剩 2 GiB：这台机器上再长，要更省的主机端格式，
+或把专家改为流式、腾出显存。
 
 ---
 
@@ -462,7 +475,8 @@ AWQ 版本而非同一个文件；它要求整个序列的 KV 都在显存里，
 DCA 解决位置，有界编码让读入线性且条目都在分布内，定位 + 重读与按回答反馈的多轮定位解决准确。
 同一台机器上，llama.cpp 与 vLLM 都装不下 3M；在它们装得下的长度上，整段直接回答随长度变差，
 而定位 + 重读不变——本系统换成同样的答法也一样变差（16K、64K、98K 分别 16、6、0 题；llama.cpp 15、7、3 题；
-vLLM 98K 3 题），说明差距来自方法。
+vLLM 98K 3 题），说明差距来自方法。按实际大小锁页后，同一张卡读入了 4,194,304 个 token，两份文档上分别答对 21 题
+和 19 题，证据全部定位到。
 
 ---
 
@@ -473,7 +487,10 @@ vLLM 98K 3 题），说明差距来自方法。
 curl -fsSL https://raw.githubusercontent.com/umouyoumou-del/DeepInfer-SM86/main/install.sh | sh
 
 # 3M 复杂多针，读入 + 21 题（结果 docs/results/longctx/complex_3m_v4.json）
-python scripts/needle_complex.py --tokens 3145728 --near-window 98304 --out complex_3m.json
+python scripts/needle_complex.py --tokens 3145728 --unpin no --near-window 98304 --out complex_3m.json
+
+# 4M（结果 complex_4m.json；另一份文档加 --seed 12，结果 complex_4m_seed12.json）
+python scripts/needle_complex.py --tokens 4194304 --unpin no --near-window 98304 --out complex_4m.json
 
 # 同一份文档，本系统整段直接回答（对照）
 python scripts/needle_complex.py --tokens 98304 --near-window 98304 --mode plain --out plain_96k.json
@@ -494,6 +511,7 @@ deepinfer-server -hf coder -c 3407872 --host 0.0.0.0 --port 6006
 - `docs/results/longctx/needle_*.json`：单针（S1）各长度、各方式。
 - `docs/results/longctx/complex_*.json`：复杂多针（S2），每题每一轮读回的块、精读留下的行与回答。
   3M：`complex_3m_v3.json`、`complex_3m_v3b.json`（同一缓存重跑）、`complex_3m_v4.json`（从头重跑）。
+  4M：`complex_4m.json`（种子 11）、`complex_4m_seed12.json`（种子 12），以及每 30 s 一次的内存采样 `complex_4m*_mem.log`。
 - `docs/results/longctx/baselines/`：与 llama.cpp、vLLM 的对比与对照运行，以及各引擎的容量探测日志。
 - 过程记录：`docs/LONG_CONTEXT_1M.md`。
 

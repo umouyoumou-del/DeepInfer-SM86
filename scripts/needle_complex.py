@@ -63,7 +63,7 @@ from deepinfer.longctx_suite import (  # noqa: F401 - re-exported for scripts th
 )
 from deepinfer.moe.deepseek_longctx import DeepSeekLongContext
 from deepinfer.moe.deepseek_v2_runtime import DeepSeekV2LiteGGUFRuntime
-from deepinfer.moe.latent_mla import DualChunkPositions, LatentKVCache
+from deepinfer.moe.latent_mla import DualChunkPositions, LatentKVCache, drop_page_cache
 from deepinfer.moe.latent_reread import (
     Refine,
     feedback_locate_and_reread,
@@ -337,6 +337,9 @@ def main() -> None:
         torch.cuda.empty_cache()
         free = torch.cuda.mem_get_info()[0]
     gpu_tokens = min(capacity, int(max(0, free - args.workspace_gib * _GIB) // per_token))
+    if not unpin and gpu_tokens < capacity:
+        # the experts are in VRAM now: give the model file's page cache back before pinning the host tier
+        drop_page_cache(os.path.join(args.models_dir, gguf))
     print(
         f"memory: kv {args.kv} {capacity * per_token / _GIB:.2f} GiB; experts {'streamed' if unpin else 'pinned'}; "
         f"gpu holds {gpu_tokens:,} tokens, host {capacity - gpu_tokens:,}",

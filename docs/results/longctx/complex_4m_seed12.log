@@ -1,0 +1,49 @@
+Token indices sequence length is longer than the specified maximum sequence length for this model (27594 > 16384). Running this sequence through the model will result in indexing errors
+document 4,194,304 tokens with 39 needles (17 s); 21 questions, 31 expected items
+DeepseekV2ForCausalLM has generative capabilities, as `prepare_inputs_for_generation` is explicitly overwritten. However, it doesn't directly inherit from `GenerationMixin`. From 👉v4.50👈 onwards, `PreTrainedModel` will NOT inherit from `GenerationMixin`, and this model will lose the ability to call `generate` and other related functions.
+  - If you're using `trust_remote_code=True`, you can get rid of this warning by loading the model with an auto class. See https://huggingface.co/docs/transformers/en/model_doc/auto#auto-classes
+  - If you are the owner of the model architecture code, please modify your model class such that it inherits from `GenerationMixin` (after `PreTrainedModel`, otherwise you'll get an exception).
+  - If you are not the owner of the model architecture class, please contact the model code owner to update it.
+memory: kv fp8 69.22 GiB; experts pinned; gpu holds 933,525 tokens, host 3,262,827
+  prefill 294,912/4,194,304 tokens, 2.0 min
+  prefill 557,056/4,194,304 tokens, 4.1 min
+  prefill 819,200/4,194,304 tokens, 6.2 min
+  prefill 1,081,344/4,194,304 tokens, 8.3 min
+  prefill 1,327,104/4,194,304 tokens, 10.4 min
+  prefill 1,572,864/4,194,304 tokens, 12.4 min
+  prefill 1,818,624/4,194,304 tokens, 14.4 min
+  prefill 2,064,384/4,194,304 tokens, 16.4 min
+  prefill 2,310,144/4,194,304 tokens, 18.4 min
+  prefill 2,555,904/4,194,304 tokens, 20.4 min
+  prefill 2,801,664/4,194,304 tokens, 22.5 min
+  prefill 3,047,424/4,194,304 tokens, 24.5 min
+  prefill 3,293,184/4,194,304 tokens, 26.5 min
+  prefill 3,538,944/4,194,304 tokens, 28.5 min
+  prefill 3,784,704/4,194,304 tokens, 30.5 min
+  prefill 4,030,464/4,194,304 tokens, 32.5 min
+  prefill 4,194,304/4,194,304 tokens, 33.9 min
+prefill 4,194,304 tokens in 33.9 min
+[feedback]  1 MK FULL 1/1 located 1/1 rounds 2 (32 s) | What is the special magic number for crimson falcon? -> 'The special magic number for crimson falcon is: 8961974.\n\nHere are the sentences or lines of text that are needed to ans'
+[feedback]  2 MK FULL 1/1 located 1/1 rounds 2 (31 s) | What is the special magic number for crimson otter? -> 'The text provided contains the special magic numbers for various animals and an employee badge number. To find the speci'
+[feedback]  3 MK FULL 1/1 located 1/1 rounds 2 (35 s) | What is the special magic number for silver falcon? -> 'The special magic number for silver falcon is: 9877341.\n\nStep-by-step reasoning:\n1. The text provided lists the special '
+[feedback]  4 MK FULL 1/1 located 1/1 rounds 2 (34 s) | What is the special magic number for silver otter? -> 'First, we need to find the special magic number for silver otter from the given information. We know that the special ma'
+[feedback]  5 MK FULL 1/1 located 1/1 rounds 2 (31 s) | What is the special magic number for amber lynx? -> 'The special magic number for amber lynx is: 3392436.\n\nFirst, we need to identify the relevant sentence from the provided'
+[feedback]  6 MK FULL 1/1 located 1/1 rounds 2 (29 s) | What is the special magic number for amber heron? -> 'The text provided contains the special magic numbers for various creatures and a combination for a safe. The question as'
+[feedback]  7 MK FULL 1/1 located 1/1 rounds 2 (30 s) | What is the special magic number for cobalt lynx? -> 'The special magic number for cobalt lynx is: 1182207.\n\nHere are the sentences or lines of the text above that are needed'
+[feedback]  8 MK FULL 1/1 located 1/1 rounds 2 (38 s) | What is the special magic number for cobalt heron? -> 'The special magic number for cobalt heron is: 7287337.\n\nStep-by-step reasoning:\n1. The text states that "The special mag'
+[feedback]  9 MK FULL 1/1 located 1/1 rounds 2 (28 s) | What is the special magic number for ivory mantis? -> 'First, we need to find the special magic number for ivory mantis in the provided text. The text states:\n\n"The special ma'
+[feedback] 10 MK FULL 1/1 located 1/1 rounds 2 (31 s) | What is the special magic number for ivory panther? -> 'The text provided contains the special magic number for ivory panther, which is 5597764. Here is the text:\n\n1. The speci'
+[feedback] 11 MK FULL 1/1 located 1/1 rounds 2 (30 s) | What is the special magic number for jade mantis? -> 'The special magic number for jade mantis is: 8721181.\n\nReasoning:\n1. The text provides a list of special magic numbers f'
+[feedback] 12 MK FULL 1/1 located 1/1 rounds 2 (30 s) | What is the special magic number for jade panther? -> 'The special magic number for jade panther is: 4819238.\n\nStep-by-step reasoning:\n1. The text contains a list of special m'
+[feedback] 13 MK FULL 1/1 located 1/1 rounds 2 (30 s) | What is the special magic number for scarlet ibis? -> 'The special magic number for scarlet ibis is: 1027948.\n\nTo find the special magic number for scarlet ibis, we need to lo'
+[feedback] 14 MK FULL 1/1 located 1/1 rounds 2 (32 s) | What is the special magic number for scarlet badger? -> 'The special magic number for scarlet badger is: 3437776.\n\nHere are the sentences or lines of text needed to answer the q'
+[feedback] 15 MK FULL 1/1 located 1/1 rounds 2 (32 s) | What is the special magic number for onyx ibis? -> 'The text provided contains the special magic number for onyx ibis, which is 8382894. Here is the relevant information fr'
+[feedback] 16 MK FULL 1/1 located 1/1 rounds 2 (49 s) | What is the special magic number for onyx badger? -> 'First, we need to find the special magic number for onyx badger in the provided text. We look for any lines that mention'
+[feedback] 17 MV FULL 4/4 located 4/4 rounds 2 (44 s) | What are all the special magic numbers for golden viper? -> 'To find all the special magic numbers for golden viper, we need to extract the numbers mentioned in the text that are as'
+[feedback] 18 MQ FULL 4/4 located 4/4 rounds 2 (39 s) | What are the special magic numbers for crimson falcon, amber -> "The special magic numbers for the given creatures and the combination for Marek Ostrov's safe are:\n\n1. Crimson falcon: 8"
+[feedback] 19 VT FULL 5/5 located 5/5 rounds 3 (118 s) | Find all variables that are assigned the value 77308, direct -> 'To find all variables that are assigned the value 77308, we need to follow the assignments step by step. Here is the bre'
+[feedback] 20 2H FULL 1/1 located 2/2 rounds 2 (33 s) | What is the employee badge number of the person who holds th -> 'First, we need to identify the sentence or line that contains the information about the person who holds the vault key o'
+[feedback] 21 2H FULL 1/1 located 2/2 rounds 2 (40 s) | Which combination opens the personal safe of the architect w -> 'First, we need to identify the architect who designed the Teal Harbor lighthouse. From the text, we know that Marek Ostr'
+[feedback] questions fully right 21/21, items 31/31, by kind {'MK': '16/16', 'MV': '1/1', 'MQ': '1/1', 'VT': '1/1', '2H': '2/2'}
+wrote logs/complex_4m_seed12.json
+exit 0
