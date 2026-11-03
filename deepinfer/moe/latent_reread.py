@@ -41,6 +41,7 @@ from collections.abc import Sequence
 import torch
 
 from deepinfer.moe import latent_locate
+from deepinfer.moe.answer_check import miscopies, retry_note, self_check_prompt
 from deepinfer.moe.latent_mla import (
     DualChunkPositions,
     LatentKVCache,
@@ -458,15 +459,15 @@ def reread(
     refine_query: Sequence[int] | None = None,
     on_tokens=None,
     kept_positions: list | None = None,
+    document_out: list | None = None,
 ) -> list[int]:
     """Greedy answer to ``prompt_ids`` in a fresh short context holding only ``spans``.
 
     With ``refine`` the context is cut down to its best lines first (their text
     is appended to ``kept`` if given, their logical positions in the long
-    sequence to ``kept_positions``).  ``on_tokens`` streams the answer's ids.
+    sequence to ``kept_positions``).  ``on_tokens`` streams the answer's ids;
+    ``document_out`` receives the short context's ids (to answer over it again).
     """
-
-    from deepinfer.moe.deepseek_longctx import DeepSeekLongContext
 
     slots: list[int] = []
     document = span_document(session, spans, header_ids=header_ids, separator_ids=separator_ids, slots=slots)
@@ -479,12 +480,29 @@ def reread(
             kept_positions.extend(
                 _logical(session.extents, slots[start]) if slots[start] >= 0 else -1 for start in starts
             )
-    short = DeepSeekLongContext(
-        session.rt,
-        capacity=len(document) + len(prompt_ids) + max_new_tokens + 8,
-        kv_dtype="fp16",
+    if document_out is not None:
+        document_out.extend(document)
+    return answer_over(
+        session.rt, document, prompt_ids, max_new_tokens=max_new_tokens, stop_ids=stop_ids, on_tokens=on_tokens
     )
-    short.prefill(document)
+
+
+@torch.inference_mode()
+def answer_over(
+    rt,
+    document: Sequence[int],
+    prompt_ids: Sequence[int],
+    *,
+    max_new_tokens: int = 32,
+    stop_ids: Sequence[int] = (),
+    on_tokens=None,
+) -> list[int]:
+    """Greedy answer to ``prompt_ids`` in a fresh short context holding ``document``."""
+
+    from deepinfer.moe.deepseek_longctx import DeepSeekLongContext
+
+    short = DeepSeekLongContext(rt, capacity=len(document) + len(prompt_ids) + max_new_tokens + 8, kv_dtype="fp16")
+    short.prefill(list(document))
     produced = short.generate(prompt_ids, max_new_tokens=max_new_tokens, stop_ids=stop_ids, on_tokens=on_tokens)
     del short
     return produced
@@ -618,6 +636,8 @@ def feedback_locate_and_reread(
     final_entity_rows: bool = False,
     on_event=None,
     preamble: str = "",
+    check_copies: bool = False,
+    self_check: bool = False,
 ) -> dict:
     """Locate, re-read and answer; then locate again with the question *and the answer*.
 
@@ -649,6 +669,14 @@ def feedback_locate_and_reread(
     read with their positions, and whether the search stops).  ``preamble`` goes
     between the re-read text and the question in the answer prompt (a chat's
     recent turns); it is not located with.
+
+    Two checks on the answers (:mod:`deepinfer.moe.answer_check`), off by default:
+    ``check_copies`` asks a round once more when its answer copies a line wrong
+    (a number bound to the wrong key) and keeps the answer that copies right;
+    ``self_check`` has the model check the final answer against its own steps in
+    a second turn, and that turn's ``Answer:`` becomes the final one.  Both are
+    reported with ``on_event`` (``check``, then an ``answer`` that replaces the
+    round's).
     """
 
     def encode(text: str) -> list[int]:
@@ -656,8 +684,10 @@ def feedback_locate_and_reread(
 
     length = session.length
     lead = f"\n\n{preamble.strip()}" if preamble.strip() else ""
-    prompt = encode(f"{lead}\n\n{question} {answer_instruction}".rstrip() + "\n\nAssistant:")
+    asked_head = f"{lead}\n\n{question}"  # the instruction follows; a retry's note goes in between
     query = encode(f"\n\n{question}\n\nAssistant:")
+    document: list[int] = []
+    asked: list[int] = []
     final_query: list[int] = []
     final_rows: list[int] | None = None
     chosen: list[int] = []
@@ -694,16 +724,17 @@ def feedback_locate_and_reread(
         chosen.extend(new)
         spans = spans_from_blocks(chosen, block=BLOCK, neighbors=neighbors, length=length)
         kept: list[str] = []
-        asked = prompt
+        head = asked_head
         if answers and carry:
             # build on the last answer instead of re-deriving everything: a chain then
             # needs one new hop per round, not the whole closure at once
-            asked = encode(
+            head = (
                 f"\n\n{question}\nAn earlier answer, from less of the text, was: {answers[-1]}\n"
-                f"Check it against the text above and give the complete answer. {answer_instruction}".rstrip()
-                + "\n\nAssistant:"
+                "Check it against the text above and give the complete answer."
             )
+        asked = encode(f"{head} {answer_instruction}".rstrip() + "\n\nAssistant:")
         kept_positions: list[int] = []
+        document = []
         produced = reread(
             session, spans, asked,
             header_ids=header_ids, separator_ids=separator_ids,
@@ -713,14 +744,31 @@ def feedback_locate_and_reread(
                 lambda ids, number=round_index + 1: on_event({"event": "tokens", "round": number, "ids": ids})
             ),
             kept_positions=kept_positions,
+            document_out=document,
         )
         answer = tokenizer.decode(produced, skip_special_tokens=True).strip()
-        trace.append({
+        record = {
             "round": round_index + 1, "new_blocks": new, "final_blocks": final_new, "lines": kept,
             "line_positions": kept_positions, "answer": answer,
             "query_tokens": len(query), "answer_tokens": len(produced),
-            "seconds": {"locate": round(located - began, 2), "reread": round(time.perf_counter() - located, 2)},
-        })
+        }
+        found = miscopies(answer, kept) if check_copies else []
+        if found:
+            if on_event is not None:
+                on_event({"event": "check", "round": round_index + 1, "kind": "copies",
+                          "copies": [item["copy"] for item in found]})
+            # the note last, where it is read; it repeats that the answer ends with "Answer:"
+            retry = encode(f"{head} {answer_instruction}".rstrip() + f"\n{retry_note(found)}\n\nAssistant:")
+            again = answer_over(
+                session.rt, document, retry, max_new_tokens=max_new_tokens, stop_ids=stop_ids
+            )
+            again_text = tokenizer.decode(again, skip_special_tokens=True).strip()
+            record["retry"] = {"miscopies": [item["copy"] for item in found], "answer": again_text}
+            if len(miscopies(again_text, kept)) < len(found):
+                produced, answer, asked = again, again_text, retry
+                record["answer"] = answer
+        record["seconds"] = {"locate": round(located - began, 2), "reread": round(time.perf_counter() - located, 2)}
+        trace.append(record)
         final = answer_key(answer)
         # a round that neither wrote "Answer: ..." nor named a code / identifier (it ran
         # out, or talked about something else) has not committed and cannot end the search
@@ -747,6 +795,21 @@ def feedback_locate_and_reread(
         final_query = lead + named + tail if named else []
         # optionally only the named things' rows score (did not rank the next link better at 3M)
         final_rows = list(range(len(lead), len(lead) + len(named))) if final_entity_rows else None
+    if self_check and produced:
+        if on_event is not None:
+            on_event({"event": "check", "round": len(trace), "kind": "self"})
+        follow = self_check_prompt(tokenizer, produced, stop_ids[0] if stop_ids else None)
+        checked = answer_over(session.rt, document + asked, follow, max_new_tokens=max_new_tokens, stop_ids=stop_ids)
+        text = tokenizer.decode(checked, skip_special_tokens=True).strip()
+        trace[-1]["self_check"] = text
+        if "answer:" in text.lower() and final_answer(text).strip():
+            stops = {int(token) for token in stop_ids}
+            produced = [token for token in produced if token not in stops] + encode("\n\n[check]\n") + checked
+            if on_event is not None:
+                on_event({
+                    "event": "answer", "round": len(trace), "text": tokenizer.decode(produced, skip_special_tokens=True).strip(),
+                    "lines": trace[-1]["lines"], "line_positions": trace[-1]["line_positions"], "stop": True,
+                })
     return {
         "answer_ids": produced,
         "spans": spans,

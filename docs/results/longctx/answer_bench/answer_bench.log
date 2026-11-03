@@ -1,0 +1,473 @@
+315 cases (180 synthetic), methods ['base', 'quote', 'check', 'both']
+DeepseekV2ForCausalLM has generative capabilities, as `prepare_inputs_for_generation` is explicitly overwritten. However, it doesn't directly inherit from `GenerationMixin`. From 👉v4.50👈 onwards, `PreTrainedModel` will NOT inherit from `GenerationMixin`, and this model will lose the ability to call `generate` and other related functions.
+  - If you're using `trust_remote_code=True`, you can get rid of this warning by loading the model with an auto class. See https://huggingface.co/docs/transformers/en/model_doc/auto#auto-classes
+  - If you are the owner of the model architecture code, please modify your model class such that it inherits from `GenerationMixin` (after `PreTrainedModel`, otherwise you'll get an exception).
+  - If you are not the owner of the model architecture class, please contact the model code owner to update it.
+   1/315 MK base=Y quote=Y check=Y both=Y  complex_256k_final.json round 2  (7 s)
+   2/315 MK base=n quote=n check=n both=n  complex_256k_final.json round 2  (14 s)
+   3/315 MK base=Y quote=Y check=Y both=Y  complex_256k_final.json round 1  (19 s)
+   4/315 MK base=n quote=n check=n both=n  complex_256k_final.json round 1  (25 s)
+   5/315 VT base=n quote=n check=n both=n  complex_256k_final.json round 3  (68 s)
+   6/315 VT base=n quote=n check=n both=n  complex_256k_final.json round 4  (106 s)
+   7/315 VT base=Y quote=Y check=Y both=Y  complex_256k_vt_union.json round 3  (137 s)
+   8/315 VT base=n quote=n check=n both=n  complex_256k_vt_union.json round 4  (174 s)
+   9/315 MK base=n quote=n check=Y both=Y  complex_2m.json round 1  (184 s)
+  10/315 MK base=n quote=n check=Y both=Y  complex_2m.json round 1  (194 s)
+  11/315 VT base=n quote=n check=n both=n  complex_2m.json round 2  (246 s)
+  12/315 VT base=Y quote=Y check=Y both=Y  complex_2m_fast.json round 3  (288 s)
+  13/315 MK base=n quote=n check=n both=n  complex_2m_final.json round 2  (298 s)
+  14/315 MK base=n quote=n check=n both=n  complex_2m_final.json round 2  (303 s)
+  15/315 VT base=n quote=n check=n both=n  complex_2m_final.json round 3  (334 s)
+  16/315 VT base=Y quote=Y check=n both=n  complex_2m_final.json round 5  (376 s)
+  17/315 MK base=n quote=n check=Y both=Y  complex_2m_final_query.json round 2  (381 s)
+  18/315 VT base=Y quote=Y check=Y both=Y  complex_2m_follow32.json round 3  (417 s)
+  19/315 VT base=Y quote=Y check=Y both=Y  complex_2m_follow32.json round 4  (447 s)
+  20/315 MV base=Y quote=Y check=Y both=Y  complex_2m_loaded.json round 2  (458 s)
+  21/315 MV base=Y quote=Y check=Y both=Y  complex_2m_loaded.json round 4  (465 s)
+  22/315 MV base=Y quote=Y check=Y both=Y  complex_2m_v2.json round 2  (476 s)
+  23/315 VT base=n quote=n check=n both=n  complex_2m_v2.json round 4  (524 s)
+  24/315 VT base=n quote=n check=n both=n  complex_2m_w16k.json round 3  (558 s)
+  25/315 VT base=n quote=n check=n both=n  complex_2m_w16k.json round 5  (588 s)
+  26/315 VT base=Y quote=Y check=Y both=Y  complex_2m_w16k.json round 6  (617 s)
+  27/315 VT base=n quote=n check=n both=n  complex_2m_w16k_2.json round 3  (648 s)
+  28/315 VT base=Y quote=Y check=Y both=Y  complex_2m_w16k_2.json round 4  (681 s)
+  29/315 VT base=n quote=n check=n both=n  complex_2m_w16k_2.json round 5  (724 s)
+  30/315 MV base=Y quote=Y check=Y both=Y  complex_3m.json round 1  (735 s)
+  31/315 VT base=n quote=n check=n both=n  complex_3m.json round 2  (768 s)
+  32/315 VT base=n quote=n check=n both=n  complex_3m_v2.json round 2  (803 s)
+  33/315 MK base=n quote=n check=Y both=Y  complex_3m_v3.json round 2  (807 s)
+  34/315 VT base=n quote=n check=n both=n  complex_3m_v3.json round 3  (833 s)
+  35/315 VT base=n quote=n check=n both=n  complex_3m_v3.json round 5  (862 s)
+  36/315 VT base=Y quote=Y check=Y both=Y  complex_3m_v3.json round 6  (897 s)
+  37/315 MK base=Y quote=Y check=Y both=Y  complex_4m.json round 1  (900 s)
+  38/315 MK base=n quote=n check=n both=n  complex_4m.json round 2  (906 s)
+  39/315 VT base=n quote=n check=n both=n  complex_4m.json round 3  (937 s)
+  40/315 VT base=n quote=n check=n both=n  complex_4m.json round 4  (964 s)
+  41/315 2H base=Y quote=Y check=Y both=Y  complex_256k_final.json round 2  (970 s)
+  42/315 2H base=Y quote=Y check=Y both=Y  complex_256k_final.json round 2  (981 s)
+  43/315 2H base=Y quote=Y check=Y both=Y  complex_2m.json round 2  (986 s)
+  44/315 2H base=Y quote=Y check=Y both=Y  complex_2m.json round 2  (992 s)
+  45/315 2H base=Y quote=Y check=Y both=Y  complex_2m_fast.json round 2  (999 s)
+  46/315 2H base=Y quote=Y check=Y both=Y  complex_2m_fast.json round 2  (1001 s)
+  47/315 2H base=Y quote=Y check=Y both=Y  complex_2m_final.json round 2  (1006 s)
+  48/315 2H base=Y quote=Y check=Y both=Y  complex_2m_final.json round 2  (1009 s)
+  49/315 2H base=Y quote=Y check=Y both=Y  complex_2m_final_query.json round 2  (1014 s)
+  50/315 2H base=Y quote=Y check=Y both=Y  complex_2m_follow32.json round 2  (1020 s)
+  51/315 2H base=Y quote=Y check=Y both=Y  complex_2m_follow32.json round 2  (1039 s)
+  52/315 2H base=Y quote=Y check=Y both=Y  complex_2m_loaded.json round 2  (1044 s)
+  53/315 2H base=Y quote=Y check=Y both=Y  complex_2m_v2.json round 2  (1050 s)
+  54/315 2H base=Y quote=Y check=Y both=Y  complex_2m_v2.json round 2  (1052 s)
+  55/315 2H base=Y quote=Y check=Y both=Y  complex_2m_w16k.json round 2  (1057 s)
+  56/315 2H base=Y quote=Y check=Y both=Y  complex_2m_w16k.json round 2  (1061 s)
+  57/315 2H base=Y quote=Y check=Y both=Y  complex_2m_w16k_2.json round 2  (1095 s)
+  58/315 2H base=Y quote=Y check=Y both=Y  complex_2m_w16k_2.json round 2  (1103 s)
+  59/315 2H base=Y quote=Y check=Y both=Y  complex_3m.json round 2  (1109 s)
+  60/315 2H base=Y quote=Y check=Y both=Y  complex_3m.json round 2  (1120 s)
+  61/315 2H base=n quote=n check=n both=n  complex_3m_v2.json round 2  (1126 s)
+  62/315 2H base=Y quote=Y check=Y both=Y  complex_3m_v2.json round 2  (1130 s)
+  63/315 2H base=Y quote=Y check=Y both=Y  complex_3m_v3.json round 2  (1134 s)
+  64/315 2H base=Y quote=Y check=Y both=Y  complex_3m_v3.json round 2  (1140 s)
+  65/315 2H base=Y quote=Y check=Y both=Y  complex_4m.json round 2  (1144 s)
+  66/315 2H base=Y quote=Y check=Y both=Y  complex_4m.json round 2  (1150 s)
+  67/315 2H base=Y quote=Y check=Y both=Y  complex_4m_seed12.json round 2  (1155 s)
+  68/315 2H base=Y quote=Y check=Y both=Y  complex_4m_seed12.json round 2  (1159 s)
+  69/315 MK base=Y quote=Y check=Y both=Y  complex_2m_follow32.json round 2  (1163 s)
+  70/315 MK base=Y quote=Y check=Y both=Y  complex_2m_fast.json round 2  (1167 s)
+  71/315 MK base=Y quote=Y check=Y both=Y  complex_2m_v2.json round 2  (1171 s)
+  72/315 MK base=Y quote=Y check=Y both=Y  complex_3m_v3.json round 4  (1174 s)
+  73/315 MK base=Y quote=Y check=Y both=Y  complex_256k_final.json round 2  (1180 s)
+  74/315 MK base=Y quote=Y check=Y both=Y  complex_2m.json round 2  (1184 s)
+  75/315 MK base=Y quote=Y check=Y both=Y  complex_3m.json round 2  (1189 s)
+  76/315 MK base=Y quote=Y check=Y both=Y  complex_2m.json round 2  (1193 s)
+  77/315 MK base=Y quote=Y check=Y both=Y  complex_2m_loaded.json round 2  (1197 s)
+  78/315 MK base=Y quote=Y check=Y both=Y  complex_3m_v2.json round 2  (1201 s)
+  79/315 MK base=Y quote=Y check=Y both=Y  complex_256k_final.json round 2  (1205 s)
+  80/315 MK base=Y quote=Y check=Y both=Y  complex_2m_w16k_2.json round 2  (1208 s)
+  81/315 MK base=Y quote=Y check=Y both=Y  complex_2m_final.json round 2  (1213 s)
+  82/315 MK base=Y quote=Y check=Y both=Y  complex_256k_final.json round 2  (1217 s)
+  83/315 MK base=Y quote=Y check=Y both=Y  complex_2m.json round 3  (1222 s)
+  84/315 MK base=Y quote=Y check=Y both=Y  complex_2m_w16k.json round 2  (1226 s)
+  85/315 MK base=n quote=n check=Y both=Y  complex_2m_w16k.json round 2  (1236 s)
+  86/315 MK base=Y quote=Y check=Y both=Y  complex_2m.json round 2  (1246 s)
+  87/315 MK base=Y quote=Y check=Y both=Y  complex_2m_final_query.json round 2  (1250 s)
+  88/315 MK base=Y quote=Y check=Y both=Y  complex_2m.json round 2  (1255 s)
+  89/315 MK base=Y quote=Y check=Y both=Y  complex_3m.json round 2  (1261 s)
+  90/315 MK base=Y quote=Y check=Y both=Y  complex_2m_w16k.json round 2  (1265 s)
+  91/315 MK base=Y quote=Y check=Y both=Y  complex_256k_final.json round 2  (1269 s)
+  92/315 MK base=Y quote=Y check=Y both=Y  complex_3m.json round 2  (1272 s)
+  93/315 MK base=Y quote=Y check=Y both=Y  complex_2m.json round 3  (1276 s)
+  94/315 MK base=Y quote=Y check=Y both=Y  complex_2m_final_query.json round 2  (1280 s)
+  95/315 MK base=Y quote=Y check=Y both=Y  complex_3m_v2.json round 2  (1286 s)
+  96/315 MK base=Y quote=Y check=Y both=Y  complex_3m_v2.json round 2  (1289 s)
+  97/315 MK base=Y quote=Y check=Y both=Y  complex_4m_seed12.json round 2  (1295 s)
+  98/315 MK base=Y quote=Y check=Y both=Y  complex_4m.json round 2  (1297 s)
+  99/315 MK base=Y quote=Y check=Y both=Y  complex_3m.json round 2  (1301 s)
+ 100/315 MK base=Y quote=Y check=Y both=Y  complex_4m.json round 2  (1305 s)
+ 101/315 MK base=Y quote=Y check=Y both=Y  complex_4m_seed12.json round 2  (1315 s)
+ 102/315 MK base=Y quote=Y check=Y both=Y  complex_4m_seed12.json round 2  (1320 s)
+ 103/315 MK base=Y quote=Y check=Y both=Y  complex_2m_final.json round 2  (1324 s)
+ 104/315 MK base=Y quote=Y check=Y both=Y  complex_256k_final.json round 2  (1327 s)
+ 105/315 MK base=Y quote=Y check=Y both=Y  complex_3m.json round 2  (1331 s)
+ 106/315 MK base=Y quote=Y check=Y both=Y  complex_2m_fast.json round 2  (1335 s)
+ 107/315 MK base=Y quote=Y check=Y both=Y  complex_2m_follow32.json round 2  (1341 s)
+ 108/315 MK base=Y quote=Y check=Y both=Y  complex_4m.json round 2  (1346 s)
+ 109/315 MQ base=Y quote=Y check=Y both=Y  complex_256k_final.json round 2  (1351 s)
+ 110/315 MQ base=Y quote=Y check=Y both=Y  complex_2m.json round 2  (1355 s)
+ 111/315 MQ base=Y quote=Y check=Y both=Y  complex_2m_final_query.json round 2  (1361 s)
+ 112/315 MQ base=Y quote=Y check=Y both=Y  complex_3m.json round 2  (1366 s)
+ 113/315 MQ base=Y quote=Y check=Y both=Y  complex_3m_v2.json round 2  (1377 s)
+ 114/315 MQ base=Y quote=Y check=Y both=Y  complex_4m.json round 2  (1385 s)
+ 115/315 MQ base=Y quote=Y check=Y both=Y  complex_4m_seed12.json round 2  (1391 s)
+ 116/315 MV base=Y quote=Y check=Y both=Y  complex_256k_final.json round 2  (1402 s)
+ 117/315 MV base=Y quote=Y check=Y both=Y  complex_2m.json round 2  (1408 s)
+ 118/315 MV base=Y quote=Y check=Y both=Y  complex_2m_fast.json round 2  (1414 s)
+ 119/315 MV base=Y quote=Y check=Y both=Y  complex_2m_final_query.json round 2  (1422 s)
+ 120/315 MV base=Y quote=Y check=Y both=Y  complex_2m_loaded.json round 6  (1428 s)
+ 121/315 MV base=Y quote=Y check=Y both=Y  complex_2m_w16k.json round 2  (1435 s)
+ 122/315 MV base=Y quote=Y check=Y both=Y  complex_2m_w16k_2.json round 2  (1442 s)
+ 123/315 MV base=Y quote=Y check=Y both=Y  complex_3m.json round 3  (1448 s)
+ 124/315 MV base=Y quote=Y check=Y both=Y  complex_3m_v2.json round 3  (1456 s)
+ 125/315 MV base=Y quote=Y check=Y both=Y  complex_3m_v3.json round 3  (1462 s)
+ 126/315 MV base=Y quote=Y check=Y both=Y  complex_4m.json round 2  (1468 s)
+ 127/315 MV base=Y quote=Y check=Y both=Y  complex_4m_seed12.json round 2  (1475 s)
+ 128/315 VT base=n quote=n check=n both=n  complex_256k_vt_union.json round 6  (1504 s)
+ 129/315 VT base=Y quote=Y check=Y both=Y  complex_2m_fast.json round 5  (1540 s)
+ 130/315 VT base=n quote=Y check=n both=Y  complex_2m_final.json round 6  (1584 s)
+ 131/315 VT base=Y quote=Y check=Y both=Y  complex_2m_final_query.json round 3  (1619 s)
+ 132/315 VT base=Y quote=Y check=Y both=Y  complex_2m_loaded.json round 3  (1657 s)
+ 133/315 VT base=Y quote=Y check=n both=n  complex_2m_saved.json round 3  (1688 s)
+ 134/315 VT base=Y quote=Y check=Y both=Y  complex_2m_vt.json round 3  (1717 s)
+ 135/315 VT base=Y quote=Y check=Y both=Y  complex_4m_seed12.json round 3  (1753 s)
+ 136/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 100  (1757 s)
+ 137/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 100  (1760 s)
+ 138/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 100  (1765 s)
+ 139/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 100  (1768 s)
+ 140/315 MV base=Y quote=Y check=Y both=Y  synthetic seed 100  (1774 s)
+ 141/315 MQ base=Y quote=Y check=Y both=Y  synthetic seed 100  (1782 s)
+ 142/315 VT base=n quote=n check=n both=n  synthetic seed 100  (1809 s)
+ 143/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 100  (1814 s)
+ 144/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 100  (1822 s)
+ 145/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 101  (1824 s)
+ 146/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 101  (1828 s)
+ 147/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 101  (1832 s)
+ 148/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 101  (1836 s)
+ 149/315 MV base=Y quote=Y check=Y both=Y  synthetic seed 101  (1842 s)
+ 150/315 MQ base=n quote=Y check=Y both=Y  synthetic seed 101  (1869 s)
+ 151/315 VT base=Y quote=Y check=Y both=Y  synthetic seed 101  (1904 s)
+ 152/315 2H base=n quote=n check=Y both=Y  synthetic seed 101  (1911 s)
+ 153/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 101  (1915 s)
+ 154/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 102  (1919 s)
+ 155/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 102  (1923 s)
+ 156/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 102  (1927 s)
+ 157/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 102  (1930 s)
+ 158/315 MV base=Y quote=Y check=Y both=Y  synthetic seed 102  (1941 s)
+ 159/315 MQ base=Y quote=Y check=Y both=Y  synthetic seed 102  (1950 s)
+ 160/315 VT base=Y quote=Y check=Y both=Y  synthetic seed 102  (1981 s)
+ 161/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 102  (1985 s)
+ 162/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 102  (1991 s)
+ 163/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 103  (1996 s)
+ 164/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 103  (1999 s)
+ 165/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 103  (2008 s)
+ 166/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 103  (2012 s)
+ 167/315 MV base=Y quote=Y check=Y both=Y  synthetic seed 103  (2019 s)
+ 168/315 MQ base=Y quote=Y check=Y both=Y  synthetic seed 103  (2027 s)
+ 169/315 VT base=Y quote=Y check=Y both=Y  synthetic seed 103  (2062 s)
+ 170/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 103  (2065 s)
+ 171/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 103  (2070 s)
+ 172/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 104  (2074 s)
+ 173/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 104  (2079 s)
+ 174/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 104  (2082 s)
+ 175/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 104  (2085 s)
+ 176/315 MV base=Y quote=Y check=Y both=Y  synthetic seed 104  (2098 s)
+ 177/315 MQ base=Y quote=Y check=Y both=Y  synthetic seed 104  (2104 s)
+ 178/315 VT base=Y quote=Y check=Y both=Y  synthetic seed 104  (2139 s)
+ 179/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 104  (2144 s)
+ 180/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 104  (2149 s)
+ 181/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 105  (2152 s)
+ 182/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 105  (2157 s)
+ 183/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 105  (2160 s)
+ 184/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 105  (2164 s)
+ 185/315 MV base=Y quote=Y check=Y both=Y  synthetic seed 105  (2169 s)
+ 186/315 MQ base=Y quote=Y check=Y both=Y  synthetic seed 105  (2178 s)
+ 187/315 VT base=n quote=n check=n both=n  synthetic seed 105  (2216 s)
+ 188/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 105  (2229 s)
+ 189/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 105  (2232 s)
+ 190/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 106  (2237 s)
+ 191/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 106  (2241 s)
+ 192/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 106  (2244 s)
+ 193/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 106  (2248 s)
+ 194/315 MV base=Y quote=Y check=Y both=Y  synthetic seed 106  (2255 s)
+ 195/315 MQ base=Y quote=Y check=Y both=Y  synthetic seed 106  (2261 s)
+ 196/315 VT base=Y quote=Y check=Y both=Y  synthetic seed 106  (2295 s)
+ 197/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 106  (2300 s)
+ 198/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 106  (2307 s)
+ 199/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 107  (2311 s)
+ 200/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 107  (2318 s)
+ 201/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 107  (2322 s)
+ 202/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 107  (2325 s)
+ 203/315 MV base=Y quote=Y check=Y both=Y  synthetic seed 107  (2335 s)
+ 204/315 MQ base=Y quote=Y check=Y both=Y  synthetic seed 107  (2342 s)
+ 205/315 VT base=Y quote=Y check=Y both=Y  synthetic seed 107  (2371 s)
+ 206/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 107  (2376 s)
+ 207/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 107  (2382 s)
+ 208/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 108  (2387 s)
+ 209/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 108  (2391 s)
+ 210/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 108  (2395 s)
+ 211/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 108  (2400 s)
+ 212/315 MV base=Y quote=Y check=Y both=Y  synthetic seed 108  (2410 s)
+ 213/315 MQ base=Y quote=Y check=Y both=Y  synthetic seed 108  (2415 s)
+ 214/315 VT base=Y quote=Y check=Y both=Y  synthetic seed 108  (2448 s)
+ 215/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 108  (2452 s)
+ 216/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 108  (2456 s)
+ 217/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 109  (2460 s)
+ 218/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 109  (2471 s)
+ 219/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 109  (2475 s)
+ 220/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 109  (2479 s)
+ 221/315 MV base=Y quote=Y check=Y both=Y  synthetic seed 109  (2487 s)
+ 222/315 MQ base=Y quote=Y check=Y both=Y  synthetic seed 109  (2501 s)
+ 223/315 VT base=Y quote=Y check=Y both=Y  synthetic seed 109  (2536 s)
+ 224/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 109  (2542 s)
+ 225/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 109  (2551 s)
+ 226/315 MK base=n quote=n check=n both=n  synthetic seed 110  (2557 s)
+ 227/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 110  (2562 s)
+ 228/315 MK base=n quote=Y check=n both=Y  synthetic seed 110  (2571 s)
+ 229/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 110  (2575 s)
+ 230/315 MV base=Y quote=Y check=Y both=Y  synthetic seed 110  (2582 s)
+ 231/315 MQ base=Y quote=Y check=Y both=Y  synthetic seed 110  (2590 s)
+ 232/315 VT base=n quote=n check=n both=n  synthetic seed 110  (2620 s)
+ 233/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 110  (2626 s)
+ 234/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 110  (2630 s)
+ 235/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 111  (2633 s)
+ 236/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 111  (2636 s)
+ 237/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 111  (2642 s)
+ 238/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 111  (2647 s)
+ 239/315 MV base=Y quote=Y check=Y both=Y  synthetic seed 111  (2653 s)
+ 240/315 MQ base=Y quote=Y check=Y both=Y  synthetic seed 111  (2662 s)
+ 241/315 VT base=n quote=n check=Y both=Y  synthetic seed 111  (2701 s)
+ 242/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 111  (2707 s)
+ 243/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 111  (2713 s)
+ 244/315 MK base=n quote=n check=n both=n  synthetic seed 112  (2718 s)
+ 245/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 112  (2722 s)
+ 246/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 112  (2730 s)
+ 247/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 112  (2734 s)
+ 248/315 MV base=Y quote=Y check=Y both=Y  synthetic seed 112  (2741 s)
+ 249/315 MQ base=Y quote=Y check=Y both=Y  synthetic seed 112  (2749 s)
+ 250/315 VT base=n quote=n check=n both=n  synthetic seed 112  (2780 s)
+ 251/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 112  (2784 s)
+ 252/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 112  (2789 s)
+ 253/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 113  (2793 s)
+ 254/315 MK base=n quote=n check=n both=n  synthetic seed 113  (2800 s)
+ 255/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 113  (2803 s)
+ 256/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 113  (2808 s)
+ 257/315 MV base=Y quote=Y check=Y both=Y  synthetic seed 113  (2814 s)
+ 258/315 MQ base=Y quote=Y check=Y both=Y  synthetic seed 113  (2821 s)
+ 259/315 VT base=Y quote=Y check=Y both=Y  synthetic seed 113  (2855 s)
+ 260/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 113  (2860 s)
+ 261/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 113  (2864 s)
+ 262/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 114  (2867 s)
+ 263/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 114  (2872 s)
+ 264/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 114  (2875 s)
+ 265/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 114  (2879 s)
+ 266/315 MV base=Y quote=Y check=Y both=Y  synthetic seed 114  (2886 s)
+ 267/315 MQ base=n quote=Y check=n both=Y  synthetic seed 114  (2901 s)
+ 268/315 VT base=Y quote=Y check=Y both=Y  synthetic seed 114  (2952 s)
+ 269/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 114  (2957 s)
+ 270/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 114  (2963 s)
+ 271/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 115  (2966 s)
+ 272/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 115  (2969 s)
+ 273/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 115  (2972 s)
+ 274/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 115  (2975 s)
+ 275/315 MV base=Y quote=Y check=Y both=Y  synthetic seed 115  (2983 s)
+ 276/315 MQ base=n quote=n check=n both=n  synthetic seed 115  (2989 s)
+ 277/315 VT base=n quote=n check=n both=n  synthetic seed 115  (3023 s)
+ 278/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 115  (3029 s)
+ 279/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 115  (3034 s)
+ 280/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 116  (3038 s)
+ 281/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 116  (3041 s)
+ 282/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 116  (3044 s)
+ 283/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 116  (3048 s)
+ 284/315 MV base=Y quote=Y check=Y both=Y  synthetic seed 116  (3055 s)
+ 285/315 MQ base=Y quote=Y check=Y both=Y  synthetic seed 116  (3064 s)
+ 286/315 VT base=Y quote=Y check=Y both=Y  synthetic seed 116  (3097 s)
+ 287/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 116  (3102 s)
+ 288/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 116  (3106 s)
+ 289/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 117  (3110 s)
+ 290/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 117  (3113 s)
+ 291/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 117  (3116 s)
+ 292/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 117  (3121 s)
+ 293/315 MV base=Y quote=Y check=Y both=Y  synthetic seed 117  (3127 s)
+ 294/315 MQ base=Y quote=Y check=Y both=Y  synthetic seed 117  (3132 s)
+ 295/315 VT base=n quote=n check=Y both=Y  synthetic seed 117  (3164 s)
+ 296/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 117  (3168 s)
+ 297/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 117  (3174 s)
+ 298/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 118  (3178 s)
+ 299/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 118  (3182 s)
+ 300/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 118  (3194 s)
+ 301/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 118  (3200 s)
+ 302/315 MV base=n quote=n check=n both=n  synthetic seed 118  (3206 s)
+ 303/315 MQ base=Y quote=Y check=Y both=Y  synthetic seed 118  (3214 s)
+ 304/315 VT base=Y quote=Y check=Y both=Y  synthetic seed 118  (3246 s)
+ 305/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 118  (3251 s)
+ 306/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 118  (3260 s)
+ 307/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 119  (3264 s)
+ 308/315 MK base=n quote=n check=n both=n  synthetic seed 119  (3271 s)
+ 309/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 119  (3276 s)
+ 310/315 MK base=Y quote=Y check=Y both=Y  synthetic seed 119  (3279 s)
+ 311/315 MV base=Y quote=Y check=Y both=Y  synthetic seed 119  (3285 s)
+ 312/315 MQ base=Y quote=Y check=Y both=Y  synthetic seed 119  (3294 s)
+ 313/315 VT base=Y quote=Y check=Y both=Y  synthetic seed 119  (3326 s)
+ 314/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 119  (3332 s)
+ 315/315 2H base=Y quote=Y check=Y both=Y  synthetic seed 119  (3339 s)
+{
+ "replay": {
+  "base": {
+   "full": "106/135",
+   "by_kind": {
+    "2H": "27/28",
+    "MK": "42/52",
+    "MQ": "7/7",
+    "MV": "16/16",
+    "VT": "14/32"
+   },
+   "fixed": 0,
+   "broke": 0
+  },
+  "quote": {
+   "full": "107/135",
+   "by_kind": {
+    "2H": "27/28",
+    "MK": "42/52",
+    "MQ": "7/7",
+    "MV": "16/16",
+    "VT": "15/32"
+   },
+   "fixed": 1,
+   "broke": 0
+  },
+  "check": {
+   "full": "109/135",
+   "by_kind": {
+    "2H": "27/28",
+    "MK": "47/52",
+    "MQ": "7/7",
+    "MV": "16/16",
+    "VT": "12/32"
+   },
+   "fixed": 5,
+   "broke": 2
+  },
+  "both": {
+   "full": "110/135",
+   "by_kind": {
+    "2H": "27/28",
+    "MK": "47/52",
+    "MQ": "7/7",
+    "MV": "16/16",
+    "VT": "13/32"
+   },
+   "fixed": 6,
+   "broke": 2
+  }
+ },
+ "synthetic": {
+  "base": {
+   "full": "163/180",
+   "by_kind": {
+    "2H": "39/40",
+    "MK": "75/80",
+    "MQ": "17/20",
+    "MV": "19/20",
+    "VT": "13/20"
+   },
+   "fixed": 0,
+   "broke": 0
+  },
+  "quote": {
+   "full": "166/180",
+   "by_kind": {
+    "2H": "39/40",
+    "MK": "76/80",
+    "MQ": "19/20",
+    "MV": "19/20",
+    "VT": "13/20"
+   },
+   "fixed": 3,
+   "broke": 0
+  },
+  "check": {
+   "full": "167/180",
+   "by_kind": {
+    "2H": "40/40",
+    "MK": "75/80",
+    "MQ": "18/20",
+    "MV": "19/20",
+    "VT": "15/20"
+   },
+   "fixed": 4,
+   "broke": 0
+  },
+  "both": {
+   "full": "169/180",
+   "by_kind": {
+    "2H": "40/40",
+    "MK": "76/80",
+    "MQ": "19/20",
+    "MV": "19/20",
+    "VT": "15/20"
+   },
+   "fixed": 6,
+   "broke": 0
+  }
+ },
+ "all": {
+  "base": {
+   "full": "269/315",
+   "by_kind": {
+    "2H": "66/68",
+    "MK": "117/132",
+    "MQ": "24/27",
+    "MV": "35/36",
+    "VT": "27/52"
+   },
+   "fixed": 0,
+   "broke": 0
+  },
+  "quote": {
+   "full": "273/315",
+   "by_kind": {
+    "2H": "66/68",
+    "MK": "118/132",
+    "MQ": "26/27",
+    "MV": "35/36",
+    "VT": "28/52"
+   },
+   "fixed": 4,
+   "broke": 0
+  },
+  "check": {
+   "full": "276/315",
+   "by_kind": {
+    "2H": "67/68",
+    "MK": "122/132",
+    "MQ": "25/27",
+    "MV": "35/36",
+    "VT": "27/52"
+   },
+   "fixed": 9,
+   "broke": 2
+  },
+  "both": {
+   "full": "279/315",
+   "by_kind": {
+    "2H": "67/68",
+    "MK": "123/132",
+    "MQ": "26/27",
+    "MV": "35/36",
+    "VT": "28/52"
+   },
+   "fixed": 12,
+   "broke": 2
+  }
+ }
+}
+wrote logs/answer_bench.json

@@ -12,7 +12,8 @@ MLA 注意力，Q4_K_M 量化 10.4 GB）在单张 RTX 4080 SUPER（32 GB）上�
 在一套 RULER 式的复杂大海寻针上——39 根针同时在场，16 个相似键、一键多值、一问多键、5 环变量链带干扰链、
 两跳——**21 题全对、31 个条目全对，33 处证据全部定位到**；读入 25.3 分钟，21 题共 14.6 分钟，
 从头重跑一遍，每一轮的回答逐字相同。按实际大小锁页后，同一张卡还读入了 **4,194,304 个 token（4M）**：
-在两份不同的文档上 33 处证据都全部定位到，21 题分别答对 21 题与 19 题，错的两题都出在作答一步。
+在两份不同的文档上 33 处证据都全部定位到，21 题分别答对 21 题与 19 题，错的两题都出在作答一步；对抄出的句子做
+核对、并让模型自查之后，后一份答对 20 题。
 
 做到这一点靠四件事：（1）**latent MLA 缓存**：只存共享的 512 维 latent 和 64 维 k_pe，fp8 下每 token
 17.3 KiB，比展开的逐头 K/V 小 19 倍，放不进显存的部分放锁页主机内存；（2）**DCA**（dual chunk attention）
@@ -45,7 +46,8 @@ present at once — 16 similar keys, one key with many values, many keys in one 
 chain next to a distractor chain, and two-hop questions — **21/21 questions and 31/31 items correct, all 33 needle positions located**. Reading takes 25.3 minutes, the 21 questions 14.6 minutes, and a fresh
 run reproduces every answer word for word. With host memory pinned at its exact size, the same GPU also reads
 **4,194,304 tokens (4M)**: on two different documents all 33 needle positions are located and 21/21 and 19/21
-questions are answered correctly; both misses happen in the answering step.
+questions are answered correctly; both misses happen in the answering step, and checking the answer's quotes against
+the text plus a self-check turn brings the second document to 20/21.
 
 Four parts make this possible: (1) a **latent MLA cache** that stores only the shared 512-dim latent and the
 64-dim rotary key (17.3 KiB per token in fp8, 19× smaller than expanded per-head K/V), with the part that
@@ -323,7 +325,7 @@ llama.cpp 的 MLA 布局在 q8_0 下每 token 16.1 KiB，与本系统的 fp8 lat
 | 1M | 0/21（0/31，输出退化成乱码；MLA 布局） | — | **21/21（31/31）** |
 | 2M | 装不下 | — | **21/21（31/31）** |
 | 3M | 装不下 | — | **21/21（31/31）** |
-| 4M | 装不下 | — | **19/21（29/31）**；另一份文档 21/21（31/31） |
+| 4M | 装不下 | — | **19/21（29/31）**；加作答检查 20/21；另一份文档 21/21（31/31） |
 
 （98K 是 llama.cpp 用原 GGUF 的上限，1M 是 MLA 布局的上限。vLLM 0.7.3 用同一模型的 AWQ 版，98K 整段直接回答
 3/21（6/31），与 llama.cpp 相同。）
@@ -415,6 +417,14 @@ llama.cpp 用全量注意力读入，时间随长度平方增长；本系统的�
 **编码窗口**（S2，2M）：96K → 16K，读入 16.8 → 6.8 分钟；两次 16K 运行分别 20/21、21/21，33 处针都定位到，
 错的仍是变量链（与 96K 下变量链的摇摆相当）。
 
+**作答检查**（只测作答这一步，`scripts/answer_bench.py`）：4M 上错的两题都在作答——一题抄错（号码配错了键），一题在
+最后挑选时漏了自己推出的一项。我们对回答里抄出的句子与读回的原文逐行核对：话与原文某行相似、却不在原文里，且其中
+的号码所在的行说的是别的事，就算抄错；抄错时附上原文对应的两行重答一次。最终答案再让模型对照自己的步骤自查一轮。
+在 315 个短上下文上（历次运行的 135 个，20 份新测试集拼出的 180 个），原样作答 269 个全对，两项都用 279 个（改对 12、
+改错 2——都是变量链：三种问法取并集时，一种问法自查后加进了干扰链的名字）。重答提示附上原文的两行之后，22 个被标出
+抄错的上下文从 9 个对变为 22 个对；这个写法是在这 22 个上比较选出的。4M 端到端（种子 11 的同一份文档）：
+不加检查 19/21，加上两项检查 20/21——onyx badger 那题被标出抄错、重答后改对；变量链仍漏一环，自查也认可了漏掉的答案。
+
 ### 5.5 边读边问
 
 同一个服务从空读到 3M，问题夹在读入中间（与 §5.2 同一份文档，读入约 2,000 token/s）：
@@ -427,6 +437,12 @@ llama.cpp 用全量注意力读入，时间随长度平方增长；本系统的�
 | 读完 | 3,145,728 | 变量链（评测时的指令、最多 8 轮、三种问法取并） | 11.1 s | 274.6 s | ✓ 5 个名字 |
 | 读完 | 3,145,792 | 换个说法问 onyx badger 的号码（通用指令） | 9.8 s | 36.5 s | ✓ |
 | 读完 | 3,145,826 | "我问的第一个问题是什么、你怎么答的" | 9.6 s | 49.9 s | ✓ |
+
+**4M 工作区**：同一个服务开 4,259,840 的容量，一个模拟用户经 HTTP 逐个上传本仓库（122 万 token，模型训练时没有这些代码）
+和 Python 标准库（292 万），共 967 个文件、4,142,408 个 token，37.4 分钟读完，容器内存峰值 60.0 GiB；读完后首字 12–13 秒，
+每题中位约 60 秒。从读入的源码自动出的 20 道可核对题（参数默认值、模块常量）答对 13 道：本仓库 10/15，标准库 3/5。
+错的多是定位没读回定义那一行，读回的是用到它的地方或别处同样写法的代码。合成测试集里每根针都独一无二，真实代码
+里到处是相似的行——对问题点了名的标识符做精确匹配，是代码场景下要补上的一环。
 
 ### 5.6 正确性与复现
 

@@ -1,0 +1,6 @@
+Token indices sequence length is longer than the specified maximum sequence length for this model (37526 > 16384). Running this sequence through the model will result in indexing errors
+workspace: 967 files, 4,140,906 tokens (1,221,722 project)
+
+[12.5 min, context 1,248,218, queued 2,898,856] In deepinfer/moe/longctx_service.py, what is the default value of the parameter `kind` of `add_ids`?
+Terminated
+exit 143

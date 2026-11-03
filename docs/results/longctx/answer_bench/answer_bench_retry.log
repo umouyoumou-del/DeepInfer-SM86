@@ -1,0 +1,104 @@
+22 cases (11 synthetic), methods ['base', 'quote']
+DeepseekV2ForCausalLM has generative capabilities, as `prepare_inputs_for_generation` is explicitly overwritten. However, it doesn't directly inherit from `GenerationMixin`. From 👉v4.50👈 onwards, `PreTrainedModel` will NOT inherit from `GenerationMixin`, and this model will lose the ability to call `generate` and other related functions.
+  - If you're using `trust_remote_code=True`, you can get rid of this warning by loading the model with an auto class. See https://huggingface.co/docs/transformers/en/model_doc/auto#auto-classes
+  - If you are the owner of the model architecture code, please modify your model class such that it inherits from `GenerationMixin` (after `PreTrainedModel`, otherwise you'll get an exception).
+  - If you are not the owner of the model architecture class, please contact the model code owner to update it.
+   1/22 MK base=n quote=Y  complex_256k_final.json round 2  (8 s)
+   2/22 MK base=n quote=Y  complex_256k_final.json round 1  (14 s)
+   3/22 MK base=n quote=Y  complex_2m_final.json round 2  (19 s)
+   4/22 MK base=n quote=Y  complex_2m_final.json round 2  (23 s)
+   5/22 MV base=Y quote=Y  complex_2m_loaded.json round 2  (32 s)
+   6/22 MV base=Y quote=Y  complex_2m_v2.json round 2  (40 s)
+   7/22 MV base=Y quote=Y  complex_3m.json round 1  (49 s)
+   8/22 MK base=n quote=n  complex_4m.json round 2  (54 s)
+   9/22 2H base=Y quote=Y  complex_2m_follow32.json round 2  (63 s)
+  10/22 2H base=Y quote=Y  complex_2m_w16k_2.json round 2  (82 s)
+  11/22 VT base=n quote=Y  complex_2m_final.json round 6  (119 s)
+  12/22 MQ base=n quote=Y  synthetic seed 101  (131 s)
+  13/22 MV base=Y quote=Y  synthetic seed 102  (138 s)
+  14/22 MV base=Y quote=Y  synthetic seed 104  (147 s)
+  15/22 MK base=n quote=Y  synthetic seed 110  (151 s)
+  16/22 MK base=n quote=Y  synthetic seed 110  (155 s)
+  17/22 MK base=n quote=Y  synthetic seed 112  (159 s)
+  18/22 MK base=n quote=Y  synthetic seed 113  (164 s)
+  19/22 MQ base=n quote=Y  synthetic seed 114  (171 s)
+  20/22 VT base=Y quote=Y  synthetic seed 114  (213 s)
+  21/22 MK base=Y quote=Y  synthetic seed 118  (218 s)
+  22/22 MK base=n quote=Y  synthetic seed 119  (223 s)
+{
+ "replay": {
+  "base": {
+   "full": "5/11",
+   "by_kind": {
+    "2H": "2/2",
+    "MK": "0/5",
+    "MV": "3/3",
+    "VT": "0/1"
+   },
+   "fixed": 0,
+   "broke": 0
+  },
+  "quote": {
+   "full": "10/11",
+   "by_kind": {
+    "2H": "2/2",
+    "MK": "4/5",
+    "MV": "3/3",
+    "VT": "1/1"
+   },
+   "fixed": 5,
+   "broke": 0
+  }
+ },
+ "synthetic": {
+  "base": {
+   "full": "4/11",
+   "by_kind": {
+    "MK": "1/6",
+    "MQ": "0/2",
+    "MV": "2/2",
+    "VT": "1/1"
+   },
+   "fixed": 0,
+   "broke": 0
+  },
+  "quote": {
+   "full": "11/11",
+   "by_kind": {
+    "MK": "6/6",
+    "MQ": "2/2",
+    "MV": "2/2",
+    "VT": "1/1"
+   },
+   "fixed": 7,
+   "broke": 0
+  }
+ },
+ "all": {
+  "base": {
+   "full": "9/22",
+   "by_kind": {
+    "2H": "2/2",
+    "MK": "1/11",
+    "MQ": "0/2",
+    "MV": "5/5",
+    "VT": "1/2"
+   },
+   "fixed": 0,
+   "broke": 0
+  },
+  "quote": {
+   "full": "21/22",
+   "by_kind": {
+    "2H": "2/2",
+    "MK": "10/11",
+    "MQ": "2/2",
+    "MV": "5/5",
+    "VT": "2/2"
+   },
+   "fixed": 12,
+   "broke": 0
+  }
+ }
+}
+wrote logs/answer_bench_retry.json

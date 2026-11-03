@@ -37,7 +37,7 @@ from needle_longctx import MODELS, document_hash
 from deepinfer.moe import latent_reread as lr
 from deepinfer.moe.deepseek_longctx import DeepSeekLongContext
 from deepinfer.moe.deepseek_v2_runtime import DeepSeekV2LiteGGUFRuntime
-from deepinfer.moe.latent_mla import DualChunkPositions, LatentKVCache
+from deepinfer.moe.latent_mla import DualChunkPositions, LatentKVCache, drop_page_cache
 
 _GIB = 2**30
 
@@ -67,6 +67,9 @@ def main() -> None:
     per_token = LatentKVCache.bytes_per_token(27, "fp8")
     capacity = len(document) + 2048
     gpu_tokens = min(capacity, int(max(0, torch.cuda.mem_get_info()[0] - cli.workspace_gib * _GIB) // per_token))
+    if gpu_tokens < capacity:
+        # the experts are in VRAM: give the model file's page cache back before pinning the host tier
+        drop_page_cache(os.path.join(cli.models_dir, gguf))
     started = time.perf_counter()
     if cli.load_cache:
         session, saved = DeepSeekLongContext.load(rt, cli.load_cache, capacity=capacity, gpu_tokens=gpu_tokens)

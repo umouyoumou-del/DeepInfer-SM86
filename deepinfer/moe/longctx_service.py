@@ -99,6 +99,18 @@ class JobQueue:
     def get(self, timeout: float | None = None):
         return self._queue.get(timeout=timeout)
 
+    def take_ingest(self):
+        """The next job if it is an ingest job - nothing more urgent waiting - else ``None``."""
+
+        try:
+            item = self._queue.get_nowait()
+        except queue.Empty:
+            return None
+        if item[0] != INGEST:
+            self._queue.put(item)
+            return None
+        return item
+
     def empty(self) -> bool:
         return self._queue.empty()
 
@@ -119,6 +131,8 @@ class LongContextChat:
         chunk: int = 16384,
         reserve: int = 8192,
         near_window: int = 98304,
+        check_copies: bool = False,
+        self_check: bool = False,
     ) -> None:
         self.rt = rt
         self.tok = tokenizer
@@ -128,6 +142,9 @@ class LongContextChat:
         self.chunk = int(chunk)
         self.reserve = int(reserve)  # room kept for located queries, conversation turns
         self.near_window = int(near_window)
+        # answer checks (deepinfer.moe.answer_check): ask again on a miscopied line, self-check the final answer
+        self.check_copies = bool(check_copies)
+        self.self_check = bool(self_check)
         self.sources: list[Source] = []
         self.jobs = JobQueue()
         self.lock = threading.Lock()  # guards the bookkeeping below, not the GPU
@@ -234,27 +251,50 @@ class LongContextChat:
                         self.state = "idle"
 
     def _ingest(self, seq: int, source: Source, ids: list[int]) -> None:
+        """Encode one chunk: this source's next piece, topped up with the sources queued after it.
+
+        Every prefill call pays a fixed cost (each layer dequantizes the experts it uses), so a
+        workspace of many small files read one file per call ran at 733 tok/s against about
+        2,000 for one big document.  Filling the chunk from the queue reads them as fast; a
+        question or a reset still goes first, between two chunks.
+        """
+
         import torch
 
         if source.tokens == -1:  # dropped by a reset while queued
             return
-        piece, rest = ids[: self.chunk], ids[self.chunk :]
+        parts = [(source, ids[: self.chunk], seq, ids[self.chunk :])]
+        room = self.chunk - len(parts[0][1])
+        while room > 0:
+            item = self.jobs.take_ingest()
+            if item is None:
+                break
+            _priority, more_seq, job = item
+            more, more_ids = job[1], job[2]
+            if more.tokens == -1:
+                continue
+            parts.append((more, more_ids[:room], more_seq, more_ids[room:]))
+            room -= len(parts[-1][1])
+        batch = [token for _, piece, _, _ in parts for token in piece]
         with self.lock:
             self.state = "reading"
         began = time.perf_counter()
         start = self.session.next_position
-        self.session.prefill(piece)
+        self.session.prefill(batch)
         torch.cuda.synchronize()
         seconds = time.perf_counter() - began
         with self.lock:
-            source.add(start, len(piece))
-            source.done += len(piece)
-            self.queued_tokens -= len(piece)
-            current = len(piece) / max(seconds, 1e-6)
+            for part, piece, _, _ in parts:
+                part.add(start, len(piece))
+                part.done += len(piece)
+                start += len(piece)
+            self.queued_tokens -= len(batch)
+            current = len(batch) / max(seconds, 1e-6)
             self.rate = current if not self.rate else 0.7 * self.rate + 0.3 * current
         self._baseline_length = -1
-        if rest:
-            self.jobs.put(INGEST, ("ingest", source, rest), seq=seq)
+        for part, _, part_seq, rest in parts:
+            if rest:
+                self.jobs.put(INGEST, ("ingest", part, rest), seq=part_seq)
 
     def _baseline_now(self):
         from deepinfer.moe.latent_reread import neutral_baseline
@@ -274,10 +314,12 @@ class LongContextChat:
         variants: Sequence[str] = (),
         rounds: int | None = None,
     ) -> None:
+        from deepinfer.moe.answer_check import self_check_prompt
         from deepinfer.moe.latent_reread import (
             BLOCK,
             Refine,
             answer_items,
+            answer_over,
             feedback_locate_and_reread,
             final_answer,
             reread,
@@ -328,13 +370,15 @@ class LongContextChat:
                     "event": "answer", "round": event["round"], "text": event["text"],
                     "final": final_answer(event["text"]), "evidence": evidence, "stop": event["stop"],
                 })
+            elif kind == "check":
+                events.put({"event": "check", "round": event["round"], "kind": event["kind"]})
 
         detail = feedback_locate_and_reread(
             session, self.tok, question, answer_instruction=instruction or QUOTE_FIRST, preamble=self._recent(),
             header_ids=self.header_ids, separator_ids=self.separator_ids, baseline=baseline, reduce="max",
             top=32, follow_top=8, neighbors=1, rounds=(rounds or 4) if deep else 1, max_new_tokens=1024,
             stop_ids=[self.tok.eos_token_id], refine=refine, near_window=self.near_window, follow_final=32,
-            on_event=relay,
+            on_event=relay, check_copies=self.check_copies, self_check=self.self_check,
         )
         answer = self.tok.decode(detail["answer_ids"], skip_special_tokens=True).strip()
         if variants:
@@ -342,11 +386,20 @@ class LongContextChat:
             texts = [answer]
             for variant in variants:
                 prompt = self.tok.encode(f"\n\n{question} {variant}\n\nAssistant:", add_special_tokens=False)
+                document: list[int] = []
                 ids = reread(
                     session, detail["spans"], prompt, header_ids=self.header_ids, separator_ids=self.separator_ids,
                     max_new_tokens=1024, stop_ids=[self.tok.eos_token_id], refine=refine,
-                    refine_query=detail["refine_query"],
+                    refine_query=detail["refine_query"], document_out=document,
                 )
+                if self.self_check:
+                    checked = answer_over(
+                        self.rt, document + prompt, self_check_prompt(self.tok, ids, self.tok.eos_token_id),
+                        max_new_tokens=1024, stop_ids=[self.tok.eos_token_id],
+                    )
+                    text = self.tok.decode(checked, skip_special_tokens=True).strip()
+                    if "answer:" in text.lower() and final_answer(text).strip():
+                        ids = checked
                 texts.append(self.tok.decode(ids, skip_special_tokens=True).strip())
             given = set(answer_items(question))  # the value asked about is not an answer
             union = sorted({item for text in texts for item in answer_items(text)} - given)
@@ -380,15 +433,22 @@ class LongContextChat:
             self.last = summary
         events.put({"event": "done", "answer": answer, "final": final_answer(answer), **summary})
 
-    def _recent(self, turns: int = 16, answer_chars: int = 300) -> str:
-        """The latest turns, numbered from the start, for the answer prompt: located text alone
-        does not say which question came first."""
+    def _recent(self, turns: int = 16, answer_chars: int = 300, opening: int = 2) -> str:
+        """Turns for the answer prompt, numbered from the start: the first ``opening`` and the
+        latest ones, ``turns`` in all.  Located text alone does not say which question came
+        first, and at 4M, 20 turns in, "what did I ask first" was not found by locating."""
 
         if not self.history:
             return ""
-        first = max(0, len(self.history) - turns)
+        numbered = list(enumerate(self.history, start=1))
+        if len(numbered) > turns:
+            numbered = numbered[:opening] + [None] + numbered[-(turns - opening):]
         lines = ["Earlier in this conversation:"]
-        for number, (question, answer) in enumerate(self.history[first:], start=first + 1):
+        for item in numbered:
+            if item is None:
+                lines.append("...")
+                continue
+            number, (question, answer) = item
             lines.append(f"Q{number}: {question}")
             lines.append(f"A{number}: {answer[:answer_chars]}")
         return "\n".join(lines)

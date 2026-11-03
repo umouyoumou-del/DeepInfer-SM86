@@ -17,6 +17,7 @@ Listening on a loopback address needs no key; on any other address every request
 
 from __future__ import annotations
 
+import argparse
 import ipaddress
 import json
 import os
@@ -36,6 +37,10 @@ SERVICE: LongContextChat | None = None
 KEY = ""
 DEMO: dict = {"questions": [], "instructions": {}, "variants": {}}
 MAX_BODY = 64 << 20
+# answer checks (deepinfer.moe.answer_check), on: over 315 answer contexts (scripts/answer_bench.py)
+# they turned 12 wrong answers right and 2 right ones wrong; --no-check-copies / --no-self-check
+CHECK_COPIES = True
+SELF_CHECK = True
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -176,6 +181,10 @@ def add_arguments(parser) -> None:
     parser.add_argument("--encode-window", type=int, default=0,
                         help="tokens each token sees while text is read; 0 = the position chunk (3/4 of trained)")
     parser.add_argument("--chunk", type=int, default=16384, help="tokens encoded between two questions")
+    parser.add_argument("--check-copies", action=argparse.BooleanOptionalAction, default=CHECK_COPIES,
+                        help="ask again when an answer copies a line of the text wrong")
+    parser.add_argument("--self-check", action=argparse.BooleanOptionalAction, default=SELF_CHECK,
+                        help="a second turn checks the final answer against its own steps")
     parser.add_argument("--load-cache", default="", help="start from a cache saved by needle_complex --save-cache")
 
 
@@ -214,7 +223,8 @@ def run(args) -> None:
         )
     else:
         session = build_session(rt, capacity=capacity, trained=model.trained, encode_window=window, chunk=args.chunk)
-    SERVICE = LongContextChat(rt, tok, session, header_ids=header, chunk=args.chunk, near_window=window)
+    SERVICE = LongContextChat(rt, tok, session, header_ids=header, chunk=args.chunk, near_window=window,
+                              check_copies=args.check_copies, self_check=args.self_check)
     if args.load_cache:
         loaded = Source(name=f"已存盘的缓存（{session.length:,} token）", tokens=session.length - len(header),
                         kind="demo", done=session.length - len(header))

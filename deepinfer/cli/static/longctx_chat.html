@@ -226,6 +226,8 @@ $('ask').onsubmit = async ev => {
             `<div><b>第 ${fmt(x.position)} 个 token（${(100 * x.depth).toFixed(1)}%）</b> ${x.source ? '· ' + esc(x.source) + ' ' : ''}· ${esc(x.line)}</div>`).join('');
           if (!e.stop) head.textContent = `第 ${e.round} 轮答完，用答案再定位一次…`;
         }
+        else if (e.event === 'check') head.textContent = e.kind === 'self'
+          ? `第 ${e.round} 轮答完，核对最终答案…` : `第 ${e.round} 轮的回答有一句与原文不符，重答一次…`;
         else if (e.event === 'variants') head.textContent = `再用另外 ${e.count} 种问法确认最后一步…`;
         else if (e.event === 'union') final.textContent = `答（${e.phrasings} 种问法取并集）：` + e.final;
         else if (e.event === 'done') {

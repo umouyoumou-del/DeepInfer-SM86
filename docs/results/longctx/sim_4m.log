@@ -1,0 +1,142 @@
+Token indices sequence length is longer than the specified maximum sequence length for this model (37526 > 16384). Running this sequence through the model will result in indexing errors
+workspace: 967 files, 4,142,230 tokens (1,223,046 project)
+
+[9.8 min, context 1,245,188, queued 2,913,430] In deepinfer/moe/longctx_service.py, what is the default value of the parameter `kind` of `add_ids`?
+  -> 'None'  [WRONG; first token 5.64 s, 59.22 s, rounds 4]
+     evidence DeepInfer-SM86/apps/longctx_chat.py @ 38,577: parser.add_argument("--models-dir", default="/root/autodl-tmp/models")
+     evidence DeepInfer-SM86/deepinfer/cli/bench.py @ 73,278: def add_arguments(parser) -> None:
+     evidence DeepInfer-SM86/deepinfer/cli/main.py @ 76,365: add_model_arguments(command)
+
+[10.8 min, context 1,245,231, queued 2,897,046] In tests/quantization/helpers.py, what is the default value of the parameter `intermediate_size` of `make_tiny_gguf`?
+  -> '128'  [RIGHT; first token 4.8 s, 28.23 s, rounds 2]
+     evidence DeepInfer-SM86/tests/quantization/__init__.py @ 1,216,333: ===== DeepInfer-SM86/tests/quantization/__init__.py =====
+     evidence DeepInfer-SM86/tests/quantization/helpers.py @ 1,216,355: ===== DeepInfer-SM86/tests/quantization/helpers.py =====
+     evidence DeepInfer-SM86/tests/quantization/helpers.py @ 1,218,884: def make_tiny_gguf(
+
+[11.5 min, context 1,261,662, queued 2,880,662] 在这个项目的 4M 测试里，读入 4,194,304 个 token 用了多少分钟？
+  -> '33.8'  [RIGHT; first token 4.77 s, 43.72 s, rounds 3]
+     evidence DeepInfer-SM86/README.md @ 3,904: 题，两次运行（其中一次从头 prefill）都是 21/21、31/31，33 处针全部定位到——KV 51.9 GiB（93 万 token 在显存、221 万在锁页主机
+     evidence DeepInfer-SM86/README.md @ 3,966: 内存），prefill 25 分钟，21 题约 15 分钟。
+     evidence DeepInfer-SM86/README.md @ 3,989: **4M（4,194,304 token）**：主机端改为按实际大小锁页（PyTorch 的锁页分配会取整到 2 的幂，4M 时要 82 GiB）后同一张卡装得下——KV 69.2 GiB（93 万在
+
+[14.6 min, context 1,556,619, queued 2,602,134] In asyncio/base_futures.py, what is the value of the module constant `_PENDING`?
+  -> "'PENDING'"  [RIGHT; first token 5.42 s, 55.42 s, rounds 4]
+     evidence 对话 @ 1,261,617: [Q] In tests/quantization/helpers.py, what is the default value of the parameter `intermediate_size`
+     evidence python3.12/asyncio/base_futures.py @ 1,536,872: ===== python3.12/asyncio/base_futures.py =====
+     evidence python3.12/asyncio/base_futures.py @ 1,536,911: # States for Future.
+
+all read: 4,142,408 tokens after 37.4 min
+
+[37.4 min, context 4,142,408, queued 0] In tests/moe/test_yarn_rope.py, what is the value of the module constant `TRAINED`?
+  -> '4096'  [RIGHT; first token 12.69 s, 53.41 s, rounds 2]
+     evidence DeepInfer-SM86/README.md @ 2,493: 见 `tests/moe/test_latent_mla.py`）；Triton 缺席时定位走 PyTorch 实现。
+     evidence DeepInfer-SM86/deepinfer/moe/olmoe_attention.py @ 331,678: verified against ``OlmoeDecoderLayer`` in ``tests/moe/test_olmoe_layer.py``.
+     evidence DeepInfer-SM86/deepinfer/moe/yarn_rope.py @ 415,008: ===== DeepInfer-SM86/deepinfer/moe/yarn_rope.py =====
+
+[38.3 min, context 4,142,451, queued 0] In deepinfer/moe/latent_mla_triton.py, what is the default value of the parameter `num_warps` of `decode_partial`?
+  -> '8'  [WRONG; first token 13.48 s, 163.93 s, rounds 4]
+     evidence DeepInfer-SM86/deepinfer/moe/latent_locate.py @ 284,154: num_warps: int,
+     evidence DeepInfer-SM86/deepinfer/moe/latent_locate.py @ 284,544: num_warps=num_warps, num_stages=num_stages,
+     evidence DeepInfer-SM86/deepinfer/moe/latent_locate.py @ 286,235: num_warps: int = 8,
+
+[41.0 min, context 4,142,502, queued 0] In scripts/bench_productivity_backends.py, what is the value of the module constant `REPEATS`?
+  -> '10'  [WRONG; first token 12.59 s, 57.18 s, rounds 2]
+     evidence DeepInfer-SM86/docs/ARTICLE_2_DEEPINFER_SM86_PRODUCTIVITY.md @ 456,595: python scripts\bench_productivity_backends.py
+     evidence DeepInfer-SM86/docs/PERSONAL_PRODUCTIVITY.md @ 687,540: python apps\server.py --checkpoint D:\Qwen3B-W4A16-SM86 --backend w4a16 --max-cache 256 --port 18001
+     evidence DeepInfer-SM86/scripts/bench_productivity_backends.py @ 983,166: ===== DeepInfer-SM86/scripts/bench_productivity_backends.py =====
+
+[42.0 min, context 4,142,541, queued 0] In tests/quantization/helpers.py, what is the default value of the parameter `num_kv_heads` of `make_tiny_gguf`?
+  -> '2'  [RIGHT; first token 12.93 s, 64.13 s, rounds 2]
+     evidence DeepInfer-SM86/scripts/test_qwen2_w4a16_graph_tiny.py @ 1,100,501: cfg = config_module.build_qwen2_model_config(hf, ROOT / "tiny-config.json")
+     evidence DeepInfer-SM86/tests/quantization/__init__.py @ 1,216,333: ===== DeepInfer-SM86/tests/quantization/__init__.py =====
+     evidence DeepInfer-SM86/tests/quantization/helpers.py @ 1,216,355: ===== DeepInfer-SM86/tests/quantization/helpers.py =====
+
+[43.1 min, context 4,142,588, queued 0] In tests/engine/test_paged_mha_degenerate.py, what is the value of the module constant `PAST`?
+  -> '6'  [RIGHT; first token 12.77 s, 86.69 s, rounds 3]
+     evidence DeepInfer-SM86/docs/ARTICLE_8_KV_FP8_AND_CPU_OFFLOAD.md @ 501,834: | `tests/engine/test_kv_cache.py` | FP8 + CPU payload roundtrip |
+     evidence DeepInfer-SM86/docs/ARTICLE_8_KV_FP8_AND_CPU_OFFLOAD.md @ 501,858: | `tests/engine/test_memory_budget.py` | FP8 block 预算 |
+     evidence DeepInfer-SM86/scripts/validate_sm86_kernels.py @ 1,103,096: block_ids = [manager.allocate_tokens(length + 1) for length in lengths]
+
+[44.5 min, context 4,142,630, queued 0] In tests/quantization/helpers.py, what is the default value of the parameter `group_size` of `pack_awq_weight`?
+  -> '32'  [RIGHT; first token 12.8 s, 61.55 s, rounds 2]
+     evidence DeepInfer-SM86/README.md @ 33,251: --group-size 128
+     evidence DeepInfer-SM86/README.md @ 33,335: --format awq `
+     evidence DeepInfer-SM86/deepinfer/moe/continuous_batching.py @ 193,843: def pack_caches(
+
+[45.6 min, context 4,142,676, queued 0] In nntplib.py, what is the value of the module constant `NNTP_SSL_PORT`?
+  -> '993'  [WRONG; first token 12.64 s, 90.51 s, rounds 3]
+     evidence python3.12/imaplib.py @ 3,179,835: def __init__(self, host='', port=IMAP4_SSL_PORT,
+     evidence python3.12/nntplib.py @ 3,591,022: ===== python3.12/nntplib.py =====
+     evidence python3.12/nntplib.py @ 3,591,038: """An NNTP client class based on:
+
+[47.1 min, context 4,142,715, queued 0] In __future__.py, what is the value of the module constant `CO_FUTURE_BARRY_AS_BDFL`?
+  -> '0x400000'  [RIGHT; first token 12.81 s, 124.01 s, rounds 4]
+     evidence python3.12/__future__.py @ 1,223,665: CO_NESTED = 0x0010                      # nested_scopes
+     evidence python3.12/__future__.py @ 1,223,712: CO_FUTURE_DIVISION = 0x20000            # division
+     evidence python3.12/__future__.py @ 1,223,734: CO_FUTURE_ABSOLUTE_IMPORT = 0x40000     # perform absolute imports by default
+
+[49.2 min, context 4,142,766, queued 0] In lib2to3/pgen2/token.py, what is the value of the module constant `MINUS`?
+  -> '-1'  [WRONG; first token 12.67 s, 62.7 s, rounds 2]
+     evidence python3.12/_compat_pickle.py @ 1,235,188: # This is a copy of lib2to3.fixes.fix_imports.MAPPING.  We cannot import
+     evidence python3.12/lib2to3/fixes/fix_exitfunc.py @ 3,329,460: from lib2to3 import pytree, fixer_base
+     evidence python3.12/lib2to3/fixes/fix_numliterals.py @ 3,343,969: from ..pgen2 import token
+
+[50.2 min, context 4,142,805, queued 0] In encodings/uu_codec.py, what is the default value of the parameter `mode` of `uu_encode`?
+  -> '0o666'  [RIGHT; first token 12.68 s, 46.59 s, rounds 2]
+     evidence python3.12/encodings/base64_codec.py @ 1,996,705: ===== python3.12/encodings/base64_codec.py =====
+     evidence python3.12/encodings/cp1254.py @ 2,059,056: def encode(self,input,errors='strict'):
+     evidence python3.12/encodings/uu_codec.py @ 2,599,064: ===== python3.12/encodings/uu_codec.py =====
+
+[51.0 min, context 4,142,849, queued 0] latent fp8 缓存每个 token 占多少 KiB？
+  -> '17.3 KiB'  [RIGHT; first token 12.29 s, 44.08 s, rounds 2]
+     evidence DeepInfer-SM86/README.md @ 3,568: 缓存 MLA 的共享 latent（每 token 17.3 KiB，而不是展开后的 324 KiB）、DCA 位置映射、
+     evidence DeepInfer-SM86/deepinfer/moe/latent_mla.py @ 287,996: latent, fp16              30.4 KiB/token
+     evidence DeepInfer-SM86/deepinfer/moe/latent_mla.py @ 288,011: latent fp8 + rope fp16    17.3 KiB/token   (1M tokens = 17.3 GiB)
+
+[51.7 min, context 4,142,878, queued 0] 和 llama.cpp 的对比里，llama.cpp 读入 1M token 用了多少分钟？
+  -> '99.3'  [RIGHT; first token 12.64 s, 48.37 s, rounds 2]
+     evidence DeepInfer-SM86/README.md @ 614: 并支持与 llama.cpp 同 prompt / 同 greedy 采样对照；
+     evidence DeepInfer-SM86/README.md @ 5,209: ### 和 llama.cpp、vLLM 比：同一张卡、同一份文档（2026-11-03）
+     evidence DeepInfer-SM86/README.md @ 5,639: 读入 1M：llama.cpp 99.3 分钟，本系统 8.7 分钟。整段直接回答随长度变差，各引擎一致（llama.cpp 16K 15/21、
+
+[52.6 min, context 4,142,919, queued 0] vLLM 0.7.3 为 DeepSeek 预先算的旋转位置表有多少行？
+  -> '163,840'  [RIGHT; first token 12.62 s, 55.65 s, rounds 2]
+     evidence DeepInfer-SM86/README.md @ 5,326: （`scripts/gguf_mla_layout.py`）；vLLM 0.7.3 用同一模型的 AWQ 版（最新版已不能加载 GGUF，它要的 PyTorch 也装不进机器剩余的磁盘）。
+     evidence DeepInfer-SM86/README.md @ 5,595: | vLLM 0.7.3，AWQ | 装不下 | 163,840（位置表上限） | 3/21 | 装不下 |
+     evidence DeepInfer-SM86/docs/LONG_CONTEXT_1M.md @ 582,798: - **vLLM**：最新的 0.32 已不能加载 GGUF，它要的 PyTorch 2.13 整套也超出这台机器的剩余磁盘（`/dev/shm
+
+[53.5 min, context 4,142,961, queued 0] Which files call drop_page_cache?
+  -> 'The files that call `drop_page_cache` are `deepinfer/moe/latent_mla.py`, `latent_mla_triton.py`, `latent_retrieval.py`, `latent_reread.py`, `tests/moe/test_latent_mla.py`, `test_latent_retrieval.py`, '  [WRONG; first token 12.19 s, 151.69 s, rounds 4]
+     evidence DeepInfer-SM86/deepinfer/cli/serve.py @ 82,515: from deepinfer.moe.latent_mla import LatentKVCache
+     evidence DeepInfer-SM86/deepinfer/moe/deepseek_longctx.py @ 206,640: from deepinfer.moe.latent_retrieval import (
+     evidence DeepInfer-SM86/deepinfer/moe/latent_mla.py @ 291,169: def drop_page_cache(path: str) -> None:
+
+[56.0 min, context 4,143,093, queued 0] What does pinned_empty do, and why does the cache not just use torch.empty with pin_memory=True?
+  -> 'The `latent_mla.pinned_empty` function creates a page-locked host tensor of a specified shape and data type on the host side, ensuring that the allocated memory is pinned to the host and not moved to '  [RIGHT; first token 12.6 s, 69.48 s, rounds 2]
+     evidence DeepInfer-SM86/deepinfer/engine/kv_cache.py @ 116,820: key = key.pin_memory()
+     evidence DeepInfer-SM86/deepinfer/moe/deepseek_v2_runtime.py @ 224,387: buffer = torch.empty(
+     evidence DeepInfer-SM86/deepinfer/moe/deepseek_v2_runtime.py @ 224,410: pin_memory=self.device.type == "cuda",
+
+[57.2 min, context 4,143,223, queued 0] 在 answer_check.py 里，判断一段话是不是抄错，相似度的阈值默认是多少？
+  -> '0.7'  [WRONG; first token 12.57 s, 62.75 s, rounds 2]
+     evidence DeepInfer-SM86/deepinfer/cli/serve.py @ 80,199: # answer checks (deepinfer.moe.answer_check), on: over 315 answer contexts (scripts/answer_bench.py)
+     evidence DeepInfer-SM86/deepinfer/moe/answer_check.py @ 189,881: ===== DeepInfer-SM86/deepinfer/moe/answer_check.py =====
+     evidence DeepInfer-SM86/deepinfer/moe/answer_check.py @ 191,612: )
+
+[58.3 min, context 4,143,263, queued 0] 我在这次对话里问的第一个问题是什么？
+  -> '中国的首都是北京。'  [read it; first token 12.15 s, 84.1 s, rounds 4]
+     evidence DeepInfer-SM86/README.md @ 1,778: deepinfer-cli -m DeepSeek-V2-Lite-Chat-Q4_K_M.gguf -p "法国的首都是哪里？"
+     evidence DeepInfer-SM86/README.md @ 4,979: | 读完 | 3,145,826 | 我问的第一个问题是什么、你怎么答的 | 9.6 s | 49.9 s | ✓ 变量链那题和它的 5 个名字 |
+     evidence DeepInfer-SM86/docs/ARTICLE_9_DEEPSEEK_V2_LITE_MOE_CPU_GPU_OFFLOAD.md @ 503,489: | 中国的首都是哪里？请只回答城市名。 | 中国的首都是北京。 |
+{
+ "right": "13/20",
+ "by_kind": {
+  "constant": "4/7",
+  "default": "4/6",
+  "docs": "1/1",
+  "hand": "4/6"
+ },
+ "minutes": 59.7
+}
+wrote logs/sim_4m.json
+exit 0
