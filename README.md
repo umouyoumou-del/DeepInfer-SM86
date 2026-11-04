@@ -204,6 +204,10 @@ attention（3M/4M 此前均 21/21、31/31），>4M 自动走分层检索 + 按�
 8 类全局问题（最大类、Top-3、过滤聚合、distinct count、实体计数、二跳/三跳关系）全部正确；
 图构建 0.33 s，单题约 0.33–0.39 s。结果见
 [`docs/results/longctx/A100_SM80_10M_REASONING.md`](docs/results/longctx/A100_SM80_10M_REASONING.md)。
+**10M 散文 map-reduce 事实抽取（2026-11-04）**：全文扫描 4,000 条散文事实，map-reduce
+抽取 4,000 条 triple 并合并进同一事实图；抽取 6.23 s，图构建 0.33 s，合并后查询约 1 ms，
+4/4 问答正确。模型抽取后端也在真实 DeepSeek 上验证通过。详见
+[`docs/results/longctx/A100_SM80_10M_PROSE_MAPREDUCE.md`](docs/results/longctx/A100_SM80_10M_PROSE_MAPREDUCE.md)。
 
 ### 3M 上下文对话：边读边问（2026-11-03）
 

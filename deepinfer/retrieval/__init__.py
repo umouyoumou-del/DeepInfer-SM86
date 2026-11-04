@@ -1,5 +1,11 @@
 """Retrieval backends for contexts that do not fit in KV memory."""
 
+from deepinfer.retrieval.fact_extraction import (
+    ModelMapReduceExtractor,
+    RulesMapReduceExtractor,
+    merge_into_graph,
+    reduce_triples,
+)
 from deepinfer.retrieval.global_queries import (
     aggregate_metrics,
     classify,
@@ -22,6 +28,8 @@ from deepinfer.retrieval.hybrid import (
 __all__ = [
     "FACT_KEYS",
     "FactGraph",
+    "ModelMapReduceExtractor",
+    "RulesMapReduceExtractor",
     "aggregate_metrics",
     "answer_reasoning",
     "build_index",
@@ -32,7 +40,9 @@ __all__ = [
     "extractive_summary",
     "facts_from_lines",
     "global_answer",
+    "merge_into_graph",
     "parse_metric_records",
+    "reduce_triples",
     "retrieve",
     "structured_answer",
 ]

@@ -1,0 +1,50 @@
+{
+ "summary": {
+  "tokens": 10000000,
+  "text_bytes": 33711891,
+  "prose_fact_lines": 4000,
+  "map_reduce_triples": 4000,
+  "merged_triples": 4000,
+  "graph_relations": 4000,
+  "graph_prose_triples": 4000,
+  "build_seconds": 38.4,
+  "extract_seconds": 6.23,
+  "graph_seconds": 0.33,
+  "checks": {
+   "owns": true,
+   "located": true,
+   "works": true,
+   "employees": true
+  }
+ },
+ "answers": {
+  "owns": {
+   "question": "Who owns Beta0001?",
+   "expected": "Answer: Acme0001",
+   "actual": "Answer: Acme0001",
+   "kind": "graph",
+   "seconds": 0.001
+  },
+  "located": {
+   "question": "Where is Beta0001 located?",
+   "expected": "Answer: Berlin0001",
+   "actual": "Answer: Berlin0001",
+   "kind": "graph",
+   "seconds": 0.001
+  },
+  "works": {
+   "question": "Who works for Acme0001?",
+   "expected": "Answer: Alice0001",
+   "actual": "Answer: Alice0001",
+   "kind": "graph",
+   "seconds": 0.001
+  },
+  "employees": {
+   "question": "How many employees does Acme0001 have?",
+   "expected": "Answer: 1201",
+   "actual": "Answer: 1201",
+   "kind": "graph",
+   "seconds": 0.001
+  }
+ }
+}

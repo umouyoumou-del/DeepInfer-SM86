@@ -1,0 +1,55 @@
+{
+ "seconds": 8.6,
+ "triples": [
+  {
+   "subject": "Acme Corporation",
+   "relation": "has_employees",
+   "object": "1200",
+   "confidence": 0.8,
+   "source": "prose-model"
+  },
+  {
+   "subject": "Acme Corporation",
+   "relation": "owns",
+   "object": "Beta Labs",
+   "confidence": 0.8,
+   "source": "prose-model"
+  },
+  {
+   "subject": "Alice Chen",
+   "relation": "works_for",
+   "object": "Acme Corporation",
+   "confidence": 0.8,
+   "source": "prose-model"
+  },
+  {
+   "subject": "Beta Labs",
+   "relation": "located_in",
+   "object": "Berlin",
+   "confidence": 0.8,
+   "source": "prose-model"
+  },
+  {
+   "subject": "Beta Labs",
+   "relation": "was_founded_by",
+   "object": "Dana Lee",
+   "confidence": 0.8,
+   "source": "prose-model"
+  },
+  {
+   "subject": "Dana Lee",
+   "relation": "reports_to",
+   "object": "Alice Chen",
+   "confidence": 0.8,
+   "source": "prose-model"
+  }
+ ],
+ "merged": 6,
+ "graph_relations": 6,
+ "checks": {
+  "owns": true,
+  "located": true,
+  "works_for": true,
+  "employees": true
+ }
+}

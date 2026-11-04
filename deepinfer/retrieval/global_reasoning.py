@@ -13,6 +13,8 @@ from collections.abc import Sequence
 
 from deepinfer.retrieval.global_queries import GlobalResult
 
+_GRAPH_CACHE: dict[int, tuple[str, FactGraph]] = {}
+
 _METRIC = re.compile(r"GLOBAL\s+METRIC\s+category=([A-Za-z0-9_.-]+)\s+value=(-?\d+)")
 _RELATION = re.compile(r"RELATION\s+subject=([A-Za-z0-9_.-]+)\s+relation=([A-Za-z0-9_.-]+)\s+object=([A-Za-z0-9_.-]+)")
 _ENTITY = re.compile(r"ENTITY\s+id=([A-Za-z0-9_.-]+)\s+type=([A-Za-z0-9_.-]+)\s+group=([A-Za-z0-9_.-]+)")
@@ -26,6 +28,7 @@ class FactGraph:
         self.con.execute("CREATE TABLE metrics(category TEXT, value INTEGER, position INTEGER)")
         self.con.execute("CREATE TABLE entities(id TEXT, type TEXT, grp TEXT, position INTEGER)")
         self.con.execute("CREATE TABLE relations(subject TEXT, relation TEXT, object TEXT, position INTEGER)")
+        self.con.execute("CREATE TABLE triples(subject TEXT, relation TEXT, object TEXT, confidence REAL, source TEXT)")
         self.con.execute("CREATE INDEX metrics_category ON metrics(category)")
         self.con.execute("CREATE INDEX entities_type ON entities(type, grp)")
         self.con.execute("CREATE INDEX relations_sp ON relations(subject, relation)")
@@ -59,6 +62,42 @@ class FactGraph:
     @property
     def relations(self) -> int:
         return int(self.con.execute("SELECT count(*) FROM relations").fetchone()[0])
+
+    @property
+    def prose_triples(self) -> int:
+        return int(self.con.execute("SELECT count(*) FROM triples").fetchone()[0])
+
+    def add_triples(self, triples: list[dict]) -> int:
+        """Merge map-reduce extracted prose triples into the same relation graph."""
+
+        added = 0
+        for item in triples:
+            subject = str(item.get("subject", "")).strip()
+            relation = str(item.get("relation", "")).strip().lower().replace(" ", "_")
+            obj = str(item.get("object", "")).strip()
+            if not subject or not relation or not obj:
+                continue
+            confidence = float(item.get("confidence", 1.0))
+            source = str(item.get("source", "prose"))
+            self.con.execute("INSERT INTO relations VALUES (?,?,?,?)", (subject, relation, obj, 0))
+            self.con.execute("INSERT INTO triples VALUES (?,?,?,?,?)", (subject, relation, obj, confidence, source))
+            added += 1
+        self.con.commit()
+        return added
+
+    def query(self, subject: str, relation: str) -> list[str]:
+        relation = relation.strip().lower().replace(" ", "_")
+        rows = self.con.execute(
+            "SELECT object FROM relations WHERE lower(subject)=lower(?) AND relation=?", (subject, relation)
+        )
+        return sorted({str(row[0]) for row in rows})
+
+    def inverse_query(self, obj: str, relation: str) -> list[str]:
+        relation = relation.strip().lower().replace(" ", "_")
+        rows = self.con.execute(
+            "SELECT subject FROM relations WHERE lower(object)=lower(?) AND relation=?", (obj, relation)
+        )
+        return sorted({str(row[0]) for row in rows})
 
     def metric_totals(self, *, min_value: int | None = None) -> dict[str, int]:
         sql = "SELECT category, sum(value) FROM metrics"
@@ -129,16 +168,43 @@ def _tokens(question: str, field: str) -> list[str]:
     return re.findall(rf"\b{field}=([A-Za-z0-9_.-]+)", question)
 
 
-def answer_reasoning(question: str, text: str) -> GlobalResult | None:
+def cached_graph(text: str) -> FactGraph:
+    """Reuse the full-text graph across questions; extraction is expensive."""
+
+    key = id(text)
+    entry = _GRAPH_CACHE.get(key)
+    if entry is not None and entry[0] is text:
+        return entry[1]
+    graph = FactGraph(text)
+    if len(_GRAPH_CACHE) >= 2:
+        _GRAPH_CACHE.pop(next(iter(_GRAPH_CACHE)))
+    _GRAPH_CACHE[key] = (text, graph)
+    return graph
+
+
+def answer_reasoning(question: str, text: str, *, graph: FactGraph | None = None) -> GlobalResult | None:
     """Answer a full-document aggregate / multi-hop question from the fact graph."""
 
     low = question.lower()
     if not any(key in low for key in (
         "relation", "relations", "entity", "entities", "metric", "category", "distinct subject", "followed by",
-        "largest total", "total value",
+        "largest total", "total value", "owns", "own ", "founded", "works for", "located", "based", "employees",
     )):
         return None
-    graph = FactGraph(text)
+    if graph is None:
+        graph = cached_graph(text)
+    # Prose questions need the map-reduce prose layer merged into the same
+    # graph.  Structured-only questions keep the fast structured scan.
+    prose_question = re.search(
+        r"who owns|what does|who founded|where is|who works for|employees", question, re.IGNORECASE
+    )
+    if (graph.relations == 0 or prose_question) and graph.prose_triples == 0:
+        from deepinfer.retrieval.fact_extraction import (
+            RulesMapReduceExtractor,
+            merge_into_graph,
+        )
+
+        merge_into_graph(graph, RulesMapReduceExtractor().run(text))
     evidence: list[dict] = []
     threshold_match = re.search(r"(?:below|under|below value|excluding values below)\s+(-?\d+)", question)
     min_value = int(threshold_match.group(1)) if threshold_match else None
@@ -154,6 +220,25 @@ def answer_reasoning(question: str, text: str) -> GlobalResult | None:
                          "source": "fact graph", "offset": 0} for obj in objects[:8]]
             return GlobalResult("graph", f"Answer: {answer}", evidence,
                                 {"subjects": subjects, "relations": relations, "objects": objects})
+    # Generic prose triples extracted by map-reduce.
+    prose_patterns = (
+        (r"who owns (.+?)\?", "inverse", "owns"),
+        (r"what does (.+?) own\?", "query", "owns"),
+        (r"who founded (.+?)\?", "inverse", "founded"),
+        (r"where is (.+?) (?:located|based)\?", "query", "located_in"),
+        (r"who works for (.+?)\?", "inverse", "works_for"),
+        (r"how many employees does (.+?) have\?", "query", "has_employees"),
+    )
+    for pattern, operation, relation in prose_patterns:
+        match = re.search(pattern, question, re.IGNORECASE)
+        if not match:
+            continue
+        entity = match.group(1).strip().rstrip(".")
+        values = graph.inverse_query(entity, relation) if operation == "inverse" else graph.query(entity, relation)
+        answer = ", ".join(values) if values else "unknown"
+        return GlobalResult("graph", f"Answer: {answer}", [],
+                            {"entity": entity, "relation": relation, "values": values,
+                             "prose_triples": graph.prose_triples})
     # Entity counts.
     if ("entity" in low or "entities" in low) and ("how many" in low or "count" in low):
         types = _tokens(question, "type")
@@ -199,4 +284,4 @@ def answer_reasoning(question: str, text: str) -> GlobalResult | None:
     return None
 
 
-__all__ = ["FactGraph", "answer_reasoning"]
+__all__ = ["FactGraph", "answer_reasoning", "cached_graph"]

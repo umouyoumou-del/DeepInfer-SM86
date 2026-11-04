@@ -220,14 +220,14 @@ def aggregate_metrics(text: str) -> GlobalResult | None:
     })
 
 
-def global_answer(question: str, text: str, facts: Sequence[str] = ()) -> GlobalResult | None:
+def global_answer(question: str, text: str, facts: Sequence[str] = (), *, graph=None) -> GlobalResult | None:
     """Route a question to the full-document count/summary/aggregation/graph path."""
 
     # Fact-graph reasoning (aggregation, distinct counts, multi-hop) is tried
     # before the simpler count/compare classifiers.
     from deepinfer.retrieval.global_reasoning import answer_reasoning
 
-    reasoned = answer_reasoning(question, text)
+    reasoned = answer_reasoning(question, text, graph=graph)
     if reasoned is not None:
         return reasoned
     kind = classify(question)
