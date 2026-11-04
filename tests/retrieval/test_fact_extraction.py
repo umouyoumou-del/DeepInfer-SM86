@@ -53,3 +53,14 @@ def test_prose_triples_are_queryable_in_shared_graph() -> None:
     assert global_answer("Where is Beta Labs located?", TEXT).answer == "Answer: Berlin"
     assert global_answer("Who works for Acme Corporation?", TEXT).answer == "Answer: Alice Chen"
     assert global_answer("How many employees does Acme Corporation have?", TEXT).answer == "Answer: 1200"
+
+
+def test_fact_graph_round_trip(tmp_path) -> None:
+    triples = RulesMapReduceExtractor(max_chars=100).run(TEXT)
+    graph = FactGraph(TEXT)
+    merge_into_graph(graph, triples)
+    path = tmp_path / "facts.sqlite"
+    graph.save(path)
+    loaded = FactGraph.from_sqlite(path)
+    assert loaded.prose_triples == 4
+    assert loaded.inverse_query("Beta Labs", "owns") == ["Acme Corporation"]

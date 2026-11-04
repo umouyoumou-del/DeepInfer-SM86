@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import re
 import sqlite3
+import threading
 from collections.abc import Sequence
+from pathlib import Path
 
 from deepinfer.retrieval.global_queries import GlobalResult
 
@@ -23,8 +25,12 @@ _ENTITY = re.compile(r"ENTITY\s+id=([A-Za-z0-9_.-]+)\s+type=([A-Za-z0-9_.-]+)\s+
 class FactGraph:
     """SQLite graph of metrics, entities and directed relations."""
 
-    def __init__(self, text: str) -> None:
-        self.con = sqlite3.connect(":memory:")
+    def __init__(self, text: str = "", *, path: str | Path | None = None) -> None:
+        self._lock = threading.RLock()
+        if path is not None:
+            self.con = sqlite3.connect(str(path), check_same_thread=False)
+            return
+        self.con = sqlite3.connect(":memory:", check_same_thread=False)
         self.con.execute("CREATE TABLE metrics(category TEXT, value INTEGER, position INTEGER)")
         self.con.execute("CREATE TABLE entities(id TEXT, type TEXT, grp TEXT, position INTEGER)")
         self.con.execute("CREATE TABLE relations(subject TEXT, relation TEXT, object TEXT, position INTEGER)")
@@ -66,6 +72,22 @@ class FactGraph:
     @property
     def prose_triples(self) -> int:
         return int(self.con.execute("SELECT count(*) FROM triples").fetchone()[0])
+
+    @classmethod
+    def from_sqlite(cls, path: str | Path) -> FactGraph:
+        return cls(path=path)
+
+    def save(self, path: str | Path) -> None:
+        """Persist the graph so a server can load the reduce output once."""
+
+        destination = Path(path)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        target = sqlite3.connect(str(destination))
+        try:
+            with target:
+                self.con.backup(target)
+        finally:
+            target.close()
 
     def add_triples(self, triples: list[dict]) -> int:
         """Merge map-reduce extracted prose triples into the same relation graph."""

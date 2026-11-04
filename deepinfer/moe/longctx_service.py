@@ -15,11 +15,13 @@ turning streamed ids into text - are separate so they can be tested on their own
 from __future__ import annotations
 
 import itertools
+import os
 import queue
 import threading
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 
 # the instruction the 3M suite was answered with (scripts/needle_complex.py), {what} = "the answer"
 QUOTE_FIRST = (
@@ -133,6 +135,7 @@ class LongContextChat:
         near_window: int = 98304,
         check_copies: bool = False,
         self_check: bool = False,
+        fact_graph_path: str | os.PathLike[str] | None = None,
     ) -> None:
         self.rt = rt
         self.tok = tokenizer
@@ -140,6 +143,12 @@ class LongContextChat:
         self.header_ids = list(header_ids)
         self.separator_ids = tokenizer.encode("\n...\n", add_special_tokens=False)
         self.chunk = int(chunk)
+        self.fact_graph_path = None if fact_graph_path is None else str(fact_graph_path)
+        self.fact_graph = None
+        if self.fact_graph_path and Path(self.fact_graph_path).exists():
+            from deepinfer.retrieval.global_reasoning import FactGraph
+
+            self.fact_graph = FactGraph.from_sqlite(self.fact_graph_path)
         self.reserve = int(reserve)  # room kept for located queries, conversation turns
         self.near_window = int(near_window)
         # answer checks (deepinfer.moe.answer_check): ask again on a miscopied line, self-check the final answer
@@ -180,6 +189,7 @@ class LongContextChat:
         if not ids:
             raise ValueError("nothing to add")
         self._global_text_cache = None
+        self.fact_graph = None
         if len(ids) > self.room():
             raise ValueError(f"{len(ids):,} tokens do not fit: {max(0, self.room()):,} left")
         source = Source(name=name, tokens=len(ids), kind=kind)
@@ -229,6 +239,8 @@ class LongContextChat:
                 "gpu_tokens": session.cache.gpu_tokens, "state": self.state, "rate": round(self.rate),
                 "eta_seconds": round(self.queued_tokens / self.rate) if self.rate and self.queued_tokens else 0,
                 "turns": self.turns, "sources": sources, "last": self.last,
+                "fact_graph": self.fact_graph_path,
+                "fact_triples": 0 if self.fact_graph is None else self.fact_graph.prose_triples,
             }
 
     # ------------------------------------------------------------- global
@@ -256,7 +268,7 @@ class LongContextChat:
         if self.session.length <= len(self.header_ids) + 256:
             return False
         started = time.perf_counter()
-        result = global_answer(question, self._global_text())
+        result = global_answer(question, self._global_text(), graph=self.fact_graph)
         if result is None:
             return False
         answer = result.answer

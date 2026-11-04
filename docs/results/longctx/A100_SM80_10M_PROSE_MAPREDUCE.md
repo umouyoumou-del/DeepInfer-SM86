@@ -77,7 +77,48 @@ Beta Labs        | located_in    | Berlin
 The reduce phase normalizes model phrasings such as `has 1,200 employees` into
 `has_employees=1200`, so the same graph query works for both backends.
 
-## Production integration
+## Persisted graph and server integration
+
+The reduce output can be persisted as a SQLite graph:
+
+```bash
+python scripts/build_fact_graph.py   --text /root/di_bench/prose10m/haystack.txt   --out /root/di_bench/prose10m/facts.sqlite   --backend rules
+```
+
+For the 10M prose corpus this produced:
+
+```text
+triples:       4000
+graph size:    476 KB
+build time:    6.54 s
+```
+
+The hierarchical server then loads it directly:
+
+```bash
+python -m deepinfer.cli.main server   -m /root/models/DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf   --meta /root/meta_coder -c 10000000 --mode hierarchical   --hierarchical-text /root/di_bench/prose10m/haystack.txt   --hierarchical-index /root/di_bench/prose10m/fts.sqlite   --fact-graph /root/di_bench/prose10m/facts.sqlite   --host 127.0.0.1 --port 6191
+```
+
+`GET /status` reported:
+
+```text
+mode:         hierarchical
+context:       9,999,999 tokens
+index chunks:  17,071
+fact_triples:  4,000
+```
+
+Four prose questions through `POST /ask`:
+
+| Question | Final | Seconds |
+|---|---|---|
+| Who owns Beta0001? | Acme0001 | 0.086 |
+| Where is Beta0001 located? | Berlin0001 | 0.047 |
+| Who works for Acme0001? | Alice0001 | 0.043 |
+| How many employees does Acme0001 have? | 1201 | 0.049 |
+
+All four returned `global_kind=graph`; no model generation was used for these
+answers.
 
 - `global_answer()` tries the fact graph before ordinary count/compare paths.
 - Prose questions trigger the rules map-reduce layer only once per cached text.
@@ -101,6 +142,7 @@ The reduce phase normalizes model phrasings such as `has 1,200 employees` into
 
 - `deepinfer/retrieval/fact_extraction.py`
 - `deepinfer/retrieval/global_reasoning.py`
+- `scripts/build_fact_graph.py`
 - `scripts/prose_facts_10m.py`
 - `scripts/model_fact_extraction_demo.py`
 - [`prose10m_results.json`](prose10m_results.json)

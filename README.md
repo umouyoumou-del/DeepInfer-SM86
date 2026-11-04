@@ -208,6 +208,9 @@ attention（3M/4M 此前均 21/21、31/31），>4M 自动走分层检索 + 按�
 抽取 4,000 条 triple 并合并进同一事实图；抽取 6.23 s，图构建 0.33 s，合并后查询约 1 ms，
 4/4 问答正确。模型抽取后端也在真实 DeepSeek 上验证通过。详见
 [`docs/results/longctx/A100_SM80_10M_PROSE_MAPREDUCE.md`](docs/results/longctx/A100_SM80_10M_PROSE_MAPREDUCE.md)。
+持久化事实图可用 `scripts/build_fact_graph.py` 生成，并通过
+`deepinfer-server --fact-graph facts.sqlite` 直接加载；10M 散文服务实测 4/4 正确，
+单题 0.043–0.086 s。
 
 ### 3M 上下文对话：边读边问（2026-11-03）
 

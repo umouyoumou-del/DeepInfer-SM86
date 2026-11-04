@@ -193,6 +193,7 @@ def add_arguments(parser) -> None:
                         help="shortcut for --mode hierarchical")
     parser.add_argument("--hierarchical-text", default="", help="text file backing the hierarchical index")
     parser.add_argument("--hierarchical-index", default="", help="SQLite FTS5 index for hierarchical mode")
+    parser.add_argument("--fact-graph", default="", help="persisted FactGraph SQLite file built by build_fact_graph.py")
     parser.add_argument("--hierarchical-top-k", type=int, default=24, help="retrieved chunks per question")
 
 
@@ -236,6 +237,7 @@ def run(args) -> None:
         SERVICE = HierarchicalChat(
             rt, tok, text_path=args.hierarchical_text or None, index_path=args.hierarchical_index or None,
             capacity=args.ctx_size or 10_000_000, top_k=args.hierarchical_top_k,
+            fact_graph_path=args.fact_graph or None,
         )
         KEY = args.api_key or ("" if _loopback(args.host) else secrets.token_urlsafe(12))
         server = ThreadingHTTPServer((args.host, args.port), Handler)
@@ -259,7 +261,8 @@ def run(args) -> None:
     else:
         session = build_session(rt, capacity=capacity, trained=model.trained, encode_window=window, chunk=args.chunk)
     SERVICE = LongContextChat(rt, tok, session, header_ids=header, chunk=args.chunk, near_window=window,
-                              check_copies=args.check_copies, self_check=args.self_check)
+                              check_copies=args.check_copies, self_check=args.self_check,
+                              fact_graph_path=args.fact_graph or None)
     if args.load_cache:
         loaded = Source(name=f"已存盘的缓存（{session.length:,} token）", tokens=session.length - len(header),
                         kind="demo", done=session.length - len(header))

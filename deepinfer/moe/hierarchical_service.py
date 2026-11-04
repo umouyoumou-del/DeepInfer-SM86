@@ -47,6 +47,7 @@ class HierarchicalChat:
         chunk_chars: int = 2000,
         max_context: int = 32768,
         trained: int = 131072,
+        fact_graph_path: str | os.PathLike[str] | None = None,
     ) -> None:
         self.rt = runtime
         self.tok = tokenizer
@@ -57,6 +58,12 @@ class HierarchicalChat:
         self.max_context = int(max_context)
         self.trained = int(trained)
         self.index_path = None if index_path is None else str(index_path)
+        self.fact_graph_path = None if fact_graph_path is None else str(fact_graph_path)
+        self.fact_graph = None
+        if self.fact_graph_path and Path(self.fact_graph_path).exists():
+            from deepinfer.retrieval.global_reasoning import FactGraph
+
+            self.fact_graph = FactGraph.from_sqlite(self.fact_graph_path)
         self.lock = threading.RLock()
         self.db_lock = threading.RLock()
         self.text_parts: list[str] = []
@@ -169,6 +176,7 @@ class HierarchicalChat:
     def add_text(self, text: str, name: str, kind: str = "text") -> Source:
         if not text:
             raise ValueError("nothing to add")
+        self.fact_graph = None
         tokens = len(self.tok.encode(text, add_special_tokens=False))
         if tokens > self.room():
             raise ValueError(f"{tokens:,} tokens do not fit: {self.room():,} left")
@@ -223,6 +231,7 @@ class HierarchicalChat:
         with self.lock:
             self.text_parts, self.text, self.facts, self.sources = [], "", [], []
             self.turns, self.history, self.last = 0, [], {}
+            self.fact_graph = None
             self._next_cid = 0
             self.session.length = 0
             self.state = "idle"
@@ -241,6 +250,8 @@ class HierarchicalChat:
                 "eta_seconds": 0, "turns": self.turns, "sources": sources, "last": self.last,
                 "index_chunks": chunks, "index_bytes": 0 if self.index_path is None else os.path.getsize(self.index_path),
                 "retrieval_ms": round(self.retrieval_ms, 2),
+                "fact_graph": self.fact_graph_path,
+                "fact_triples": 0 if self.fact_graph is None else self.fact_graph.prose_triples,
             }
 
     # ----------------------------------------------------------------- worker
@@ -295,7 +306,7 @@ class HierarchicalChat:
         # Global count/summary/aggregation queries need every token, not top-k.
         first_token = None
         tokens = 0
-        global_result = global_answer(question, text, facts)
+        global_result = global_answer(question, text, facts, graph=self.fact_graph)
         if global_result is not None:
             answer = global_result.answer
             global_kind = global_result.kind

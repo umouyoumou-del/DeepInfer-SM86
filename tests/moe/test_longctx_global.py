@@ -31,6 +31,7 @@ def test_full_kv_service_handles_global_count() -> None:
     chat.last = {}
     chat._global_text_cache = None
     chat._global_text_length = -1
+    chat.fact_graph = None
     events = queue.Queue()
     handled = chat._try_global("How many times does GLOBAL_MARKER_X occur in the document?", events)
     assert handled is True

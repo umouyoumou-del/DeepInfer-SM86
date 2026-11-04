@@ -32,6 +32,7 @@ def main() -> None:
     parser.add_argument("--max-new-tokens", type=int, default=256)
     parser.add_argument("--max-chunks", type=int, default=1)
     parser.add_argument("--out", default="/root/di_bench/model_fact_extraction.json")
+    parser.add_argument("--graph-out", default="")
     args = parser.parse_args()
 
     import torch
@@ -55,6 +56,8 @@ def main() -> None:
     seconds = time.perf_counter() - began
     graph = FactGraph(TEXT)
     merged = merge_into_graph(graph, triples)
+    if args.graph_out:
+        graph.save(args.graph_out)
     checks = {
         "owns": graph.inverse_query("Beta Labs", "owns") == ["Acme Corporation"],
         "located": graph.query("Beta Labs", "located_in") == ["Berlin"],
@@ -67,6 +70,7 @@ def main() -> None:
         "merged": merged,
         "graph_relations": graph.relations,
         "checks": checks,
+        "graph_out": args.graph_out,
     }
     Path(args.out).write_text(json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
     print(json.dumps(payload, ensure_ascii=False), flush=True)

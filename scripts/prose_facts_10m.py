@@ -55,6 +55,7 @@ def main() -> None:
     parser.add_argument("--meta", default="/root/meta_coder")
     parser.add_argument("--out-dir", default="/root/di_bench/prose10m")
     parser.add_argument("--out", default="")
+    parser.add_argument("--graph-out", default="")
     args = parser.parse_args()
 
     out_dir = Path(args.out_dir)
@@ -76,6 +77,8 @@ def main() -> None:
     graph = FactGraph(text)
     merged = merge_into_graph(graph, triples)
     graph_seconds = time.perf_counter() - t
+    graph_out = Path(args.graph_out) if args.graph_out else out_dir / "facts.sqlite"
+    graph.save(graph_out)
 
     questions = [
         ("owns", "Who owns Beta0001?", f"Answer: {expected['acme']}"),
@@ -104,6 +107,7 @@ def main() -> None:
         "build_seconds": round(build_seconds, 2),
         "extract_seconds": round(extract_seconds, 2),
         "graph_seconds": round(graph_seconds, 2),
+        "graph_out": str(graph_out),
         "checks": checks,
     }
     out = Path(args.out) if args.out else out_dir / "prose10m_results.json"

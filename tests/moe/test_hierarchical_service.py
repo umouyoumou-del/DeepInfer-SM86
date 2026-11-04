@@ -101,3 +101,38 @@ def test_global_compare_event(tmp_path) -> None:
     done = next(event for event in seen if event.get("event") == "done")
     assert "alpha=15" in done["answer"]
     assert "Largest total: beta=20" in done["answer"]
+
+
+def test_persisted_fact_graph_answers_prose_without_model(tmp_path) -> None:
+    from deepinfer.retrieval.fact_extraction import (
+        RulesMapReduceExtractor,
+        merge_into_graph,
+    )
+    from deepinfer.retrieval.global_reasoning import FactGraph
+
+    text = (
+        "Acme Corporation owns Beta Labs.\n"
+        "Beta Labs is located in Berlin.\n"
+        "Alice Chen works for Acme Corporation.\n"
+        "Acme Corporation has 1,200 employees.\n"
+    )
+    text_path = tmp_path / "prose.txt"
+    text_path.write_text(text, encoding="utf-8")
+    graph = FactGraph(text)
+    merge_into_graph(graph, RulesMapReduceExtractor(max_chars=100).run(text))
+    graph_path = tmp_path / "facts.sqlite"
+    graph.save(graph_path)
+    chat = HierarchicalChat(
+        None, ToyTokenizer(), text_path=text_path, index_path=tmp_path / "index.sqlite",
+        capacity=1_000_000, fact_graph_path=graph_path,
+    )
+    events = chat.ask("Who owns Beta Labs?")
+    seen = []
+    while True:
+        event = events.get(timeout=10)
+        seen.append(event)
+        if event.get("event") in ("done", "error"):
+            break
+    done = next(event for event in seen if event.get("event") == "done")
+    assert done["final"] == "Acme Corporation"
+    assert done["global_kind"] == "graph"
