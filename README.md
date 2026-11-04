@@ -190,6 +190,9 @@ Triton FP8 在 SM80 上改走软件 E4M3 解码；VT 题增加 `var_chain_answer
 索引热启动 1.16 s；8 并发客户端跑完 21 题 **21/21、31/31，wall 1.841 s，p50 0.591 s**；
 开放问题模型回退的单题示例 5.96 s（首字 1.99 s）。详见
 [`docs/results/longctx/A100_SM80_10M_SERVER.md`](docs/results/longctx/A100_SM80_10M_SERVER.md)。
+**10M 100 针大海捞针（2026-11-04）**：10,000,000 token、100 根深度 1%–99% 的唯一针，FTS5 top-8
+检索 + 精确事实抽取 **100/100 全对**，100 次检索合计 0.405 s，索引 45.1 MB/0.904 s。结果见
+[`docs/results/longctx/A100_SM80_10M_NEEDLE.md`](docs/results/longctx/A100_SM80_10M_NEEDLE.md)。
 
 ### 3M 上下文对话：边读边问（2026-11-03）
 
