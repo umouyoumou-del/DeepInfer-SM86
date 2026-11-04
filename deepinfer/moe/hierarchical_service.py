@@ -21,6 +21,7 @@ from types import SimpleNamespace
 from deepinfer.moe.answer_check import var_chain_answer
 from deepinfer.moe.latent_reread import final_answer
 from deepinfer.moe.longctx_service import QUOTE_FIRST, Source
+from deepinfer.retrieval.global_queries import global_answer
 from deepinfer.retrieval.hybrid import (
     chunk_text,
     exact_lines,
@@ -291,35 +292,45 @@ class HierarchicalChat:
         )
         events.put({"event": "located", "round": 1, "seconds": round(retrieval, 3),
                     "positions": [], "context": context_length})
-        # Exact structured facts and variable chains do not need a GPU pass at all.
+        # Global count/summary/aggregation queries need every token, not top-k.
         first_token = None
         tokens = 0
-        structured = structured_answer(question, facts, text)
-        if structured:
-            answer = "Answer: " + structured
-        elif text and "variable" in question.lower() and (names := var_chain_answer(question, text)):
-            answer = "Answer: " + ", ".join(names)
+        global_result = global_answer(question, text, facts)
+        if global_result is not None:
+            answer = global_result.answer
+            global_kind = global_result.kind
+            globals_evidence = global_result.evidence
+            global_metrics = global_result.metrics
         else:
-            capacity = len(context_ids) + len(prompt_ids) + 1024
-            positions = DualChunkPositions(self.trained, self.trained * 3 // 4, -1)
-            session = DeepSeekLongContext(
-                self.rt, capacity=capacity, gpu_tokens=capacity, kv_dtype="fp8", positions=positions,
-                prefill_chunk=16384, tile_tokens=32768, encode_window=98304,
-            )
-            session.prefill(context_ids)
-            first = [None]
+            global_kind = None
+            globals_evidence = []
+            global_metrics = {}
+            structured = structured_answer(question, facts, text)
+            if structured:
+                answer = "Answer: " + structured
+            elif text and "variable" in question.lower() and (names := var_chain_answer(question, text)):
+                answer = "Answer: " + ", ".join(names)
+            else:
+                capacity = len(context_ids) + len(prompt_ids) + 1024
+                positions = DualChunkPositions(self.trained, self.trained * 3 // 4, -1)
+                session = DeepSeekLongContext(
+                    self.rt, capacity=capacity, gpu_tokens=capacity, kv_dtype="fp8", positions=positions,
+                    prefill_chunk=16384, tile_tokens=32768, encode_window=98304,
+                )
+                session.prefill(context_ids)
+                first = [None]
 
-            def on_tokens(_ids: list[int]) -> None:
-                if first[0] is None:
-                    first[0] = time.perf_counter() - began
+                def on_tokens(_ids: list[int]) -> None:
+                    if first[0] is None:
+                        first[0] = time.perf_counter() - began
 
-            out = session.generate(prompt_ids, max_new_tokens=self.max_new,
-                                   stop_ids=[self.tok.eos_token_id], on_tokens=on_tokens)
-            first_token = first[0]
-            tokens = len(out)
-            answer = self.tok.decode(out, skip_special_tokens=True).strip()
+                out = session.generate(prompt_ids, max_new_tokens=self.max_new,
+                                       stop_ids=[self.tok.eos_token_id], on_tokens=on_tokens)
+                first_token = first[0]
+                tokens = len(out)
+                answer = self.tok.decode(out, skip_special_tokens=True).strip()
         final = final_answer(answer)
-        ev = [
+        ev = globals_evidence or [
             {"line": line, "position": 0, "depth": 0.0, "source": "exact", "offset": 0}
             for line in evidence[:8]
         ]
@@ -330,7 +341,8 @@ class HierarchicalChat:
             "question": question, "seconds": round(seconds, 2),
             "first_token": None if first_token is None else round(first_token, 2),
             "rounds": 1, "tokens": tokens, "context": context_length, "read_tokens": len(context_ids),
-            "retrieval_ms": round(retrieval * 1000, 2),
+            "retrieval_ms": round(retrieval * 1000, 2), "global_kind": global_kind,
+            "global_metrics": global_metrics,
         }
         with self.lock:
             self.turns += 1

@@ -44,3 +44,60 @@ def test_structured_fast_path_event(tmp_path) -> None:
     done = next(event for event in seen if event.get("event") == "done")
     assert done["final"] == "7646461"
     assert done["rounds"] == 1
+
+
+def test_global_count_event(tmp_path) -> None:
+    chat = HierarchicalChat(None, ToyTokenizer(), index_path=tmp_path / "index.sqlite", capacity=1_000_000)
+    chat.add_text("GLOBAL_MARKER_X one.\nGLOBAL_MARKER_X two.\nGLOBAL_MARKER_X three.\n", "counts.txt")
+    events = chat.ask("How many times does GLOBAL_MARKER_X occur in the document?")
+    seen = []
+    while True:
+        event = events.get(timeout=10)
+        seen.append(event)
+        if event.get("event") in ("done", "error"):
+            break
+    done = next(event for event in seen if event.get("event") == "done")
+    assert done["final"] == "3"
+    assert done["global_kind"] == "count"
+
+
+def test_global_summary_event(tmp_path) -> None:
+    chat = HierarchicalChat(None, ToyTokenizer(), index_path=tmp_path / "index.sqlite", capacity=1_000_000)
+    themes = "\n\n".join([
+        "THEME_ALPHA explains low latency retrieval and incremental indexing.",
+        "THEME_BETA explains persistent evidence indexes and warm starts.",
+        "THEME_GAMMA explains full text counting instead of top-k sampling.",
+        "THEME_DELTA explains depth coverage across the whole document.",
+        "THEME_EPSILON explains deterministic aggregation of every record.",
+    ] * 3)
+    chat.add_text(themes, "themes.txt")
+    events = chat.ask("Summarize the main themes of the document.")
+    seen = []
+    while True:
+        event = events.get(timeout=10)
+        seen.append(event)
+        if event.get("event") in ("done", "error"):
+            break
+    done = next(event for event in seen if event.get("event") == "done")
+    for theme in ("THEME_ALPHA", "THEME_BETA", "THEME_GAMMA", "THEME_DELTA", "THEME_EPSILON"):
+        assert theme in done["answer"]
+
+
+def test_global_compare_event(tmp_path) -> None:
+    chat = HierarchicalChat(None, ToyTokenizer(), index_path=tmp_path / "index.sqlite", capacity=1_000_000)
+    chat.add_text(
+        "GLOBAL METRIC category=alpha value=10\n"
+        "GLOBAL METRIC category=beta value=20\n"
+        "GLOBAL METRIC category=alpha value=5\n",
+        "metrics.txt",
+    )
+    events = chat.ask("Compare the total value by category in the GLOBAL METRIC records.")
+    seen = []
+    while True:
+        event = events.get(timeout=10)
+        seen.append(event)
+        if event.get("event") in ("done", "error"):
+            break
+    done = next(event for event in seen if event.get("event") == "done")
+    assert "alpha=15" in done["answer"]
+    assert "Largest total: beta=20" in done["answer"]

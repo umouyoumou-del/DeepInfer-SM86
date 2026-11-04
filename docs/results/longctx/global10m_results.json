@@ -1,0 +1,86 @@
+{
+ "summary": {
+  "tokens": 10000000,
+  "text_bytes": 33834980,
+  "markers_expected": 137,
+  "markers_counted": 137,
+  "metrics_records": 100,
+  "categories": {
+   "alpha": 618,
+   "beta": 594,
+   "gamma": 570,
+   "delta": 587,
+   "epsilon": 604
+  },
+  "checks": {
+   "count": true,
+   "summary": true,
+   "compare": true
+  },
+  "build_seconds": 40.38,
+  "count_seconds": 0.013,
+  "summary_seconds": 3.217,
+  "compare_seconds": 0.013,
+  "summary_selected": 64,
+  "summary_buckets": 16
+ },
+ "questions": {
+  "count": {
+   "question": "How many times does GLOBAL_MARKER_X occur in the entire document?",
+   "answer": {
+    "term": "GLOBAL_MARKER_X",
+    "count": 137,
+    "positions": [
+     352183,
+     352216,
+     380298,
+     543978,
+     602814,
+     731450,
+     881386,
+     1053192,
+     1270253,
+     1363126,
+     1552497,
+     1673603,
+     1847544,
+     1998183,
+     2191041,
+     2316118,
+     2402973,
+     2591094,
+     2696587,
+     2842667
+    ],
+    "total_chars": 33830660
+   }
+  },
+  "summary": {
+   "question": "Summarize the main themes of this 10M-token document.",
+   "answer": "Full-document extractive summary:\n[  4.8%] #   http://www.demo2s.com/Tutorial/Cpp/0380__set-multiset/Catalog0380__set-multiset.htm\n[  5.3%] # Issue 19330: ensure context manager instances have good docstrings\n[  5.7%] \"NUL\", \"SOH\", \"STX\", \"ETX\", \"EOT\", \"ENQ\", \"ACK\", \"BEL\",\n[  5.7%] \"DLE\", \"DC1\", \"DC2\", \"DC3\", \"DC4\", \"NAK\", \"SYN\", \"ETB\",\n[  7.6%] type can be detected (jpeg, png, gif, tiff, rgb, pbm, pgm, ppm,\n[  9.6%] THEME_ALPHA: the system prefers low-latency retrieval and incremental indexing.\n[ 10.4%] Based on data from ftp://dkuug.dk/i18n/charmaps/HP-ROMAN8 (Keld Simonsen)\n[ 10.4%] '\\u02cb'   #  0xA9 -> MODIFIER LETTER GRAVE ACCENT (MANDARIN CHINESE FOURTH TONE)\n[ 12.5%] >>> ftps.login()  # login anonymously previously securing control channel\n[ 12.9%] b'\\\\xbbd\\\\x9c\\\\x83\\\\xdd\\\\x1e\\\\xa5\\\\xc9\\\\xd9\\\\xde\\\\xc9\\\\xa1\\\\x8d\\\\xf0\\\\xff\\\\xe9'\n[ 13.0%] 0xfdd9, 0xfdda, 0xfddb, 0xfddc, 0xfddd, 0xfdde, 0xfddf, 0xfde0, 0xfde1,\n[ 13.0%] 0xfde2, 0xfde3, 0xfde4, 0xfde5, 0xfde6, 0xfde7, 0xfde8, 0xfde9, 0xfdea,\n[ 18.8%] dispatch[BINUNICODE[0]] = load_binunicode\n[ 22.6%] # https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.47.8407&rep=rep1&type=pdf\n[ 24.1%] b1_set = set([173, 847, 6150, 6155, 6156, 6157, 8203, 8204, 8205, 8288, 65279] + list(range(65024,65040)))\n[ 24.2%] c22_specials = set([1757, 1807, 6158, 8204, 8205, 8232, 8233, 65279] + list(range(8288,8292)) + list(range(8298,8304)) + list(range(65529,65533)) + list(range(119155,119163)))\n[ 26.6%] Nygubhtu gung jnl znl abg or boivbhf ng svefg hayrff lbh'er Qhgpu.\n[ 28.8%] _WHATWG_C0_CONTROL_OR_SPACE = '\\x00\\x01\\x02\\x03\\x04\\x05\\x06\\x07\\x08\\t\\n\\x0b\\x0c\\r\\x0e\\x0f\\x10\\x11\\x12\\x13\\x14\\x15\\x16\\x17\\x18\\x19\\x1a\\x1b\\x1c\\x1d\\x1e\\x1f '\n[ 29.3%] b'\\x00\\x01\\x02\\x03\\x04\\x05\\x06\\x07\\x08\\t\\n\\x0b\\x0c\\r\\x0e\\x0f'\n[ 29.7%] THEME_BETA: the serving layer keeps a persistent evidence index for warm starts.\n[ 31.3%] return _ZipWriteFile(self, zinfo, zip64)\n[ 31.4%] '\\x00\\x01\\x02\\x03\\x04\\x05\\x06\\x07\\x08\\t\\n\\x0b\\x0c\\r\\x0e\\x0f'\n[ 31.4%] '\\x10\\x11\\x12\\x13\\x14\\x15\\x16\\x17\\x18\\x19\\x1a\\x1b\\x1c\\x1d\\x1e\\x1f'\n[ 31.4%] '\\xb0\\u2219\\xb7\\u221a\\u207f\\xb2\\u25a0\\xa0'\n[ 37.5%] key, pos_and_siz_pair = _ast.literal_eval(line)\n[ 39.2%] type can be detected (jpeg, png, gif, tiff, rgb, pbm, pgm, ppm,\n[ 41.9%] Based on data from ftp://dkuug.dk/i18n/charmaps/HP-ROMAN8 (Keld Simonsen)\n[ 42.0%] '\\u02cb'   #  0xA9 -> MODIFIER LETTER GRAVE ACCENT (MANDARIN CHINESE FOURTH TONE)\n[ 44.5%] b'\\\\xbbd\\\\x9c\\\\x83\\\\xdd\\\\x1e\\\\xa5\\\\xc9\\\\xd9\\\\xde\\\\xc9\\\\xa1\\\\x8d\\\\xf0\\\\xff\\\\xe9'\n[ 44.6%] 0xfdd9, 0xfdda, 0xfddb, 0xfddc, 0xfddd, 0xfdde, 0xfddf, 0xfde0, 0xfde1,\n[ 44.6%] 0xfde2, 0xfde3, 0xfde4, 0xfde5, 0xfde6, 0xfde7, 0xfde8, 0xfde9, 0xfdea,\n[ 48.6%] THEME_GAMMA: global counts scan the complete text instead of sampling top-k chunks.\n[ 50.0%] elif start == dollar_end and token_type == token.NAME:\n[ 54.2%] # https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.47.8407&rep=rep1&type=pdf\n[ 55.7%] b1_set = set([173, 847, 6150, 6155, 6156, 6157, 8203, 8204, 8205, 8288, 65279] + list(range(65024,65040)))\n[ 55.7%] c22_specials = set([1757, 1807, 6158, 8204, 8205, 8232, 8233, 65279] + list(range(8288,8292)) + list(range(8298,8304)) + list(range(65529,65533)) + list(range(119155,119163)))\n[ 56.3%] # taken from gzip.GzipFile with some alterations\n[ 58.1%] Nygubhtu gung jnl znl abg or boivbhf ng svefg hayrff lbh'er Qhgpu.\n[ 60.3%] _WHATWG_C0_CONTROL_OR_SPACE = '\\x00\\x01\\x02\\x03\\x04\\x05\\x06\\x07\\x08\\t\\n\\x0b\\x0c\\r\\x0e\\x0f\\x10\\x11\\x12\\x13\\x14\\x15\\x16\\x17\\x18\\x19\\x1a\\x1b\\x1c\\x1d\\x1e\\x1f '\n[ 60.8%] b'\\x00\\x01\\x02\\x03\\x04\\x05\\x06\\x07\\x08\\t\\n\\x0b\\x0c\\r\\x0e\\x0f'\n[ 62.5%] server = MathServer((\"localhost\", 8000))\n[ 63.0%] '\\x00\\x01\\x02\\x03\\x04\\x05\\x06\\x07\\x08\\t\\n\\x0b\\x0c\\r\\x0e\\x0f'\n[ 63.0%] '\\x10\\x11\\x12\\x13\\x14\\x15\\x16\\x17\\x18\\x19\\x1a\\x1b\\x1c\\x1d\\x1e\\x1f'\n[ 63.0%] '\\xb0\\u2219\\xb7\\u221a\\u207f\\xb2\\u25a0\\xa0'\n[ 68.8%] \"NUL\", \"SOH\", \"STX\", \"ETX\", \"EOT\", \"ENQ\", \"ACK\", \"BEL\",\n[ 68.8%] \"DLE\", \"DC1\", \"DC2\", \"DC3\", \"DC4\", \"NAK\", \"SYN\", \"ETB\",\n[ 70.2%] THEME_DELTA: summaries explicitly cover depth buckets across the whole document.\n[ 70.7%] type can be detected (jpeg, png, gif, tiff, rgb, pbm, pgm, ppm,\n[ 75.0%] return codecs.utf_16_be_encode(input, self.errors)[0]\n[ 76.0%] b'\\\\xbbd\\\\x9c\\\\x83\\\\xdd\\\\x1e\\\\xa5\\\\xc9\\\\xd9\\\\xde\\\\xc9\\\\xa1\\\\x8d\\\\xf0\\\\xff\\\\xe9'\n[ 76.1%] 0xfdd9, 0xfdda, 0xfddb, 0xfddc, 0xfddd, 0xfdde, 0xfddf, 0xfde0, 0xfde1,\n[ 76.1%] 0xfde2, 0xfde3, 0xfde4, 0xfde5, 0xfde6, 0xfde7, 0xfde8, 0xfde9, 0xfdea,\n[ 81.3%] if _exists(\"statvfs\") and _exists(\"fstatvfs\"): # mac os x10.3\n[ 85.7%] # https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.47.8407&rep=rep1&type=pdf\n[ 87.2%] b1_set = set([173, 847, 6150, 6155, 6156, 6157, 8203, 8204, 8205, 8288, 65279] + list(range(65024,65040)))\n[ 87.3%] c22_specials = set([1757, 1807, 6158, 8204, 8205, 8232, 8233, 65279] + list(range(8288,8292)) + list(range(8298,8304)) + list(range(65529,65533)) + list(range(119155,119163)))\n[ 89.3%] THEME_EPSILON: structured facts are aggregated deterministically over every record.\n[ 89.7%] Nygubhtu gung jnl znl abg or boivbhf ng svefg hayrff lbh'er Qhgpu.\n[ 91.9%] _WHATWG_C0_CONTROL_OR_SPACE = '\\x00\\x01\\x02\\x03\\x04\\x05\\x06\\x07\\x08\\t\\n\\x0b\\x0c\\r\\x0e\\x0f\\x10\\x11\\x12\\x13\\x14\\x15\\x16\\x17\\x18\\x19\\x1a\\x1b\\x1c\\x1d\\x1e\\x1f '\n[ 92.4%] b'\\x00\\x01\\x02\\x03\\x04\\x05\\x06\\x07\\x08\\t\\n\\x0b\\x0c\\r\\x0e\\x0f'\n[ 93.8%] if hasattr(self._parser, \"GetInputContext\"):\n[ 94.5%] '\\x00\\x01\\x02\\x03\\x04\\x05\\x06\\x07\\x08\\t\\n\\x0b\\x0c\\r\\x0e\\x0f'\n[ 94.5%] '\\x10\\x11\\x12\\x13\\x14\\x15\\x16\\x17\\x18\\x19\\x1a\\x1b\\x1c\\x1d\\x1e\\x1f'\n[ 94.5%] '\\xb0\\u2219\\xb7\\u221a\\u207f\\xb2\\u25a0\\xa0'",
+   "metrics": {
+    "units": 266248,
+    "selected": 64,
+    "buckets": 16,
+    "chars": 5529,
+    "seconds": 3.13
+   }
+  },
+  "compare": {
+   "question": "Compare the total value by category in the GLOBAL METRIC records. Report the totals and which category has the largest total.",
+   "answer": "Totals by category: alpha=618, epsilon=604, beta=594, delta=587, gamma=570. Largest total: alpha=618.",
+   "metrics": {
+    "records": 100,
+    "categories": 5,
+    "totals": {
+     "alpha": 618,
+     "beta": 594,
+     "gamma": 570,
+     "delta": 587,
+     "epsilon": 604
+    },
+    "largest": "alpha"
+   }
+  }
+ }
+}

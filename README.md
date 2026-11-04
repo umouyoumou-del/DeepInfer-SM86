@@ -193,6 +193,9 @@ Triton FP8 在 SM80 上改走软件 E4M3 解码；VT 题增加 `var_chain_answer
 **10M 100 针大海捞针（2026-11-04）**：10,000,000 token、100 根深度 1%–99% 的唯一针，FTS5 top-8
 检索 + 精确事实抽取 **100/100 全对**，100 次检索合计 0.405 s，索引 45.1 MB/0.904 s。结果见
 [`docs/results/longctx/A100_SM80_10M_NEEDLE.md`](docs/results/longctx/A100_SM80_10M_NEEDLE.md)。
+**10M 全局问题（2026-11-04）**：全量字面计数 137/137、全篇摘要 5/5 主题（16 个深度桶）、
+100 条 metric 记录聚合全部正确；计数/聚合各 0.013 s，摘要 3.217 s。结果见
+[`docs/results/longctx/A100_SM80_10M_GLOBAL.md`](docs/results/longctx/A100_SM80_10M_GLOBAL.md)。
 
 ### 3M 上下文对话：边读边问（2026-11-03）
 
