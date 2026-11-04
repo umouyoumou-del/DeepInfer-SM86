@@ -156,6 +156,8 @@ class LongContextChat:
         self.last: dict = {}
         self._baseline = None
         self._baseline_length = -1
+        self._global_text_cache: str | None = None
+        self._global_text_length = -1
         if session.length == 0:
             session.prefill(self.header_ids)
         self.worker = threading.Thread(target=self._work, name="longctx-worker", daemon=True)
@@ -177,6 +179,7 @@ class LongContextChat:
         ids = list(ids)
         if not ids:
             raise ValueError("nothing to add")
+        self._global_text_cache = None
         if len(ids) > self.room():
             raise ValueError(f"{len(ids):,} tokens do not fit: {max(0, self.room()):,} left")
         source = Source(name=name, tokens=len(ids), kind=kind)
@@ -222,11 +225,58 @@ class LongContextChat:
                 for s in self.sources
             ]
             return {
-                "context": session.length, "capacity": session.cache.capacity, "queued": self.queued_tokens,
+                "mode": "full", "context": session.length, "capacity": session.cache.capacity, "queued": self.queued_tokens,
                 "gpu_tokens": session.cache.gpu_tokens, "state": self.state, "rate": round(self.rate),
                 "eta_seconds": round(self.queued_tokens / self.rate) if self.rate and self.queued_tokens else 0,
                 "turns": self.turns, "sources": sources, "last": self.last,
             }
+
+    # ------------------------------------------------------------- global
+
+    def _global_text(self) -> str:
+        """Decode the full context once for count/summary/aggregation queries."""
+
+        if self._global_text_cache is not None and self._global_text_length == self.session.length:
+            return self._global_text_cache
+        start = len(self.header_ids)
+        length = int(self.session.length)
+        tokens = [int(token) for token in self.session.slot_tokens[start:length] if int(token) >= 0]
+        self._global_text_cache = self.tok.decode(tokens, skip_special_tokens=True)
+        self._global_text_length = length
+        return self._global_text_cache
+
+    def _try_global(self, question: str, events: queue.Queue) -> bool:
+        """Handle full-document count/summary/aggregation questions before locate."""
+
+        import time
+
+        from deepinfer.moe.latent_reread import final_answer
+        from deepinfer.retrieval.global_queries import global_answer
+
+        if self.session.length <= len(self.header_ids) + 256:
+            return False
+        started = time.perf_counter()
+        result = global_answer(question, self._global_text())
+        if result is None:
+            return False
+        answer = result.answer
+        final = final_answer(answer)
+        events.put({
+            "event": "answer", "round": 1, "text": answer, "final": final,
+            "evidence": result.evidence, "stop": True,
+        })
+        summary = {
+            "question": question, "seconds": round(time.perf_counter() - started, 2),
+            "first_token": None, "rounds": 1, "tokens": 0,
+            "context": self.session.length, "read_tokens": self.session.length,
+            "global_kind": result.kind, "global_metrics": result.metrics,
+        }
+        with self.lock:
+            self.turns += 1
+            self.history.append((question, final))
+            self.last = summary
+        events.put({"event": "done", "answer": answer, "final": final, **summary})
+        return True
 
     # --------------------------------------------------------------- worker
 
@@ -331,6 +381,8 @@ class LongContextChat:
         length = session.length
         began = time.perf_counter()
         events.put({"event": "start", "question": question, "context": length, "deep": deep})
+        if self._try_global(question, events):
+            return
         baseline = self._baseline_now()
         events.put({"event": "baseline", "seconds": round(time.perf_counter() - began, 2)})
         bare = self.tok.encode(f"\n\n{question}\n\nAssistant:", add_special_tokens=False)
@@ -407,6 +459,7 @@ class LongContextChat:
                 answer = f"{answer}\n\n[{len(texts)} phrasings, union]\nAnswer: {', '.join(union)}"
                 events.put({"event": "union", "final": ", ".join(union), "phrasings": len(texts)})
         seconds = time.perf_counter() - began
+        self._global_text_cache = None
         # the turn joins the context, so a later question can find it
         turn = self.tok.encode(f"\n\n[Q] {question}\n[A] {final_answer(answer)}\n", add_special_tokens=False)
         start = session.next_position
@@ -462,6 +515,7 @@ class LongContextChat:
             self.turns = 0
             self.history = []
             self.last = {}
+            self._global_text_cache = None
         self.session.truncate(len(self.header_ids))
         self._baseline_length = -1
         done.set()

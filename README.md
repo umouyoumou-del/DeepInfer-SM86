@@ -196,6 +196,10 @@ Triton FP8 在 SM80 上改走软件 E4M3 解码；VT 题增加 `var_chain_answer
 **10M 全局问题（2026-11-04）**：全量字面计数 137/137、全篇摘要 5/5 主题（16 个深度桶）、
 100 条 metric 记录聚合全部正确；计数/聚合各 0.013 s，摘要 3.217 s。结果见
 [`docs/results/longctx/A100_SM80_10M_GLOBAL.md`](docs/results/longctx/A100_SM80_10M_GLOBAL.md)。
+**3M/4M/10M 自动分层（2026-11-04）**：`deepinfer-server --mode auto` 在 ≤4M 保留全量 KV
+attention（3M/4M 此前均 21/21、31/31），>4M 自动走分层检索 + 按需 KV；3M/4M 的全文计数、
+摘要、metric 聚合也全部走全量路径，checks 全为 true。详见
+[`docs/results/longctx/AUTO_TIER_3M_4M_10M.md`](docs/results/longctx/AUTO_TIER_3M_4M_10M.md)。
 
 ### 3M 上下文对话：边读边问（2026-11-03）
 

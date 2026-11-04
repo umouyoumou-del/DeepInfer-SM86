@@ -1,0 +1,86 @@
+{
+ "summary": {
+  "tokens": 3000000,
+  "text_bytes": 10063605,
+  "markers_expected": 137,
+  "markers_counted": 137,
+  "metrics_records": 100,
+  "categories": {
+   "alpha": 618,
+   "beta": 594,
+   "gamma": 570,
+   "delta": 587,
+   "epsilon": 604
+  },
+  "checks": {
+   "count": true,
+   "summary": true,
+   "compare": true
+  },
+  "build_seconds": 12.42,
+  "count_seconds": 0.004,
+  "summary_seconds": 1.2,
+  "compare_seconds": 0.004,
+  "summary_selected": 73,
+  "summary_buckets": 16
+ },
+ "questions": {
+  "count": {
+   "question": "How many times does GLOBAL_MARKER_X occur in the entire document?",
+   "answer": {
+    "term": "GLOBAL_MARKER_X",
+    "count": 137,
+    "positions": [
+     106276,
+     106309,
+     113164,
+     160714,
+     183954,
+     229217,
+     271960,
+     318429,
+     376386,
+     400198,
+     454967,
+     491611,
+     539256,
+     574325,
+     616198,
+     641541,
+     662370,
+     713694,
+     758310,
+     834406
+    ],
+    "total_chars": 10062195
+   }
+  },
+  "summary": {
+   "question": "Summarize the main themes of this 10M-token document.",
+   "answer": "Full-document extractive summary:\n[  0.6%] # http://www.planetpublish.com/xmlarena/xap/Thursday/WordtoXML.pdf\n[  3.6%] >>> ExtendedContext.fma(Decimal('888565290'), Decimal('1557.96930'), Decimal('-86087.7578'))\n[  5.4%] the week, with week_start_day representing whether the week of the year\n[  5.8%] 'MODBUILT_NAMES': '_bisect  _csv  _datetime  _heapq  _opcode  _pickle  '\n[  6.3%] 'MODBUILT_NAMES': '_bisect  _csv  _datetime  _heapq  _opcode  _pickle  '\n[  9.7%] # SPDX-FileCopyrightText: Copyright (c) 2015-2021 MagicStack Inc.  http://magic.io\n[ 10.4%] THEME_ALPHA: the system prefers low-latency retrieval and incremental indexing.\n[ 11.4%] # SPDX-FileCopyrightText: Copyright (c) 2015-2021 MagicStack Inc.  http://magic.io\n[ 13.7%] # http://zgp.org/pipermail/p2p-hackers/2001-September/000316.html\n[ 16.1%] #   http://www.demo2s.com/Tutorial/Cpp/0380__set-multiset/Catalog0380__set-multiset.htm\n[ 16.4%] YIQ: Luminance, Chrominance (used by composite video signals)\n[ 16.9%] WorkItem from the \"Work Items\" dict: if the work item has been cancelled then\n[ 18.7%] https://www.ibm.com/support/knowledgecenter/en/ssw_aix_61/com.ibm.aix.basetrf1/dlopen.htm\n[ 18.8%] ELF:   Executable and Linking Format that was developed by AT&T and is a\n[ 19.1%] \"NUL\", \"SOH\", \"STX\", \"ETX\", \"EOT\", \"ENQ\", \"ACK\", \"BEL\",\n[ 19.1%] \"DLE\", \"DC1\", \"DC2\", \"DC3\", \"DC4\", \"NAK\", \"SYN\", \"ETB\",\n[ 20.5%] for tag, ai1, ai2, bj1, bj2 in cruncher.get_opcodes():\n[ 22.8%] Either atom or quoted-string may start with CFWS.  We have to peel off this\n[ 25.6%] # Additional ones to be added to sndhdr? midi, mp3, realaudio, wma??\n[ 25.6%] type can be detected (jpeg, png, gif, tiff, rgb, pbm, pgm, ppm,\n[ 26.4%] \"\"\" Python Character Mapping Codec cp037 generated from 'MAPPINGS/VENDORS/MICSFT/EBCDIC/CP037.TXT' with gencodec.py.\n[ 30.1%] THEME_BETA: the serving layer keeps a persistent evidence index for warm starts.\n[ 34.9%] Based on data from ftp://dkuug.dk/i18n/charmaps/HP-ROMAN8 (Keld Simonsen)\n[ 35.0%] '\\u02cb'   #  0xA9 -> MODIFIER LETTER GRAVE ACCENT (MANDARIN CHINESE FOURTH TONE)\n[ 37.2%] \"\"\" Python Character Mapping Codec koi8_r generated from 'MAPPINGS/VENDORS/MISC/KOI8-R.TXT' with gencodec.py.\n[ 38.8%] \"\"\" Python Character Mapping Codec mac_latin2 generated from 'MAPPINGS/VENDORS/MICSFT/MAC/LATIN2.TXT' with gencodec.py.\n[ 42.8%] # Peter Funk, who wrote fintl.py, a fairly complete wrapper around intlmodule,\n[ 42.8%] # http://git.savannah.gnu.org/cgit/gettext.git/tree/gettext-runtime/intl/plural.y\n[ 43.4%] NOTE: If you want the adler32 or crc32 hash functions they are available in\n[ 43.4%] b'\\\\xbbd\\\\x9c\\\\x83\\\\xdd\\\\x1e\\\\xa5\\\\xc9\\\\xd9\\\\xde\\\\xc9\\\\xa1\\\\x8d\\\\xf0\\\\xff\\\\xe9'\n[ 43.8%] 0xfdd0, 0xfdd1, 0xfdd2, 0xfdd3, 0xfdd4, 0xfdd5, 0xfdd6, 0xfdd7, 0xfdd8,\n[ 43.8%] 0xfdd9, 0xfdda, 0xfddb, 0xfddc, 0xfddd, 0xfdde, 0xfddf, 0xfde0, 0xfde1,\n[ 43.8%] 0xfde2, 0xfde3, 0xfde4, 0xfde5, 0xfde6, 0xfde7, 0xfde8, 0xfde9, 0xfdea,\n[ 45.3%] THEME_GAMMA: global counts scan the complete text instead of sampling top-k chunks.\n[ 50.4%] GEN_RUNNING: Currently being executed by the interpreter.\n[ 51.7%] JavaScript syntax (ECMA-262 3rd edition) used as a lightweight data\n[ 53.0%] # http://msdn.microsoft.com/library/default.asp?url=/library/en-us/intl/nls_238z.asp\n[ 53.9%] is based on PEP 282 and comments thereto in comp.lang.python, and influenced\n[ 54.7%] If you want slimmer logs, you have to pass in the name of your own DLL\n[ 59.2%] Run all finalizers whose exit priority is not None and at least minpriority\n[ 59.6%] NOTE: This neither checks for a wildcard in 'group' nor does\n[ 60.3%] 'iconcat', 'ifloordiv', 'ilshift', 'imatmul', 'imod', 'imul',\n[ 61.2%] __all__.extend([\"execl\",\"execle\",\"execlp\",\"execlpe\",\"execvp\",\"execvpe\"])\n[ 61.4%] from stat import S_ISDIR, S_ISLNK, S_ISREG, S_ISSOCK, S_ISBLK, S_ISCHR, S_ISFIFO\n[ 64.5%] #      Colin Kong, Trent Mick, Guido van Rossum, Anthony Baxter, Steve\n[ 64.9%] <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n[ 64.9%] r\"[\\x00\\x01\\x02\\x03\\x04\\x05\\x06\\x07\\x08\\x0b\\x0c\\x0e\\x0f\"\n[ 64.9%] r\"\\x10\\x11\\x12\\x13\\x14\\x15\\x16\\x17\\x18\\x19\\x1a\\x1b\\x1c\\x1d\\x1e\\x1f]\")\n[ 66.9%] THEME_DELTA: summaries explicitly cover depth buckets across the whole document.\n[ 71.0%] \"   'int: 42;  hex: 0x2a;  oct: 0o52;  bin: 0b101010'\\n\"\n[ 71.3%] '   3.14j   10.j    10j     .001j   1e100j   3.14e-10j   '\n[ 71.3%] '   import foo.bar.baz as fbb  # foo, foo.bar, and foo.bar.baz '\n[ 72.5%] '     http://ocert.org/advisories/ocert-2011-003.html for\\n'\n[ 76.1%] # https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.47.8407&rep=rep1&type=pdf\n[ 80.0%] HAS_SNI, HAS_ECDH, HAS_NPN, HAS_ALPN, HAS_SSLv2, HAS_SSLv3, HAS_TLSv1,\n[ 80.2%] NOTE: The protocol and settings may change anytime without prior\n[ 81.2%] b1_set = set([173, 847, 6150, 6155, 6156, 6157, 8203, 8204, 8205, 8288, 65279] + list(range(65024,65040)))\n[ 81.2%] 0x1f56:'\\u03c5\\u0313\\u0342', 0x1f80:'\\u1f00\\u03b9', 0x1f81:'\\u1f01\\u03b9', 0x1f82:'\\u1f02\\u03b9',\n[ 81.3%] c22_specials = set([1757, 1807, 6158, 8204, 8205, 8232, 8233, 65279] + list(range(8288,8292)) + list(range(8298,8304)) + list(range(65529,65533)) + list(range(119155,119163)))\n[ 81.3%] c8_set = set([832, 833, 8206, 8207] + list(range(8234,8239)) + list(range(8298,8304)))\n[ 81.3%] DEVNULL: Special value that indicates that os.devnull should be used\n[ 82.9%] __credits__ = \"Gustavo Niemeyer, Niels Gust\\u00e4bel, Richard Townsend.\"\n[ 84.7%] tests that try to exhaust the address space of the process, which only makes\n[ 88.6%] http://bugs.python.org/issue2550 for more info.  The following site also\n[ 89.1%] THEME_EPSILON: structured facts are aggregated deterministically over every record.\n[ 89.4%] Nygubhtu gung jnl znl abg or boivbhf ng svefg hayrff lbh'er Qhgpu.\n[ 89.4%] Anzrfcnprf ner bar ubaxvat terng vqrn -- yrg'f qb zber bs gubfr!\"\"\"\n[ 92.7%] a11, a12, a21, a22 = (ca*m11 - sa*m21, ca*m12 - sa*m22,\n[ 94.3%] NOTE: This does not distinguish between the different possible\n[ 96.9%] _WHATWG_C0_CONTROL_OR_SPACE = '\\x00\\x01\\x02\\x03\\x04\\x05\\x06\\x07\\x08\\t\\n\\x0b\\x0c\\r\\x0e\\x0f\\x10\\x11\\x12\\x13\\x14\\x15\\x16\\x17\\x18\\x19\\x1a\\x1b\\x1c\\x1d\\x1e\\x1f '\n[ 98.5%] b'\\x00\\x01\\x02\\x03\\x04\\x05\\x06\\x07\\x08\\t\\n\\x0b\\x0c\\r\\x0e\\x0f'\n[ 98.7%] # See https://en.wikipedia.org/w/index.php?title=MAC_address&oldid=1128764812#Universal_vs._local_(U/L_bit)\n[ 99.0%] You may need to use sudo with that command.  After installing the python3-venv",
+   "metrics": {
+    "units": 80039,
+    "selected": 73,
+    "buckets": 16,
+    "chars": 6376,
+    "seconds": 1.174
+   }
+  },
+  "compare": {
+   "question": "Compare the total value by category in the GLOBAL METRIC records. Report the totals and which category has the largest total.",
+   "answer": "Totals by category: alpha=618, epsilon=604, beta=594, delta=587, gamma=570. Largest total: alpha=618.",
+   "metrics": {
+    "records": 100,
+    "categories": 5,
+    "totals": {
+     "alpha": 618,
+     "beta": 594,
+     "gamma": 570,
+     "delta": 587,
+     "epsilon": 604
+    },
+    "largest": "alpha"
+   }
+  }
+ }
+}

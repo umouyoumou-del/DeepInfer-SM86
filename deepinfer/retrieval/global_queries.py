@@ -93,6 +93,19 @@ def _units(text: str) -> list[tuple[int, str, set[str]]]:
         offset += len(raw)
     return units
 
+def _prose_score(chunk: str) -> float:
+    """Prefer prose sentences over dense code when two units tie on rarity."""
+
+    words = len(re.findall(r"[A-Za-z]{3,}", chunk))
+    if not words:
+        return 0.0
+    punctuation = len(re.findall(r"[={}\[\]();]", chunk))
+    stripped = chunk.lstrip()
+    code_start = stripped.startswith(("#", "def ", "class ", "async def ", "import ", "from ",
+                                     "return ", "elif ", "if ", "for ", "while ", "try:", "except "))
+    return words / (1.0 + punctuation + (2.0 if code_start else 0.0))
+
+
 def extractive_summary(text: str, *, max_chars: int = 12_000, buckets: int = 16) -> GlobalResult:
     """Select high-information paragraphs while covering every depth bucket."""
 
@@ -109,36 +122,67 @@ def extractive_summary(text: str, *, max_chars: int = 12_000, buckets: int = 16)
     for start, chunk, tokens in units:
         total_idf = sum(idf[token] for token in tokens)
         score = total_idf / math.sqrt(len(tokens))
-        scored.append((score, max(idf[token] for token in tokens), start, chunk))
-    per_bucket: dict[int, list[tuple[float, float, int, str]]] = defaultdict(list)
+        scored.append((score, max(idf[token] for token in tokens), _prose_score(chunk), start, chunk))
+    per_bucket: dict[int, list[tuple[float, float, float, int, str]]] = defaultdict(list)
     length = max(1, len(text))
     for item in scored:
-        bucket = min(buckets - 1, item[2] * buckets // length)
+        bucket = min(buckets - 1, item[3] * buckets // length)
         per_bucket[bucket].append(item)
-    chosen: list[tuple[int, str]] = []
+    # First reserve the rarest-term line in every depth bucket, then fill in
+    # high-density lines.  The first pass is what keeps themes and unique
+    # constants in the summary when the character budget is tight.
+    selected: list[tuple[float, float, float, int, str]] = []
+    rare_starts: set[int] = set()
     seen: set[int] = set()
+    # Pass 0: keep one uppercase-heading line per depth bucket.  In mixed
+    # code/docs these are the document's own section/theme markers.
+    heading_starts: set[int] = set()
+    for bucket in range(buckets):
+        headings = [item for item in per_bucket.get(bucket, [])
+                    if re.match(r"^[A-Z][A-Z0-9_]{2,}:", item[4].lstrip())]
+        if headings:
+            heading = max(headings, key=lambda item: (item[2], item[1], item[0]))
+            heading_starts.add(heading[3])
+            rare_starts.add(heading[3])
+            if heading[3] not in seen:
+                seen.add(heading[3])
+                selected.append(heading)
+    # Pass 1: reserve one rare-term line in every depth bucket.  These are
+    # emitted first and shortened to 400 chars so the coverage slots fit.
     for bucket in range(buckets):
         items = per_bucket.get(bucket, [])
-        # Information density plus a slot for the rarest-term line in each
-        # depth bucket: themes and unique constants must not be outvoted by
-        # long code lines with many ordinary tokens.
-        selected = sorted(items, reverse=True)[:3] + sorted(items, key=lambda item: item[1], reverse=True)[:1]
-        for _score, _max_idf, start, chunk in selected:
-            if start not in seen:
-                seen.add(start)
-                chosen.append((start, chunk))
-    chosen.sort(key=lambda item: item[0])
+        if not items:
+            continue
+        rare = max(items, key=lambda item: (item[1], item[2], -len(item[4])))
+        rare_starts.add(rare[3])
+        if rare[3] not in seen:
+            seen.add(rare[3])
+            selected.append(rare)
+    # Pass 2: fill the remaining budget with information-dense lines.
+    for bucket in range(buckets):
+        for item in sorted(per_bucket.get(bucket, []), reverse=True)[:3]:
+            if item[3] not in seen:
+                seen.add(item[3])
+                selected.append(item)
+    chosen: list[tuple[int, str]] = []
     lines: list[str] = []
     used = 0
-    for start, chunk in chosen:
-        line = f"[{100 * start / length:5.1f}%] {chunk[:700]}"
+    for _score, _max_idf, _prose, start, chunk in selected:
+        # Keep the rare-term line short so every depth bucket gets its slot
+        # even when the corpus contains very long code lines.
+        limit = 400 if start in rare_starts else 700
+        line = f"[{100 * start / length:5.1f}%] {chunk[:limit]}"
         if used + len(line) > max_chars:
-            break
+            continue
+        chosen.append((start, chunk))
         lines.append(line)
         used += len(line) + 1
-    answer = "Full-document extractive summary:\n" + "\n".join(lines)
+    paired = sorted(zip(chosen, lines, strict=True), key=lambda pair: pair[0][0])
+    chosen = [pair[0] for pair in paired]
+    lines = [pair[1] for pair in paired]
+    answer = "Full-document extractive summary:" + chr(10) + chr(10).join(lines)
     evidence = [{"line": line, "position": start, "depth": start / length, "source": "document", "offset": 0}
-                for (start, _chunk), line in zip(chosen, lines, strict=False)]
+                for (start, _chunk), line in zip(chosen, lines, strict=True)]
     return GlobalResult(
         "summary", answer, evidence,
         {"units": total, "selected": len(lines), "buckets": buckets, "chars": used,

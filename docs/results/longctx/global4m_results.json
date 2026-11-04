@@ -1,0 +1,86 @@
+{
+ "summary": {
+  "tokens": 4000000,
+  "text_bytes": 13561665,
+  "markers_expected": 137,
+  "markers_counted": 137,
+  "metrics_records": 100,
+  "categories": {
+   "alpha": 618,
+   "beta": 594,
+   "gamma": 570,
+   "delta": 587,
+   "epsilon": 604
+  },
+  "checks": {
+   "count": true,
+   "summary": true,
+   "compare": true
+  },
+  "build_seconds": 16.11,
+  "count_seconds": 0.005,
+  "summary_seconds": 1.507,
+  "compare_seconds": 0.006,
+  "summary_selected": 73,
+  "summary_buckets": 16
+ },
+ "questions": {
+  "count": {
+   "question": "How many times does GLOBAL_MARKER_X occur in the entire document?",
+   "answer": {
+    "term": "GLOBAL_MARKER_X",
+    "count": 137,
+    "positions": [
+     138402,
+     138435,
+     149978,
+     213560,
+     246705,
+     309031,
+     363221,
+     417908,
+     503433,
+     537795,
+     594643,
+     623875,
+     676821,
+     742790,
+     828872,
+     877582,
+     914821,
+     993959,
+     1052004,
+     1149136
+    ],
+    "total_chars": 13560223
+   }
+  },
+  "summary": {
+   "question": "Summarize the main themes of this 10M-token document.",
+   "answer": "Full-document extractive summary:\n[  0.5%] # http://www.planetpublish.com/xmlarena/xap/Thursday/WordtoXML.pdf\n[  2.6%] >>> ExtendedContext.fma(Decimal('888565290'), Decimal('1557.96930'), Decimal('-86087.7578'))\n[  4.0%] the week, with week_start_day representing whether the week of the year\n[  4.6%] 'MODBUILT_NAMES': '_bisect  _csv  _datetime  _heapq  _opcode  _pickle  '\n[  5.9%] ONE_OR_MORE: _('expected at least one argument'),\n[ 10.2%] # http://zgp.org/pipermail/p2p-hackers/2001-September/000316.html\n[ 10.5%] THEME_ALPHA: the system prefers low-latency retrieval and incremental indexing.\n[ 11.9%] _dict, _tuple, _len, _map, _zip = dict, tuple, len, map, zip\n[ 12.0%] #   http://www.demo2s.com/Tutorial/Cpp/0380__set-multiset/Catalog0380__set-multiset.htm\n[ 12.6%] WorkItem from the \"Work Items\" dict: if the work item has been cancelled then\n[ 13.9%] https://www.ibm.com/support/knowledgecenter/en/ssw_aix_61/com.ibm.aix.basetrf1/dlopen.htm\n[ 13.9%] ELF:   Executable and Linking Format that was developed by AT&T and is a\n[ 14.2%] \"NUL\", \"SOH\", \"STX\", \"ETX\", \"EOT\", \"ENQ\", \"ACK\", \"BEL\",\n[ 14.2%] \"DLE\", \"DC1\", \"DC2\", \"DC3\", \"DC4\", \"NAK\", \"SYN\", \"ETB\",\n[ 19.0%] # Additional ones to be added to sndhdr? midi, mp3, realaudio, wma??\n[ 19.0%] type can be detected (jpeg, png, gif, tiff, rgb, pbm, pgm, ppm,\n[ 19.1%] # Author: Barry Warsaw, Thomas Wouters, Anthony Baxter\n[ 21.6%] \"\"\" Python Character Mapping Codec cp500 generated from 'MAPPINGS/VENDORS/MICSFT/EBCDIC/CP500.TXT' with gencodec.py.\n[ 25.9%] Based on data from ftp://dkuug.dk/i18n/charmaps/HP-ROMAN8 (Keld Simonsen)\n[ 26.0%] '\\u02cb'   #  0xA9 -> MODIFIER LETTER GRAVE ACCENT (MANDARIN CHINESE FOURTH TONE)\n[ 27.3%] THEME_BETA: the serving layer keeps a persistent evidence index for warm starts.\n[ 28.8%] \"\"\" Python Character Mapping Codec mac_latin2 generated from 'MAPPINGS/VENDORS/MICSFT/MAC/LATIN2.TXT' with gencodec.py.\n[ 32.2%] NOTE: If you want the adler32 or crc32 hash functions they are available in\n[ 32.2%] b'\\\\xbbd\\\\x9c\\\\x83\\\\xdd\\\\x1e\\\\xa5\\\\xc9\\\\xd9\\\\xde\\\\xc9\\\\xa1\\\\x8d\\\\xf0\\\\xff\\\\xe9'\n[ 32.3%] vanishes, you switch heaps and start a new run.  Clever and quite\n[ 32.5%] 0xfdd9, 0xfdda, 0xfddb, 0xfddc, 0xfddd, 0xfdde, 0xfddf, 0xfde0, 0xfde1,\n[ 32.5%] 0xfde2, 0xfde3, 0xfde4, 0xfde5, 0xfde6, 0xfde7, 0xfde8, 0xfde9, 0xfdea,\n[ 38.4%] JavaScript syntax (ECMA-262 3rd edition) used as a lightweight data\n[ 38.5%] def JSONArray(s_and_end, scan_once, _w=WHITESPACE.match, _ws=WHITESPACE_STR):\n[ 39.3%] # http://msdn.microsoft.com/library/default.asp?url=/library/en-us/intl/nls_238z.asp\n[ 40.6%] If you want slimmer logs, you have to pass in the name of your own DLL\n[ 47.0%] THEME_GAMMA: global counts scan the complete text instead of sampling top-k chunks.\n[ 47.8%] #      Colin Kong, Trent Mick, Guido van Rossum, Anthony Baxter, Steve\n[ 48.1%] <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n[ 48.2%] r\"[\\x00\\x01\\x02\\x03\\x04\\x05\\x06\\x07\\x08\\x0b\\x0c\\x0e\\x0f\"\n[ 48.2%] r\"\\x10\\x11\\x12\\x13\\x14\\x15\\x16\\x17\\x18\\x19\\x1a\\x1b\\x1c\\x1d\\x1e\\x1f]\")\n[ 52.9%] '   import foo.bar.baz as fbb  # foo, foo.bar, and foo.bar.baz '\n[ 56.2%] from math import sqrt as _sqrt, acos as _acos, cos as _cos, sin as _sin\n[ 56.2%] from math import tau as TWOPI, floor as _floor, isfinite as _isfinite\n[ 56.2%] from math import lgamma as _lgamma, fabs as _fabs, log2 as _log2\n[ 56.4%] # https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.47.8407&rep=rep1&type=pdf\n[ 59.4%] HAS_SNI, HAS_ECDH, HAS_NPN, HAS_ALPN, HAS_SSLv2, HAS_SSLv3, HAS_TLSv1,\n[ 59.5%] NOTE: The protocol and settings may change anytime without prior\n[ 60.2%] b1_set = set([173, 847, 6150, 6155, 6156, 6157, 8203, 8204, 8205, 8288, 65279] + list(range(65024,65040)))\n[ 60.3%] c22_specials = set([1757, 1807, 6158, 8204, 8205, 8232, 8233, 65279] + list(range(8288,8292)) + list(range(8298,8304)) + list(range(65529,65533)) + list(range(119155,119163)))\n[ 65.7%] http://bugs.python.org/issue2550 for more info.  The following site also\n[ 65.8%] XXX: although this approach is a vast improvement on previous attempts to\n[ 66.3%] Nygubhtu gung jnl znl abg or boivbhf ng svefg hayrff lbh'er Qhgpu.\n[ 66.3%] Anzrfcnprf ner bar ubaxvat terng vqrn -- yrg'f qb zber bs gubfr!\"\"\"\n[ 68.7%] a11, a12, a21, a22 = (ca*m11 - sa*m21, ca*m12 - sa*m22,\n[ 68.8%] THEME_DELTA: summaries explicitly cover depth buckets across the whole document.\n[ 71.9%] _WHATWG_C0_CONTROL_OR_SPACE = '\\x00\\x01\\x02\\x03\\x04\\x05\\x06\\x07\\x08\\t\\n\\x0b\\x0c\\r\\x0e\\x0f\\x10\\x11\\x12\\x13\\x14\\x15\\x16\\x17\\x18\\x19\\x1a\\x1b\\x1c\\x1d\\x1e\\x1f '\n[ 73.1%] b'\\x00\\x01\\x02\\x03\\x04\\x05\\x06\\x07\\x08\\t\\n\\x0b\\x0c\\r\\x0e\\x0f'\n[ 73.2%] # See https://en.wikipedia.org/w/index.php?title=MAC_address&oldid=1128764812#Universal_vs._local_(U/L_bit)\n[ 73.4%] You may need to use sudo with that command.  After installing the python3-venv\n[ 75.8%] Text after this element's end tag, but before the next sibling element's\n[ 78.4%] '\\x00\\x01\\x02\\x03\\x04\\x05\\x06\\x07\\x08\\t\\n\\x0b\\x0c\\r\\x0e\\x0f'\n[ 78.4%] '\\x10\\x11\\x12\\x13\\x14\\x15\\x16\\x17\\x18\\x19\\x1a\\x1b\\x1c\\x1d\\x1e\\x1f'\n[ 78.4%] '\\xb0\\u2219\\xb7\\u221a\\u207f\\xb2\\u25a0\\xa0'\n[ 81.4%] >>> ExtendedContext.fma(Decimal('888565290'), Decimal('1557.96930'), Decimal('-86087.7578'))\n[ 82.8%] the week, with week_start_day representing whether the week of the year\n[ 83.0%] 'MODBUILT_NAMES': '_bisect  _csv  _datetime  _heapq  _opcode  _pickle  '\n[ 83.4%] 'MODBUILT_NAMES': '_bisect  _csv  _datetime  _heapq  _opcode  _pickle  '\n[ 86.7%] NOTE: This is the only Protocol callback that is not called\n[ 88.9%] # http://zgp.org/pipermail/p2p-hackers/2001-September/000316.html\n[ 90.1%] THEME_EPSILON: structured facts are aggregated deterministically over every record.\n[ 90.7%] #   http://www.demo2s.com/Tutorial/Cpp/0380__set-multiset/Catalog0380__set-multiset.htm\n[ 93.0%] \"DLE\", \"DC1\", \"DC2\", \"DC3\", \"DC4\", \"NAK\", \"SYN\", \"ETB\",\n[ 93.9%] for tag, ai1, ai2, bj1, bj2 in cruncher.get_opcodes():\n[ 95.4%] XXX: provide complete list of token types.\n[ 97.7%] # Additional ones to be added to sndhdr? midi, mp3, realaudio, wma??\n[ 97.8%] type can be detected (jpeg, png, gif, tiff, rgb, pbm, pgm, ppm,\n[ 98.3%] \"\"\" Python Character Mapping Codec cp037 generated from 'MAPPINGS/VENDORS/MICSFT/EBCDIC/CP037.TXT' with gencodec.py.",
+   "metrics": {
+    "units": 106479,
+    "selected": 73,
+    "buckets": 16,
+    "chars": 6233,
+    "seconds": 1.474
+   }
+  },
+  "compare": {
+   "question": "Compare the total value by category in the GLOBAL METRIC records. Report the totals and which category has the largest total.",
+   "answer": "Totals by category: alpha=618, epsilon=604, beta=594, delta=587, gamma=570. Largest total: alpha=618.",
+   "metrics": {
+    "records": 100,
+    "categories": 5,
+    "totals": {
+     "alpha": 618,
+     "beta": 594,
+     "gamma": 570,
+     "delta": 587,
+     "epsilon": 604
+    },
+    "largest": "alpha"
+   }
+  }
+ }
+}

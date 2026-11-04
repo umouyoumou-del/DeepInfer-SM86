@@ -41,6 +41,7 @@ MAX_BODY = 64 << 20
 # they turned 12 wrong answers right and 2 right ones wrong; --no-check-copies / --no-self-check
 CHECK_COPIES = True
 SELF_CHECK = True
+FULL_KV_MAX_TOKENS = 4_194_304  # 4M: above this auto mode uses hierarchical retrieval
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -186,11 +187,23 @@ def add_arguments(parser) -> None:
     parser.add_argument("--self-check", action=argparse.BooleanOptionalAction, default=SELF_CHECK,
                         help="a second turn checks the final answer against its own steps")
     parser.add_argument("--load-cache", default="", help="start from a cache saved by needle_complex --save-cache")
+    parser.add_argument("--mode", choices=("auto", "full", "hierarchical"), default="auto",
+                        help="auto: full KV through 4M tokens, hierarchical above it; full/hierarchical force a path")
     parser.add_argument("--hierarchical", action="store_true",
-                        help="use the persistent FTS5 index + on-demand KV path instead of a full KV cache")
+                        help="shortcut for --mode hierarchical")
     parser.add_argument("--hierarchical-text", default="", help="text file backing the hierarchical index")
     parser.add_argument("--hierarchical-index", default="", help="SQLite FTS5 index for hierarchical mode")
     parser.add_argument("--hierarchical-top-k", type=int, default=24, help="retrieved chunks per question")
+
+
+def resolve_mode(mode: str, ctx_size: int, hierarchical: bool = False) -> str:
+    """Resolve the production tier: full KV through 4M, hierarchical above it."""
+
+    if hierarchical or mode == "hierarchical":
+        return "hierarchical"
+    if mode == "full":
+        return "full"
+    return "hierarchical" if ctx_size > FULL_KV_MAX_TOKENS else "full"
 
 
 def _loopback(host: str) -> bool:
@@ -216,7 +229,8 @@ def run(args) -> None:
     print(f"loading {model.gguf.name} (config and tokenizer from {model.meta})", flush=True)
     tok = AutoTokenizer.from_pretrained(str(model.meta), trust_remote_code=True)
     rt = DeepSeekV2LiteGGUFRuntime(model.gguf, meta_dir=model.meta, device=args.device, verbose=False)
-    if args.hierarchical:
+    mode = resolve_mode(args.mode, args.ctx_size, args.hierarchical)
+    if mode == "hierarchical":
         from deepinfer.moe.hierarchical_service import HierarchicalChat
 
         SERVICE = HierarchicalChat(
@@ -227,7 +241,7 @@ def run(args) -> None:
         server = ThreadingHTTPServer((args.host, args.port), Handler)
         shown = "127.0.0.1" if args.host in ("0.0.0.0", "::") else args.host
         status = SERVICE.status()
-        print(f"ready: hierarchical index {status['index_chunks']:,} chunks / {status['context']:,} tokens "
+        print(f"ready: {mode} index {status['index_chunks']:,} chunks / {status['context']:,} tokens "
               f"({status['index_bytes'] / 1e6:.1f} MB)", flush=True)
         print(f"open http://{shown}:{args.port}/" + (f"?key={KEY}" if KEY else ""), flush=True)
         server.serve_forever()
@@ -254,7 +268,7 @@ def run(args) -> None:
     KEY = args.api_key or ("" if _loopback(args.host) else secrets.token_urlsafe(12))
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     shown = "127.0.0.1" if args.host in ("0.0.0.0", "::") else args.host
-    print(f"ready: context up to {session.cache.capacity:,} tokens, {session.cache.gpu_tokens:,} of them in VRAM",
+    print(f"ready: {mode} context up to {session.cache.capacity:,} tokens, {session.cache.gpu_tokens:,} of them in VRAM",
           flush=True)
     print(f"open http://{shown}:{args.port}/" + (f"?key={KEY}" if KEY else ""), flush=True)
     server.serve_forever()
