@@ -181,6 +181,12 @@ Triton FP8 在 SM80 上改走软件 E4M3 解码；VT 题增加 `var_chain_answer
 流式用户模拟（866 文件、4.13M token、21.65 分钟全部读完、边读边问）见
 [`docs/results/longctx/A100_SM80_STREAM_SIM.md`](docs/results/longctx/A100_SM80_STREAM_SIM.md)。
 
+**10M（2026-11-04，分层检索）**：10M 的 fp8 全量 KV 约 165 GiB，超过 A100 80GB + 16GiB
+主机容量，因此改走“45.1 MB SQLite FTS5 索引 + 精确结构化证据 + 按需 13–17K token KV”路线：
+17,135 个 chunk，索引 0.90 s，21 题检索总计 0.099 s；10M 上 **21/21 题、31/31 条目**，
+模型问答总计 209.2 s（p50 8.1 s，p95 19.0 s，VT 精确闭包 0.29 s）。详见
+[`docs/results/longctx/A100_SM80_10M_HIERARCHICAL.md`](docs/results/longctx/A100_SM80_10M_HIERARCHICAL.md)。
+
 ### 3M 上下文对话：边读边问（2026-11-03）
 
 ```
