@@ -1,0 +1,174 @@
+{
+ "summary": {
+  "tokens": 10000000,
+  "text_bytes": 33667316,
+  "metrics_records": 2000,
+  "entities": 2000,
+  "relations": 3998,
+  "build_seconds": 41.01,
+  "graph_seconds": 0.33,
+  "checks": {
+   "largest": true,
+   "top3": true,
+   "alpha_total": true,
+   "alpha_ge50": true,
+   "owns_subjects": true,
+   "person_alpha": true,
+   "two_hop": true,
+   "three_hop": true
+  },
+  "expected": {
+   "largest": "delta",
+   "top3": [
+    [
+     "delta",
+     20927
+    ],
+    [
+     "epsilon",
+     20694
+    ],
+    [
+     "beta",
+     20521
+    ]
+   ],
+   "alpha_total": 19909,
+   "alpha_total_ge50": 15130,
+   "owns_subjects": 1999,
+   "person_alpha": 334,
+   "two_hop": "e0003",
+   "three_hop": "e0004"
+  }
+ },
+ "answers": {
+  "largest": {
+   "question": "Which category has the largest total value in the GLOBAL METRIC records?",
+   "expected": "Answer: delta",
+   "actual": "Answer: delta",
+   "kind": "graph",
+   "metrics": {
+    "totals": {
+     "alpha": 19909,
+     "beta": 20521,
+     "delta": 20927,
+     "epsilon": 20694,
+     "gamma": 19080
+    },
+    "largest": "delta",
+    "largest_total": 20927
+   },
+   "seconds": 0.328
+  },
+  "top3": {
+   "question": "List the top 3 categories by total value.",
+   "expected": "Answer: delta=20927, epsilon=20694, beta=20521",
+   "actual": "Answer: delta=20927, epsilon=20694, beta=20521",
+   "kind": "graph",
+   "metrics": {
+    "top": [
+     [
+      "delta",
+      20927
+     ],
+     [
+      "epsilon",
+      20694
+     ],
+     [
+      "beta",
+      20521
+     ]
+    ],
+    "min_value": null
+   },
+   "seconds": 0.331
+  },
+  "alpha_total": {
+   "question": "What is the total value in category=alpha?",
+   "expected": "Answer: 19909",
+   "actual": "Answer: 19909",
+   "kind": "graph",
+   "metrics": {
+    "category": "alpha",
+    "total": 19909,
+    "min_value": null
+   },
+   "seconds": 0.391
+  },
+  "alpha_ge50": {
+   "question": "What is the total value in category=alpha, excluding values below 50?",
+   "expected": "Answer: 15130",
+   "actual": "Answer: 15130",
+   "kind": "graph",
+   "metrics": {
+    "category": "alpha",
+    "total": 15130,
+    "min_value": 50
+   },
+   "seconds": 0.331
+  },
+  "owns_subjects": {
+   "question": "How many distinct subjects have relation=owns?",
+   "expected": "Answer: 1999",
+   "actual": "Answer: 1999",
+   "kind": "graph",
+   "metrics": {
+    "relation": "owns",
+    "distinct_subjects": 1999
+   },
+   "seconds": 0.328
+  },
+  "person_alpha": {
+   "question": "How many entities have type=person and group=alpha?",
+   "expected": "Answer: 334",
+   "actual": "Answer: 334",
+   "kind": "graph",
+   "metrics": {
+    "count": 334,
+    "type": "person",
+    "group": "alpha"
+   },
+   "seconds": 0.337
+  },
+  "two_hop": {
+   "question": "Which object is reached from subject=e0001 by relation=owns followed by relation=located_in?",
+   "expected": "Answer: e0003",
+   "actual": "Answer: e0003",
+   "kind": "graph",
+   "metrics": {
+    "subjects": [
+     "e0001"
+    ],
+    "relations": [
+     "owns",
+     "located_in"
+    ],
+    "objects": [
+     "e0003"
+    ]
+   },
+   "seconds": 0.327
+  },
+  "three_hop": {
+   "question": "Which object is reached from subject=e0001 by relation=owns followed by relation=located_in followed by relation=owns?",
+   "expected": "Answer: e0004",
+   "actual": "Answer: e0004",
+   "kind": "graph",
+   "metrics": {
+    "subjects": [
+     "e0001"
+    ],
+    "relations": [
+     "owns",
+     "located_in",
+     "owns"
+    ],
+    "objects": [
+     "e0004"
+    ]
+   },
+   "seconds": 0.33
+  }
+ }
+}

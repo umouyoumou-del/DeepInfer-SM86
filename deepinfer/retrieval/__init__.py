@@ -8,6 +8,7 @@ from deepinfer.retrieval.global_queries import (
     global_answer,
     parse_metric_records,
 )
+from deepinfer.retrieval.global_reasoning import FactGraph, answer_reasoning
 from deepinfer.retrieval.hybrid import (
     FACT_KEYS,
     build_index,
@@ -20,7 +21,9 @@ from deepinfer.retrieval.hybrid import (
 
 __all__ = [
     "FACT_KEYS",
+    "FactGraph",
     "aggregate_metrics",
+    "answer_reasoning",
     "build_index",
     "chunk_text",
     "classify",

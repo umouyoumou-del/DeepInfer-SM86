@@ -200,6 +200,10 @@ Triton FP8 在 SM80 上改走软件 E4M3 解码；VT 题增加 `var_chain_answer
 attention（3M/4M 此前均 21/21、31/31），>4M 自动走分层检索 + 按需 KV；3M/4M 的全文计数、
 摘要、metric 聚合也全部走全量路径，checks 全为 true。详见
 [`docs/results/longctx/AUTO_TIER_3M_4M_10M.md`](docs/results/longctx/AUTO_TIER_3M_4M_10M.md)。
+**10M 复杂全局推理（2026-11-04）**：全文扫描构建 metric/entity/relation 事实图，
+8 类全局问题（最大类、Top-3、过滤聚合、distinct count、实体计数、二跳/三跳关系）全部正确；
+图构建 0.33 s，单题约 0.33–0.39 s。结果见
+[`docs/results/longctx/A100_SM80_10M_REASONING.md`](docs/results/longctx/A100_SM80_10M_REASONING.md)。
 
 ### 3M 上下文对话：边读边问（2026-11-03）
 
