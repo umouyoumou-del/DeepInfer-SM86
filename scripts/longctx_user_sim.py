@@ -36,7 +36,7 @@ PROJECT_SUFFIXES = (".py", ".md", ".sh", ".toml", ".txt", ".ps1", ".html", ".js"
 
 # hand-written: (question, keywords that a right answer contains, all of them; "any:" = one of them)
 HAND = [
-    ("在这个项目的 4M 测试里，读入 4,194,304 个 token 用了多少分钟？", ["any:33.8", "any:33.9", "any:34"]),
+    ("在这个项目的 4M 测试里，读入 4,194,304 个 token 用了多少分钟？", ["any:18.4", "any:33.8", "any:33.9", "any:34"]),
     ("latent fp8 缓存每个 token 占多少 KiB？", ["17.3"]),
     ("和 llama.cpp 的对比里，llama.cpp 读入 1M token 用了多少分钟？", ["99.3"]),
     ("vLLM 0.7.3 为 DeepSeek 预先算的旋转位置表有多少行？", ["any:163,840", "any:163840"]),

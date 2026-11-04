@@ -178,6 +178,8 @@ KV 69.2 GiB（3,830,167 token 在显存、366,185 token 在锁页主机），pre
 Triton FP8 在 SM80 上改走软件 E4M3 解码；VT 题增加 `var_chain_answer` 精确变量链闭包后，
 最终 **21/21 题、31/31 条目**。命令、显存布局和结果见
 [`docs/results/longctx/A100_SM80_4M.md`](docs/results/longctx/A100_SM80_4M.md)。
+流式用户模拟（866 文件、4.13M token、21.65 分钟全部读完、边读边问）见
+[`docs/results/longctx/A100_SM80_STREAM_SIM.md`](docs/results/longctx/A100_SM80_STREAM_SIM.md)。
 
 ### 3M 上下文对话：边读边问（2026-11-03）
 

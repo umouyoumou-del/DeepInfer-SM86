@@ -1,0 +1,2062 @@
+{
+ "files": 866,
+ "tokens": 4126773,
+ "project_tokens": 1252848,
+ "turns": [
+  {
+   "question": "In deepinfer/moe/longctx_service.py, what is the default value of the parameter `chunk` of `build_session`?",
+   "right": true,
+   "queued_at_ask": 2832437,
+   "context_at_ask": 1310724,
+   "kind": "default",
+   "part": "project",
+   "expected": [
+    "16384"
+   ],
+   "file": "DeepInfer-SM86/deepinfer/moe/longctx_service.py",
+   "answer": "The default value of the parameter `chunk` of `build_session` is 16384.\n\nHere are the sentences and lines of text from the provided code snippet that are needed to answer the question:\n\n1. `def build_session(rt, *, capacity: int, trained: int, encode_window: int, kv_dtype: str = \"fp8\", workspace_gib: float = 4.0, chunk: int = 16384):`\n2. `parser.add_argument(\"--chunk\", type=int, default=16384)`\n3. `\"chunk\": positions.chunk`\n\nStep-by-step reasoning:\n\n1. The function `build_session` is defined with a parameter `chunk` that has a default value of 16384.\n2. The `parser.add_argument` line defines the `--chunk` argument with a default value of 16384.\n3. In the function call `\"chunk\": positions.chunk`, the value of `chunk` is set to the value of `positions.chunk`.\n\nSince the default value of `chunk` is specified in the function definition and also confirmed by the argument parser definition, the default value of `chunk` is 16384.\n\n[check]\n The default value of the parameter `chunk` of `build_session` is 16384.\n\nHere are the sentences and lines of text from the provided code snippet that are needed to answer the question:\n\n1. `def build_session(rt, *, capacity: int, trained: int, encode_window: int, kv_dtype: str = \"fp8\", workspace_gib: float = 4.0, chunk: int = 16384):`\n2. `parser.add_argument(\"--chunk\", type=int, default=16384)`\n3. `\"chunk\": positions.chunk`\n\nStep-by-step reasoning:\n\n1. The function `build_session` is defined with a parameter `chunk` that has a default value of 16384.\n2. The `parser.add_argument` line defines the `--chunk` argument with a default value of 16384.\n3. In the function call `\"chunk\": positions.chunk`, the value of `chunk` is set to the value of `positions.chunk`.\n\nSince the default value of `chunk` is specified in the function definition and also confirmed by the argument parser definition, the default value of `chunk` is 16384.\n\nAnswer: 16384",
+   "final": "16384",
+   "first_token": 5.11,
+   "seconds": 34.14,
+   "round_trip": 37.8,
+   "rounds": [
+    {
+     "round": 1,
+     "blocks": 32,
+     "seconds": 1.75
+    },
+    {
+     "round": 2,
+     "blocks": 40,
+     "seconds": 11.12
+    }
+   ],
+   "context": 1310724,
+   "error": null,
+   "evidence": [
+    {
+     "source": "DeepInfer-SM86/deepinfer/cli/serve.py",
+     "position": 80561,
+     "line": ":class:`~deepinfer.moe.longctx_service.LongContextChat`:"
+    },
+    {
+     "source": "DeepInfer-SM86/deepinfer/cli/serve.py",
+     "position": 80824,
+     "line": "from deepinfer.moe.longctx_service import LongContextChat, Source, build_session"
+    },
+    {
+     "source": "DeepInfer-SM86/deepinfer/moe/gguf_dense_loader.py",
+     "position": 263875,
+     "line": "def build_dense_state_dict("
+    },
+    {
+     "source": "DeepInfer-SM86/deepinfer/moe/longctx_service.py",
+     "position": 327699,
+     "line": "def build_session(rt, *, capacity: int, trained: int, encode_window: int, kv_dtype: str = \"fp8\","
+    },
+    {
+     "source": "DeepInfer-SM86/deepinfer/moe/longctx_service.py",
+     "position": 327732,
+     "line": "workspace_gib: float = 4.0, chunk: int = 16384):"
+    },
+    {
+     "source": "DeepInfer-SM86/scripts/bench_locate.py",
+     "position": 992713,
+     "line": "parser.add_argument(\"--kv\", choices=(\"fp16\", \"fp8\"), default=\"fp8\")"
+    },
+    {
+     "source": "DeepInfer-SM86/scripts/bench_locate.py",
+     "position": 992739,
+     "line": "parser.add_argument(\"--workspace-gib\", type=float, default=4.0)"
+    },
+    {
+     "source": "DeepInfer-SM86/scripts/needle_complex.py",
+     "position": 1076704,
+     "line": "parser.add_argument(\"--chunk\", type=int, default=16384)"
+    },
+    {
+     "source": "DeepInfer-SM86/scripts/needle_complex.py",
+     "position": 1078467,
+     "line": "\"encode_window\": args.encode_window or None, \"trained\": positions.trained, \"chunk\": positions.chunk,"
+    },
+    {
+     "source": "DeepInfer-SM86/scripts/needle_complex.py",
+     "position": 1078547,
+     "line": "rt, args.load_cache, capacity=capacity, gpu_tokens=gpu_tokens, far=positions.far,"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/moe/test_deepseek_longctx_layout.py",
+     "position": 1175284,
+     "line": "from deepinfer.moe.deepseek_longctx import DeepSeekLongContext"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/moe/test_deepseek_longctx_layout.py",
+     "position": 1175350,
+     "line": "session.encode_window = window"
+    }
+   ]
+  },
+  {
+   "question": "In tests/quantization/helpers.py, what is the default value of the parameter `quant_type_name` of `make_tiny_gguf`?",
+   "right": true,
+   "queued_at_ask": 2816053,
+   "context_at_ask": 1310772,
+   "kind": "default",
+   "part": "project",
+   "expected": [
+    "\"Q4_0\"",
+    "'Q4_0'",
+    "Q4_0"
+   ],
+   "file": "DeepInfer-SM86/tests/quantization/helpers.py",
+   "answer": "First, let's copy and paste the relevant sentences from the text provided:\n\n```python\nfrom gguf import GGMLQuantizationType, dequantize\nfrom transformers import Qwen2Config, Qwen2ForCausalLM\n    *,\n    root: Path,\n    *,\n    quant_type_name: str = \"Q4_0\",\n) -> tuple[Path, Qwen2ForCausalLM]:\n    from gguf import GGMLQuantizationType, GGUFWriter\n    quant_type = getattr(GGMLQuantizationType, quant_type_name)\nfrom tests.quantization.helpers import make_tiny_gguf\n```\n\nNow, let's reason step by step to find the default value of the parameter `quant_type_name` of `make_tiny_gguf`:\n\n1. The function `make_tiny_gguf` is defined in `tests.quantization.helpers`.\n2. The function signature includes a parameter `quant_type_name` with a default value of `\"Q4_0\"`.\n\nTherefore, the default value of the parameter `quant_type_name` of `make_tiny_gguf` is `\"Q4_0\"`.\n\nAnswer:\n\"Q4_0\"\n\n[check]\n The default value of the parameter `quant_type_name` of `make_tiny_gguf` is `\"Q4_0\"`.\n\nAnswer:\n\"Q4_0\"",
+   "final": "\"Q4_0\"",
+   "first_token": 4.59,
+   "seconds": 56.73,
+   "round_trip": 61.5,
+   "rounds": [
+    {
+     "round": 1,
+     "blocks": 32,
+     "seconds": 1.85
+    },
+    {
+     "round": 2,
+     "blocks": 40,
+     "seconds": 5.44
+    },
+    {
+     "round": 3,
+     "blocks": 40,
+     "seconds": 12.63
+    },
+    {
+     "round": 4,
+     "blocks": 40,
+     "seconds": 7.65
+    }
+   ],
+   "context": 1327156,
+   "error": null,
+   "evidence": [
+    {
+     "source": "DeepInfer-SM86/tests/moe/test_gguf_index.py",
+     "position": 1181776,
+     "line": "from gguf import GGMLQuantizationType, dequantize"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/quantization/helpers.py",
+     "position": 1246214,
+     "line": "from transformers import Qwen2Config, Qwen2ForCausalLM"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/quantization/helpers.py",
+     "position": 1246270,
+     "line": "*,"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/quantization/helpers.py",
+     "position": 1248695,
+     "line": "root: Path,"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/quantization/helpers.py",
+     "position": 1248701,
+     "line": "*,"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/quantization/helpers.py",
+     "position": 1248704,
+     "line": "quant_type_name: str = \"Q4_0\","
+    },
+    {
+     "source": "DeepInfer-SM86/tests/quantization/helpers.py",
+     "position": 1248795,
+     "line": ") -> tuple[Path, Qwen2ForCausalLM]:"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/quantization/helpers.py",
+     "position": 1248810,
+     "line": "from gguf import GGMLQuantizationType, GGUFWriter"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/quantization/helpers.py",
+     "position": 1248829,
+     "line": "quant_type = getattr(GGMLQuantizationType, quant_type_name)"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/quantization/test_convert_gguf.py",
+     "position": 1249805,
+     "line": "from tests.quantization.helpers import make_tiny_gguf"
+    },
+    {
+     "source": "对话",
+     "position": 1310726,
+     "line": "[Q] In deepinfer/moe/longctx_service.py, what is the default value of the parameter `chunk` of `build_session`?"
+    },
+    {
+     "source": "对话",
+     "position": 1310762,
+     "line": "[A] 16384"
+    }
+   ]
+  },
+  {
+   "question": "在这个项目的 4M 测试里，读入 4,194,304 个 token 用了多少分钟？",
+   "right": true,
+   "queued_at_ask": 2799669,
+   "context_at_ask": 1327207,
+   "kind": "docs",
+   "part": "project",
+   "answer": "在这个项目的 4M 测试里，读入 4,194,304 个 token 用了 33.8 分钟。\n\n首先，我们从文本中找到相关的信息：\n\n```\n**4M（4,194,304 token）**：主机端改为按实际大小锁页后同一张卡装得下——KV 69.2 GiB（93 万 token 在显存、326 万在锁页主机内存），容器内存峰值 60.0 GiB（上限 62 GiB），prefill 34 分钟，21 题约 14 分钟；\n```\n\n这段文字明确提到了读入 4,194,304 个 token 用了 33.8 分钟。\n\n接下来，我们逐步推理：\n\n1. 文本中提到“prefill 34 分钟”，这指的是从文档中读入数据并进行预处理（prefill）所花费的时间。\n2. 文本中还提到“21 题约 14 分钟”，这指的是回答 21 个问题所花费的时间。\n3. 由于 prefill 和回答问题的时间是独立的，我们可以推断出读入数据的时间是 33.8 分钟。\n\n因此，读入 4,194,304 个 token 用了 33.8 分钟。\n\nAnswer: 33.8\n\n[check]\n The text provided states:\n\n```\n**4M（4,194,304 token）**：主机端改为按实际大小锁页后同一张卡装得下——KV 69.2 GiB（93 万 token 在显存、326 万在锁页主机内存），容器内存峰值 60.0 GiB（上限 62 GiB），prefill 34 分钟，21 题约 14 分钟；\n```\n\nFrom this, we can see that the time taken to read in 4,194,304 tokens is mentioned as 33.8 minutes.\n\nAnswer: 33.8",
+   "final": "33.8",
+   "first_token": 4.43,
+   "seconds": 69.09,
+   "round_trip": 73.8,
+   "rounds": [
+    {
+     "round": 1,
+     "blocks": 32,
+     "seconds": 1.68
+    },
+    {
+     "round": 2,
+     "blocks": 40,
+     "seconds": 11.35
+    },
+    {
+     "round": 3,
+     "blocks": 40,
+     "seconds": 9.37
+    }
+   ],
+   "context": 1343591,
+   "error": null,
+   "evidence": [
+    {
+     "source": "DeepInfer-SM86/README.md",
+     "position": 3996,
+     "line": "**3M（3,145,728 token）**：同样 39 根针、21 题，两次运行（其中一次从头 prefill）都是 21/21、31/31，33 处针全部定位到——KV 51.9 GiB（93 万 token 在显存、221 万在锁页主机"
+    },
+    {
+     "source": "DeepInfer-SM86/README.md",
+     "position": 4109,
+     "line": "**4M（4,194,304 token）**：主机端改为按实际大小锁页（PyTorch 的锁页分配会取整到 2 的幂，4M 时要 82 GiB）后同一张卡装得下——KV 69.2 GiB（93 万在显存、326 万在锁页主机"
+    },
+    {
+     "source": "DeepInfer-SM86/README.md",
+     "position": 4196,
+     "line": "内存），容器内存峰值 60.0 GiB（上限 62 GiB），prefill 34 分钟，21 题约 14 分钟；两份不同的文档上 33 处针都全部定位到，"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/LONG_CONTEXT_1M.md",
+     "position": 572706,
+     "line": "**4M（4,194,304 token）**：主机端改为按实际大小锁页后同一张卡装得下（§4.12）——KV 69.2 GiB（93 万 token 在显存、"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/LONG_CONTEXT_1M.md",
+     "position": 572765,
+     "line": "326 万在锁页主机内存），容器内存峰值 60.0 GiB（上限 62 GiB），prefill 34"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/LONG_CONTEXT_1M.md",
+     "position": 588785,
+     "line": "| KV（latent fp8） | 51.9 GiB：显存 93 万 token，锁页主机内存 221 万 | 69.2 GiB：显存 93 万 token，锁页主机内存 326 万 |"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/LONG_CONTEXT_1M.md",
+     "position": 588887,
+     "line": "| 容器内存峰值（上限 62 GiB） | 58 GB | 59.7 / 60.0 GiB（其中约 3 GiB 是可回收的文件页） |"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/PAPER_LONG_CONTEXT.html",
+     "position": 673792,
+     "line": "_K_M 量化 10.4 GB）在单张 RTX 4080 SUPER（32 GB）上读入 <strong>3,145,728 个 token</strong>，<br>在一套 RULER 式的复杂大海寻针上——39 根针同时在场，16 个相似键、一键多值、一问多键、5 环变量链带干扰链、<br>两跳——<strong>"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/PAPER_LONG_CONTEXT.html",
+     "position": 684508,
+     "line": "<p><strong>4M。</strong> 按实际大小锁页（§3.1）后 4,194,304 个 token 装得下：KV 69.2 GiB，93 万 token 在显存、326 万在锁页主机内存，<br>容器内存峰值 60.0 GiB（上限 62 GiB）；读入 33.8 分钟，21 题 13–14 分钟。Pyt"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/PAPER_LONG_CONTEXT.html",
+     "position": 685727,
+     "line": "<p><strong>图 3</strong> 读入文档用的时间（双对数）。llama.cpp 用全量注意力，"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/PAPER_LONG_CONTEXT.md",
+     "position": 701408,
+     "line": "**4M。** 按实际大小锁页（§3.1）后 4,194,304 个 token 装得下：KV 69.2 GiB，93 万 token 在显存、326 万在锁页主机内存，"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/PAPER_LONG_CONTEXT.md",
+     "position": 701474,
+     "line": "容器内存峰值 60.0 GiB（上限 62 GiB）；读入 33.8 分钟，21 题 13–14 分钟。Python 标准库只有约 371 万个 token，草堆"
+    }
+   ]
+  },
+  {
+   "question": "In asyncio/base_futures.py, what is the value of the module constant `_PENDING`?",
+   "right": true,
+   "queued_at_ask": 2570293,
+   "context_at_ask": 1572864,
+   "kind": "constant",
+   "part": "stdlib",
+   "expected": [
+    "'PENDING'",
+    "PENDING"
+   ],
+   "file": "python3.12/asyncio/base_futures.py",
+   "answer": "The text provided is:\n\n```python\n===== python3.12/asyncio/base_futures.py =====\n# States for Future.\n_PENDING = 'PENDING'\n_CANCELLED = 'CANCELLED'\n```\n\nThe value of the module constant `_PENDING` is `'PENDING'`.\n\nAnswer: 'PENDING'\n\n[check]\n The text provided is:\n\n```python\n===== python3.12/asyncio/base_futures.py =====\n# States for Future.\n_PENDING = 'PENDING'\n_CANCELLED = 'CANCELLED'\n```\n\nThe value of the module constant `_PENDING` is `'PENDING'`.\n\nAnswer: 'PENDING'",
+   "final": "'PENDING'",
+   "first_token": 4.64,
+   "seconds": 19.76,
+   "round_trip": 22.6,
+   "rounds": [
+    {
+     "round": 1,
+     "blocks": 32,
+     "seconds": 1.77
+    },
+    {
+     "round": 2,
+     "blocks": 40,
+     "seconds": 6.55
+    }
+   ],
+   "context": 1573012,
+   "error": null,
+   "evidence": [
+    {
+     "source": "python3.12/__future__.py",
+     "position": 1252854,
+     "line": "===== python3.12/__future__.py ====="
+    },
+    {
+     "source": "对话",
+     "position": 1327158,
+     "line": "[Q] In tests/quantization/helpers.py, what is the default value of the parameter `quant_type_name` of `make_tiny_gguf`?"
+    },
+    {
+     "source": "python3.12/_pylong.py",
+     "position": 1400463,
+     "line": "===== python3.12/_pylong.py ====="
+    },
+    {
+     "source": "python3.12/asyncio/base_futures.py",
+     "position": 1530378,
+     "line": "===== python3.12/asyncio/base_futures.py ====="
+    },
+    {
+     "source": "python3.12/asyncio/base_futures.py",
+     "position": 1530417,
+     "line": "# States for Future."
+    },
+    {
+     "source": "python3.12/asyncio/base_futures.py",
+     "position": 1530423,
+     "line": "_PENDING = 'PENDING'"
+    },
+    {
+     "source": "python3.12/asyncio/base_futures.py",
+     "position": 1530432,
+     "line": "_CANCELLED = 'CANCELLED'"
+    },
+    {
+     "source": "python3.12/asyncio/base_tasks.py",
+     "position": 1533375,
+     "line": "===== python3.12/asyncio/base_tasks.py ====="
+    },
+    {
+     "source": "python3.12/asyncio/base_tasks.py",
+     "position": 1533406,
+     "line": "from . import base_futures"
+    },
+    {
+     "source": "python3.12/asyncio/futures.py",
+     "position": 1544483,
+     "line": "_PENDING = base_futures._PENDING"
+    },
+    {
+     "source": "python3.12/asyncio/proactor_events.py",
+     "position": 1553143,
+     "line": "from . import base_events"
+    },
+    {
+     "source": "python3.12/asyncio/selector_events.py",
+     "position": 1567354,
+     "line": "===== python3.12/asyncio/selector_events.py ====="
+    }
+   ]
+  },
+  {
+   "question": "In tests/moe/test_olmoe_weights.py, what is the default value of the parameter `hidden` of `_shapes`?",
+   "right": false,
+   "queued_at_ask": 0,
+   "context_at_ask": 4126960,
+   "kind": "default",
+   "part": "project",
+   "expected": [
+    "2048"
+   ],
+   "file": "DeepInfer-SM86/tests/moe/test_olmoe_weights.py",
+   "answer": "Earlier in this conversation:\nQ1: In deepinfer/moe/longctx_service.py, what is the default value of the parameter `chunk` of `build_session`?\nA1: 16384\n\nQ2: In tests/quantization/helpers.py, what is the default value of the parameter `quant_type_name` of `make_tiny_gguf`?\nA2: \"Q4_0\"\n\nQ3: 在这个项目的 4M 测试里，读入 4,194,304 个 token 用了多少分钟？\nA3: 33.8\n\nQ4: In asyncio/base_futures.py, what is the value of the module constant `_PENDING`?\nA4: 'PENDING'\n\nIn tests/moe/test_olmoe_weights.py, what is the default value of the parameter `hidden` of `_shapes`?\n\nFirst, let's identify the relevant text from the earlier conversation that is needed to answer the question:\n\n1. \"===== DeepInfer-SM86/tests/moe/test_olmoe_weights.py =====\"\n2. \"    hidden_size: int = 64,\"\n\nThese two pieces of information are needed to answer the question. The first line indicates the file where the code is located, and the second line provides the default value of the `hidden_size` parameter.\n\nNow, let's reason step by step:\n\n1. The text indicates that the file is `tests/moe/test_olmoe_weights.py`.\n2. The line `hidden_size: int = 64,` specifies the default value of the `hidden_size` parameter.\n\nTherefore, the default value of the parameter `hidden` of `_shapes` in `tests/moe/test_olmoe_weights.py` is 64.\n\nAnswer: 64\n\n[check]\n Earlier in this conversation:\nQ1: In deepinfer/moe/longctx_service.py, what is the default value of the parameter `chunk` of `build_session`?\nA1: 16384\n\nQ2: In tests/quantization/helpers.py, what is the default value of the parameter `quant_type_name` of `make_tiny_gguf`?\nA2: \"Q4_0\"\n\nQ3: 在这个项目的 4M 测试里，读入 4,194,304 个 token 用了多少分钟？\nA3: 33.8\n\nQ4: In asyncio/base_futures.py, what is the value of the module constant `_PENDING`?\nA4: 'PENDING'\n\nIn tests/moe/test_olmoe_weights.py, what is the default value of the parameter `hidden` of `_shapes`?\n\nFirst, let's identify the relevant text from the earlier conversation that is needed to answer the question:\n\n1. \"===== DeepInfer-SM86/tests/moe/test_olmoe_weights.py =====\"\n2. \"    hidden_size: int = 64,\"\n\nThese two pieces of information are needed to answer the question. The first line indicates the file where the code is located, and the second line provides the default value of the `hidden_size` parameter.\n\nNow, let's reason step by step:\n\n1. The text indicates that the file is `tests/moe/test_olmoe_weights.py`.\n2. The line `hidden_size: int = 64,` specifies the default value of the `hidden_size` parameter.\n\nTherefore, the default value of the parameter `hidden` of `_shapes` in `tests/moe/test_olmoe_weights.py` is 64.\n\nAnswer: 64",
+   "final": "64",
+   "first_token": 9.6,
+   "seconds": 98.55,
+   "round_trip": 99.1,
+   "rounds": [
+    {
+     "round": 1,
+     "blocks": 32,
+     "seconds": 4.98
+    },
+    {
+     "round": 2,
+     "blocks": 8,
+     "seconds": 10.48
+    },
+    {
+     "round": 3,
+     "blocks": 40,
+     "seconds": 33.66
+    },
+    {
+     "round": 4,
+     "blocks": 8,
+     "seconds": 11.26
+    }
+   ],
+   "context": 4126960,
+   "error": null,
+   "evidence": [
+    {
+     "source": "DeepInfer-SM86/deepinfer/moe/olmoe_weights.py",
+     "position": 374905,
+     "line": "===== DeepInfer-SM86/deepinfer/moe/olmoe_weights.py ====="
+    },
+    {
+     "source": "DeepInfer-SM86/docs/HANDOFF.md",
+     "position": 566806,
+     "line": "测试：`tests/moe/test_mla_kv_layout.py`、`test_yarn_rope.py`、`test_block_mass.py`、"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/moe/conftest.py",
+     "position": 1166405,
+     "line": "===== DeepInfer-SM86/tests/moe/conftest.py ====="
+    },
+    {
+     "source": "DeepInfer-SM86/tests/moe/olmoe_synthetic.py",
+     "position": 1166670,
+     "line": "HIDDEN, HEADS, INTER, EXPERTS, TOP_K, LAYERS, VOCAB = 256, 2, 256, 8, 2, 2, 64"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/moe/olmoe_synthetic.py",
+     "position": 1169186,
+     "line": "from deepinfer.moe.olmoe_weights import layer_tensors"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/moe/test_cpu_avx2.py",
+     "position": 1174003,
+     "line": "===== DeepInfer-SM86/tests/moe/test_cpu_avx2.py ====="
+    },
+    {
+     "source": "DeepInfer-SM86/tests/moe/test_fused_moe.py",
+     "position": 1178448,
+     "line": "===== DeepInfer-SM86/tests/moe/test_fused_moe.py ====="
+    },
+    {
+     "source": "DeepInfer-SM86/tests/moe/test_olmoe_attention.py",
+     "position": 1209024,
+     "line": "===== DeepInfer-SM86/tests/moe/test_olmoe_attention.py ====="
+    },
+    {
+     "source": "DeepInfer-SM86/tests/moe/test_olmoe_layer.py",
+     "position": 1213185,
+     "line": "===== DeepInfer-SM86/tests/moe/test_olmoe_layer.py ====="
+    },
+    {
+     "source": "DeepInfer-SM86/tests/quantization/helpers.py",
+     "position": 1246273,
+     "line": "hidden_size: int = 64,"
+    },
+    {
+     "source": "对话",
+     "position": 1310726,
+     "line": "[Q] In deepinfer/moe/longctx_service.py, what is the default value of the parameter `chunk` of `build_session`?"
+    },
+    {
+     "source": "对话",
+     "position": 1327158,
+     "line": "[Q] In tests/quantization/helpers.py, what is the default value of the parameter `quant_type_name` of `make_tiny_gguf`?"
+    }
+   ]
+  },
+  {
+   "question": "In deepinfer/moe/latent_mla_triton.py, what is the default value of the parameter `block_n` of `decode_partial`?",
+   "right": true,
+   "queued_at_ask": 0,
+   "context_at_ask": 4127006,
+   "kind": "default",
+   "part": "project",
+   "expected": [
+    "32"
+   ],
+   "file": "DeepInfer-SM86/deepinfer/moe/latent_mla_triton.py",
+   "answer": "The default value of the parameter `block_n` of `decode_partial` in `deepinfer/moe/latent_mla_triton.py` is 32.\n\nFirst, let's copy and paste the relevant text from the original message:\n\n```python\nfrom deepinfer.moe import latent_mla_triton as fused\n    out, lse = fused.decode_partial(\n        q_abs, q_pe, latent, scale, pe, [(0, n, 0)], sm_scale=1.0,\n        block_n=32, num_warps=4, num_stages=1,\n    )\n```\n\nIn this line of code, `block_n` is explicitly set to 32. Therefore, the default value of `block_n` in `decode_partial` is 32.\n\nAnswer: 32\n\n[check]\n The default value of the parameter `block_n` of `decode_partial` in `deepinfer/moe/latent_mla_triton.py` is 32.\n\nStep-by-step reasoning:\n1. The code snippet provided is from `deepinfer/moe/latent_mla_triton.py`.\n2. The function `decode_partial` is called with several parameters, including `block_n`.\n3. The specific line of code is:\n   ```python\n   out, lse = fused.decode_partial(\n       q_abs, q_pe, latent, scale, pe, [(0, n, 0)], sm_scale=1.0,\n       block_n=32, num_warps=4, num_stages=1,\n   )\n   ```\n4. From this line, it is clear that `block_n` is set to 32.\n\nTherefore, the default value of `block_n` in `decode_partial` is 32.\n\nAnswer: 32",
+   "final": "32",
+   "first_token": 9.92,
+   "seconds": 111.49,
+   "round_trip": 112.0,
+   "rounds": [
+    {
+     "round": 1,
+     "blocks": 32,
+     "seconds": 5.41
+    },
+    {
+     "round": 2,
+     "blocks": 40,
+     "seconds": 37.06
+    },
+    {
+     "round": 3,
+     "blocks": 8,
+     "seconds": 7.23
+    },
+    {
+     "round": 4,
+     "blocks": 40,
+     "seconds": 28.66
+    }
+   ],
+   "context": 4127006,
+   "error": null,
+   "evidence": [
+    {
+     "source": "DeepInfer-SM86/deepinfer/moe/latent_mla.py",
+     "position": 301474,
+     "line": "from deepinfer.moe import latent_mla_triton as fused"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/moe/test_latent_locate.py",
+     "position": 1189255,
+     "line": "out, mass = latent_locate.locate_attention("
+    },
+    {
+     "source": "DeepInfer-SM86/tests/moe/test_latent_locate.py",
+     "position": 1189324,
+     "line": "tile=512, dequantize=dequantize, block_n=block_n, block_m=16 if block_n == 64 else 32,"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/moe/test_latent_locate.py",
+     "position": 1189367,
+     "line": "num_warps=4 if block_n == 64 else 8,"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/moe/test_latent_mla_triton_fp8.py",
+     "position": 1196564,
+     "line": "===== DeepInfer-SM86/tests/moe/test_latent_mla_triton_fp8.py ====="
+    },
+    {
+     "source": "DeepInfer-SM86/tests/moe/test_latent_mla_triton_fp8.py",
+     "position": 1196651,
+     "line": "from deepinfer.moe import latent_mla_triton as fused"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/moe/test_latent_mla_triton_fp8.py",
+     "position": 1196965,
+     "line": "out, lse = fused.decode_partial("
+    },
+    {
+     "source": "DeepInfer-SM86/tests/moe/test_latent_mla_triton_fp8.py",
+     "position": 1196978,
+     "line": "q_abs, q_pe, latent, scale, pe, [(0, n, 0)], sm_scale=1.0,"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/moe/test_latent_mla_triton_fp8.py",
+     "position": 1197010,
+     "line": "block_n=32, num_warps=4, num_stages=1,"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/moe/test_latent_mla_triton_fp8.py",
+     "position": 1197033,
+     "line": ")"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/packaging/test_pypi_package.py",
+     "position": 1245805,
+     "line": "\"src/deepinfer/moe/cpu_avx2_packed.cpp\","
+    },
+    {
+     "source": "对话",
+     "position": 4126962,
+     "line": "[Q] In tests/moe/test_olmoe_weights.py, what is the default value of the parameter `hidden` of `_shapes`?"
+    }
+   ]
+  },
+  {
+   "question": "In scripts/bench_productivity_backends.py, what is the value of the module constant `DEFAULT_OLLAMA`?",
+   "right": false,
+   "queued_at_ask": 0,
+   "context_at_ask": 4127057,
+   "kind": "constant",
+   "part": "project",
+   "expected": [
+    "\"maibot-catgirl-v3:latest\"",
+    "'maibot-catgirl-v3:latest'",
+    "maibot-catgirl-v3:latest"
+   ],
+   "file": "DeepInfer-SM86/scripts/bench_productivity_backends.py",
+   "answer": "To answer the question about the value of the module constant `DEFAULT_OLLAMA` in `scripts/bench_productivity_backends.py`, we need to find the relevant information in the provided text.\n\n1. The text provided does not explicitly mention the value of `DEFAULT_OLLAMA`.\n2. However, it does mention the existence of `DEFAULT_OLLAMA` in the context of the project.\n\nGiven the context, we can infer that `DEFAULT_OLLAMA` is likely a module constant or a configuration value used in the project. Since the text does not provide its value, we cannot determine its specific value from the given information.\n\nAnswer:\nThe value of the module constant `DEFAULT_OLLAMA` is not provided in the given text.\n\n[check]\n The text provided does not explicitly mention the value of `DEFAULT_OLLAMA`. Therefore, based on the given information, we cannot determine its specific value.\n\nAnswer:\nThe value of the module constant `DEFAULT_OLLAMA` is not provided in the given text.",
+   "final": "The value of the module constant `DEFAULT_OLLAMA` is not provided in the given text.",
+   "first_token": 9.04,
+   "seconds": 114.81,
+   "round_trip": 115.4,
+   "rounds": [
+    {
+     "round": 1,
+     "blocks": 32,
+     "seconds": 4.51
+    },
+    {
+     "round": 2,
+     "blocks": 40,
+     "seconds": 24.01
+    },
+    {
+     "round": 3,
+     "blocks": 40,
+     "seconds": 20.34
+    },
+    {
+     "round": 4,
+     "blocks": 40,
+     "seconds": 34.91
+    }
+   ],
+   "context": 4127057,
+   "error": null,
+   "evidence": [
+    {
+     "source": "DeepInfer-SM86/README.md",
+     "position": 30539,
+     "line": "PRODUCTIVITY_BENCHMARK_3B_7B_OLLAMA.md       3B/7B/Ollama 完整基准"
+    },
+    {
+     "source": "DeepInfer-SM86/deepinfer/cli/models.py",
+     "position": 78469,
+     "line": "DEFAULT_QUANT = \"Q4_K_M\""
+    },
+    {
+     "source": "DeepInfer-SM86/docs/ARTICLE_2_DEEPINFER_SM86_PRODUCTIVITY.md",
+     "position": 455605,
+     "line": "docs/PRODUCTIVITY_BENCHMARK_"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/PERSONAL_PRODUCTIVITY.md",
+     "position": 714129,
+     "line": "- `docs/PRODUCTIVITY_BENCHMARK_3B_7B_OLLAMA.md`"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/QWEN_DEEPINFER_4GB_ENGINEERING_ARTICLE.md",
+     "position": 758972,
+     "line": "docs/PRODUCTIV"
+    },
+    {
+     "source": "DeepInfer-SM86/scripts/answer_bench.py",
+     "position": 967078,
+     "line": "===== DeepInfer-SM86/scripts/answer_bench.py ====="
+    },
+    {
+     "source": "DeepInfer-SM86/scripts/bench_productivity_backends.py",
+     "position": 1009943,
+     "line": "===== DeepInfer-SM86/scripts/bench_productivity_backends.py ====="
+    },
+    {
+     "source": "python3.12/doctest.py",
+     "position": 1867824,
+     "line": "Optional keyword arg \"optionflags\" or's together module constants,"
+    },
+    {
+     "source": "python3.12/io.py",
+     "position": 2907664,
+     "line": "DEFAULT_BUFFER_SIZE"
+    },
+    {
+     "source": "python3.12/pickle.py",
+     "position": 3232567,
+     "line": "DEFAULT_PROTOCOL = 4"
+    },
+    {
+     "source": "python3.12/shelve.py",
+     "position": 3626955,
+     "line": "from pickle import DEFAULT_PROTOCOL, Pickler, Unpickler"
+    },
+    {
+     "source": "python3.12/test/typinganndata/ann_module7.py",
+     "position": 3957529,
+     "line": "DEFAULT_BUFFER_SIZE = 8192"
+    }
+   ]
+  },
+  {
+   "question": "In tests/quantization/helpers.py, what is the default value of the parameter `vocab_size` of `make_tiny_gguf`?",
+   "right": true,
+   "queued_at_ask": 0,
+   "context_at_ask": 4127116,
+   "kind": "default",
+   "part": "project",
+   "expected": [
+    "128"
+   ],
+   "file": "DeepInfer-SM86/tests/quantization/helpers.py",
+   "answer": "In tests/quantization/helpers.py, what is the default value of the parameter `vocab_size` of `make_tiny_gguf`?\n\nFirst, let's find the relevant line in `tests/quantization/helpers.py` that defines `make_tiny_gguf`.\n\n```python\ndef make_tiny_gguf(\n    *,\n    quant_type_name: str = \"Q4_0\",\n    hidden_size: int = 64,\n    vocab_size: int = 128,\n    _config,\n    model = tiny_qwen()\n)\n```\n\nFrom the line above, we can see that the default value of the parameter `vocab_size` of `make_tiny_gguf` is `128`.\n\nAnswer: 128\n\n[check]\n In tests/quantization/helpers.py, what is the default value of the parameter `vocab_size` of `make_tiny_gguf`?\n\nFirst, let's find the relevant line in `tests/quantization/helpers.py` that defines `make_tiny_gguf`.\n\n```python\ndef make_tiny_gguf(\n    *,\n    quant_type_name: str = \"Q4_0\",\n    hidden_size: int = 64,\n    vocab_size: int = 128,\n    _config,\n    model = tiny_qwen()\n)\n```\n\nFrom the line above, we can see that the default value of the parameter `vocab_size` of `make_tiny_gguf` is `128`.\n\nAnswer: 128",
+   "final": "128",
+   "first_token": 9.52,
+   "seconds": 44.93,
+   "round_trip": 45.5,
+   "rounds": [
+    {
+     "round": 1,
+     "blocks": 32,
+     "seconds": 5.0
+    },
+    {
+     "round": 2,
+     "blocks": 40,
+     "seconds": 22.51
+    }
+   ],
+   "context": 4127116,
+   "error": null,
+   "evidence": [
+    {
+     "source": "DeepInfer-SM86/tests/quantization/__init__.py",
+     "position": 1246135,
+     "line": "===== DeepInfer-SM86/tests/quantization/__init__.py ====="
+    },
+    {
+     "source": "DeepInfer-SM86/tests/quantization/helpers.py",
+     "position": 1246157,
+     "line": "===== DeepInfer-SM86/tests/quantization/helpers.py ====="
+    },
+    {
+     "source": "DeepInfer-SM86/tests/quantization/helpers.py",
+     "position": 1246263,
+     "line": "def tiny_qwen("
+    },
+    {
+     "source": "DeepInfer-SM86/tests/quantization/helpers.py",
+     "position": 1246270,
+     "line": "*,"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/quantization/helpers.py",
+     "position": 1246273,
+     "line": "hidden_size: int = 64,"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/quantization/helpers.py",
+     "position": 1246298,
+     "line": "vocab_size: int = 128,"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/quantization/helpers.py",
+     "position": 1247645,
+     "line": "_config, model = tiny_qwen()"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/quantization/helpers.py",
+     "position": 1248686,
+     "line": "def make_tiny_gguf("
+    },
+    {
+     "source": "DeepInfer-SM86/tests/quantization/test_convert_gguf.py",
+     "position": 1249805,
+     "line": "from tests.quantization.helpers import make_tiny_gguf"
+    },
+    {
+     "source": "对话",
+     "position": 1327158,
+     "line": "[Q] In tests/quantization/helpers.py, what is the default value of the parameter `quant_type_name` of `make_tiny_gguf`?"
+    },
+    {
+     "source": "对话",
+     "position": 4126962,
+     "line": "[Q] In tests/moe/test_olmoe_weights.py, what is the default value of the parameter `hidden` of `_shapes`?"
+    },
+    {
+     "source": "对话",
+     "position": 4127008,
+     "line": "[Q] In deepinfer/moe/latent_mla_triton.py, what is the default value of the parameter `block_n` of `decode_partial`?"
+    }
+   ]
+  },
+  {
+   "question": "In tests/apps/test_paged_scheduler.py, what is the default value of the parameter `kv_cache_dtype` of `_make_scheduler`?",
+   "right": true,
+   "queued_at_ask": 0,
+   "context_at_ask": 4127164,
+   "kind": "default",
+   "part": "project",
+   "expected": [
+    "\"fp16\"",
+    "'fp16'",
+    "fp16"
+   ],
+   "file": "DeepInfer-SM86/tests/apps/test_paged_scheduler.py",
+   "answer": "The default value of the parameter `kv_cache_dtype` of `_make_scheduler` in `tests/apps/test_paged_scheduler.py` is `\"fp16\"`.\n\nFirst, let's identify the relevant part of the text that contains the information about `kv_cache_dtype` in `_make_scheduler`:\n\n```python\nfrom apps.paged_scheduler import PagedBatchScheduler\ndef _make_scheduler(\n    runtime: _Runtime,\n    *,\n    max_num_seqs: int = 2,\n    kv_cache_dtype: str = \"fp16\",\n```\n\nThis line shows that `kv_cache_dtype` is set to `\"fp16\"` by default. Therefore, the default value of `kv_cache_dtype` in `_make_scheduler` is `\"fp16\"`.\n\nAnswer: `\"fp16\"`\n\n[check]\n The default value of the parameter `kv_cache_dtype` of `_make_scheduler` in `tests/apps/test_paged_scheduler.py` is `\"fp16\"`.\n\nFirst, let's identify the relevant part of the text that contains the information about `kv_cache_dtype` in `_make_scheduler`:\n\n```python\nfrom apps.paged_scheduler import PagedBatchScheduler\ndef _make_scheduler(\n    runtime: _Runtime,\n    *,\n    max_num_seqs: int = 2,\n    kv_cache_dtype: str = \"fp16\",\n```\n\nThis line shows that `kv_cache_dtype` is set to `\"fp16\"` by default. Therefore, the default value of `kv_cache_dtype` in `_make_scheduler` is `\"fp16\"`.\n\nAnswer: `\"fp16\"`",
+   "final": "`\"fp16\"`",
+   "first_token": 9.94,
+   "seconds": 53.47,
+   "round_trip": 54.0,
+   "rounds": [
+    {
+     "round": 1,
+     "blocks": 32,
+     "seconds": 5.39
+    },
+    {
+     "round": 2,
+     "blocks": 40,
+     "seconds": 28.87
+    }
+   ],
+   "context": 4127164,
+   "error": null,
+   "evidence": [
+    {
+     "source": "DeepInfer-SM86/README.md",
+     "position": 19833,
+     "line": "DeepSeek-V2-Lite 已接到现有 `apps/paged_scheduler.py`："
+    },
+    {
+     "source": "DeepInfer-SM86/docs/ENGINE_CORE_PAGED_CONTINUOUS_BATCHING.md",
+     "position": 557263,
+     "line": "`apps/paged_scheduler.py` 的循环："
+    },
+    {
+     "source": "DeepInfer-SM86/scripts/bench_cpu_offload.py",
+     "position": 971988,
+     "line": "choices=(\"fp16\", \"int8\", \"fp8\", \"fp8_e5m2\"),"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/apps/test_paged_scheduler.py",
+     "position": 1132959,
+     "line": "===== DeepInfer-SM86/tests/apps/test_paged_scheduler.py ====="
+    },
+    {
+     "source": "DeepInfer-SM86/tests/apps/test_paged_scheduler.py",
+     "position": 1132998,
+     "line": "from apps.paged_scheduler import PagedBatchScheduler"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/apps/test_paged_scheduler.py",
+     "position": 1133591,
+     "line": "def _make_scheduler("
+    },
+    {
+     "source": "DeepInfer-SM86/tests/apps/test_paged_scheduler.py",
+     "position": 1133598,
+     "line": "runtime: _Runtime,"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/apps/test_paged_scheduler.py",
+     "position": 1133605,
+     "line": "*,"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/apps/test_paged_scheduler.py",
+     "position": 1133608,
+     "line": "max_num_seqs: int = 2,"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/apps/test_paged_scheduler.py",
+     "position": 1133653,
+     "line": "kv_cache_dtype: str = \"fp16\","
+    },
+    {
+     "source": "DeepInfer-SM86/tests/packaging/test_pypi_package.py",
+     "position": 1245581,
+     "line": "===== DeepInfer-SM86/tests/packaging/test_pypi_package.py ====="
+    },
+    {
+     "source": "python3.12/unittest/loader.py",
+     "position": 4119006,
+     "line": "def _make_failed_import_test(name, suiteClass):"
+    }
+   ]
+  },
+  {
+   "question": "In tests/quantization/helpers.py, what is the default value of the parameter `bits` of `pack_gptq_weight`?",
+   "right": true,
+   "queued_at_ask": 0,
+   "context_at_ask": 4127217,
+   "kind": "default",
+   "part": "project",
+   "expected": [
+    "4"
+   ],
+   "file": "DeepInfer-SM86/tests/quantization/helpers.py",
+   "answer": "First, let's identify the relevant lines from the provided text that are needed to answer the question.\n\n1. \"def pack_gptq_weight(\"\n2. \"    weight: torch.Tensor,\"\n3. \"    bits: int = 4,\"\n\nFrom these lines, we can see that the function `pack_gptq_weight` has a parameter `bits` with a default value of `4`.\n\nNow, let's reason step by step:\n\n1. The function `pack_gptq_weight` is defined in the file `DeepInfer-SM86/tests/quantization/helpers.py`.\n2. The parameter `bits` is specified with a default value of `4`.\n\nTherefore, the default value of the parameter `bits` of `pack_gptq_weight` is `4`.\n\nAnswer:\n4\n\n[check]\n The relevant lines from the provided text are:\n\n1. \"def pack_gptq_weight(\"\n2. \"    weight: torch.Tensor,\"\n3. \"    bits: int = 4,\"\n\nFrom these lines, we can see that the function `pack_gptq_weight` has a parameter `bits` with a default value of `4`.\n\nTherefore, the default value of the parameter `bits` of `pack_gptq_weight` is `4`.\n\nAnswer:\n4",
+   "final": "4",
+   "first_token": 9.46,
+   "seconds": 36.57,
+   "round_trip": 37.1,
+   "rounds": [
+    {
+     "round": 1,
+     "blocks": 32,
+     "seconds": 4.92
+    },
+    {
+     "round": 2,
+     "blocks": 40,
+     "seconds": 16.6
+    }
+   ],
+   "context": 4127217,
+   "error": null,
+   "evidence": [
+    {
+     "source": "DeepInfer-SM86/tests/quantization/__init__.py",
+     "position": 1246135,
+     "line": "===== DeepInfer-SM86/tests/quantization/__init__.py ====="
+    },
+    {
+     "source": "DeepInfer-SM86/tests/quantization/helpers.py",
+     "position": 1246157,
+     "line": "===== DeepInfer-SM86/tests/quantization/helpers.py ====="
+    },
+    {
+     "source": "DeepInfer-SM86/tests/quantization/helpers.py",
+     "position": 1246702,
+     "line": "def pack_gptq_weight("
+    },
+    {
+     "source": "DeepInfer-SM86/tests/quantization/helpers.py",
+     "position": 1246711,
+     "line": "weight: torch.Tensor,"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/quantization/helpers.py",
+     "position": 1246722,
+     "line": "bits: int = 4,"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/quantization/helpers.py",
+     "position": 1247767,
+     "line": "\"bits\": 4,"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/quantization/helpers.py",
+     "position": 1248330,
+     "line": "qweight, scales, qzeros, g_idx = pack_gptq_weight(weight)"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/quantization/helpers.py",
+     "position": 1248413,
+     "line": "qweight, scales, qzeros = pack_awq_weight(weight)"
+    },
+    {
+     "source": "对话",
+     "position": 4126962,
+     "line": "[Q] In tests/moe/test_olmoe_weights.py, what is the default value of the parameter `hidden` of `_shapes`?"
+    },
+    {
+     "source": "对话",
+     "position": 4127008,
+     "line": "[Q] In deepinfer/moe/latent_mla_triton.py, what is the default value of the parameter `block_n` of `decode_partial`?"
+    },
+    {
+     "source": "对话",
+     "position": 4127118,
+     "line": "[Q] In tests/quantization/helpers.py, what is the default value of the parameter `vocab_size` of `make_tiny_gguf`?"
+    },
+    {
+     "source": "对话",
+     "position": 4127166,
+     "line": "[Q] In tests/apps/test_paged_scheduler.py, what is the default value of the parameter `kv_cache_dtype` of `_make_scheduler`?"
+    }
+   ]
+  },
+  {
+   "question": "In stat.py, what is the value of the module constant `FILE_ATTRIBUTE_ARCHIVE`?",
+   "right": true,
+   "queued_at_ask": 0,
+   "context_at_ask": 4127260,
+   "kind": "constant",
+   "part": "stdlib",
+   "expected": [
+    "32"
+   ],
+   "file": "python3.12/stat.py",
+   "answer": "The value of the module constant `FILE_ATTRIBUTE_ARCHIVE` in the `stat` module is 32. This is indicated in the text where it says:\n\n```\nFILE_ATTRIBUTE_ARCHIVE = 32\n```\n\nThis constant is part of the `stat` module in Python, which is used to interpret the results of `os.stat()` and `os.lstat()` functions, particularly the `st_file_attributes` member. The constant `FILE_ATTRIBUTE_ARCHIVE` is one of the file attributes that can be interpreted from this member.\n\nAnswer: 32\n\n[check]\n The value of the module constant `FILE_ATTRIBUTE_ARCHIVE` in the `stat` module is 32. This is indicated in the text where it says:\n\n```\nFILE_ATTRIBUTE_ARCHIVE = 32\n```\n\nThis constant is part of the `stat` module in Python, which is used to interpret the results of `os.stat()` and `os.lstat()` functions, particularly the `st_file_attributes` member. The constant `FILE_ATTRIBUTE_ARCHIVE` is one of the file attributes that can be interpreted from this member.\n\nAnswer: 32",
+   "final": "32",
+   "first_token": 8.46,
+   "seconds": 34.34,
+   "round_trip": 34.8,
+   "rounds": [
+    {
+     "round": 1,
+     "blocks": 32,
+     "seconds": 3.95
+    },
+    {
+     "round": 2,
+     "blocks": 40,
+     "seconds": 15.76
+    }
+   ],
+   "context": 4127260,
+   "error": null,
+   "evidence": [
+    {
+     "source": "python3.12/shutil.py",
+     "position": 3638408,
+     "line": "(st.st_file_attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT"
+    },
+    {
+     "source": "python3.12/stat.py",
+     "position": 3705593,
+     "line": "===== python3.12/stat.py ====="
+    },
+    {
+     "source": "python3.12/stat.py",
+     "position": 3705606,
+     "line": "\"\"\"Constants/functions for interpreting results of os.stat() and os.lstat()."
+    },
+    {
+     "source": "python3.12/stat.py",
+     "position": 3705626,
+     "line": "Suggested usage: from stat import *"
+    },
+    {
+     "source": "python3.12/stat.py",
+     "position": 3705655,
+     "line": "ST_MODE  = 0"
+    },
+    {
+     "source": "python3.12/stat.py",
+     "position": 3707560,
+     "line": "# Windows FILE_ATTRIBUTE constants for interpreting os.stat()'s"
+    },
+    {
+     "source": "python3.12/stat.py",
+     "position": 3707575,
+     "line": "# \"st_file_attributes\" member"
+    },
+    {
+     "source": "python3.12/stat.py",
+     "position": 3707586,
+     "line": "FILE_ATTRIBUTE_ARCHIVE = 32"
+    },
+    {
+     "source": "python3.12/stat.py",
+     "position": 3707597,
+     "line": "FILE_ATTRIBUTE_COMPRESSED = 2048"
+    },
+    {
+     "source": "对话",
+     "position": 4126999,
+     "line": "[A] 64"
+    },
+    {
+     "source": "对话",
+     "position": 4127059,
+     "line": "[Q] In scripts/bench_productivity_backends.py, what is the value of the module constant `DEFAULT_OLLAMA`?"
+    },
+    {
+     "source": "对话",
+     "position": 4127091,
+     "line": "[A] The value of the module constant `DEFAULT_OLLAMA` is not provided in the given text."
+    }
+   ]
+  },
+  {
+   "question": "In __future__.py, what is the value of the module constant `CO_FUTURE_BARRY_AS_BDFL`?",
+   "right": true,
+   "queued_at_ask": 0,
+   "context_at_ask": 4127295,
+   "kind": "constant",
+   "part": "stdlib",
+   "expected": [
+    "0x400000",
+    "4194304"
+   ],
+   "file": "python3.12/__future__.py",
+   "answer": "The text provided does not contain the value of the module constant `CO_FUTURE_BARRY_AS_BDFL` in `__future__.py`. However, we can infer the value from the information given in the text.\n\nThe text states:\n```python\nCO_FUTURE_BARRY_AS_BDFL = 0x400000\n```\n\nTherefore, the value of the module constant `CO_FUTURE_BARRY_AS_BDFL` in `__future__.py` is:\n\nAnswer: 0x400000\n\n[check]\n The text provided does not contain the value of the module constant `CO_FUTURE_BARRY_AS_BDFL` in `__future__.py`. However, we can infer the value from the information given in the text.\n\nThe text states:\n```python\nCO_FUTURE_BARRY_AS_BDFL = 0x400000\n```\n\nTherefore, the value of the module constant `CO_FUTURE_BARRY_AS_BDFL` in `__future__.py` is:\n\nAnswer: 0x400000",
+   "final": "0x400000",
+   "first_token": 9.43,
+   "seconds": 56.41,
+   "round_trip": 56.9,
+   "rounds": [
+    {
+     "round": 1,
+     "blocks": 32,
+     "seconds": 4.94
+    },
+    {
+     "round": 2,
+     "blocks": 40,
+     "seconds": 34.11
+    }
+   ],
+   "context": 4127295,
+   "error": null,
+   "evidence": [
+    {
+     "source": "python3.12/__future__.py",
+     "position": 1253267,
+     "line": "#defines of CO_xxx flags in Include/cpython/compile.h."
+    },
+    {
+     "source": "python3.12/__future__.py",
+     "position": 1253310,
+     "line": "\"nested_scopes\","
+    },
+    {
+     "source": "python3.12/__future__.py",
+     "position": 1253357,
+     "line": "\"barry_as_FLUFL\","
+    },
+    {
+     "source": "python3.12/__future__.py",
+     "position": 1253403,
+     "line": "# The CO_xxx symbols are defined here under the same names defined in"
+    },
+    {
+     "source": "python3.12/__future__.py",
+     "position": 1253467,
+     "line": "CO_NESTED = 0x0010                      # nested_scopes"
+    },
+    {
+     "source": "python3.12/__future__.py",
+     "position": 1253486,
+     "line": "CO_GENERATOR_ALLOWED = 0                # generators (obsolete, was 0x1000)"
+    },
+    {
+     "source": "python3.12/__future__.py",
+     "position": 1253514,
+     "line": "CO_FUTURE_DIVISION = 0x20000            # division"
+    },
+    {
+     "source": "python3.12/__future__.py",
+     "position": 1253536,
+     "line": "CO_FUTURE_ABSOLUTE_IMPORT = 0x40000     # perform absolute imports by default"
+    },
+    {
+     "source": "python3.12/__future__.py",
+     "position": 1253640,
+     "line": "CO_FUTURE_BARRY_AS_BDFL = 0x400000"
+    },
+    {
+     "source": "python3.12/__future__.py",
+     "position": 1253697,
+     "line": "CO_FUTURE_ANNOTATIONS = 0x1000000       # annotations become strings at runtime"
+    },
+    {
+     "source": "python3.12/doctest.py",
+     "position": 1848898,
+     "line": "import __future__"
+    },
+    {
+     "source": "python3.12/pydoc.py",
+     "position": 3346847,
+     "line": "_future_feature_names = set(__future__.all_feature_names)"
+    }
+   ]
+  },
+  {
+   "question": "In turtle.py, what is the default value of the parameter `filename` of `write_docstringdict`?",
+   "right": true,
+   "queued_at_ask": 0,
+   "context_at_ask": 4127346,
+   "kind": "default",
+   "part": "stdlib",
+   "expected": [
+    "\"turtle_docstringdict\"",
+    "'turtle_docstringdict'",
+    "turtle_docstringdict"
+   ],
+   "file": "python3.12/turtle.py",
+   "answer": "In turtle.py, what is the default value of the parameter `filename` of `write_docstringdict`?\n\nFirst, let's identify the relevant information from the text provided:\n\n1. `write_docstringdict` function is defined with a docstring:\n   ```python\n   def write_docstringdict(filename=\"turtle_docstringdict\"):\n       \"\"\"Create and write docstring-dictionary to file.\n       filename -- a string, used as filename\n                   default value is turtle_docstringdict\n       \"\"\"\n   ```\n\nFrom this, we can see that the default value of the `filename` parameter in `write_docstringdict` is `\"turtle_docstringdict\"`.\n\nAnswer:\n\"turtle_docstringdict\"\n\n[check]\n In turtle.py, what is the default value of the parameter `filename` of `write_docstringdict`?\n\nStep 1: Identified the `write_docstringdict` function definition with a docstring:\n   ```python\n   def write_docstringdict(filename=\"turtle_docstringdict\"):\n       \"\"\"Create and write docstring-dictionary to file.\n       filename -- a string, used as filename\n                   default value is turtle_docstringdict\n       \"\"\"\n   ```\n\nStep 2: Extracted the default value from the docstring:\n   - The default value of `filename` is `\"turtle_docstringdict\"`.\n\nAnswer:\n\"turtle_docstringdict\"",
+   "final": "\"turtle_docstringdict\"",
+   "first_token": 8.92,
+   "seconds": 42.07,
+   "round_trip": 42.6,
+   "rounds": [
+    {
+     "round": 1,
+     "blocks": 32,
+     "seconds": 4.29
+    },
+    {
+     "round": 2,
+     "blocks": 40,
+     "seconds": 21.14
+    }
+   ],
+   "context": 4127346,
+   "error": null,
+   "evidence": [
+    {
+     "source": "python3.12/gzip.py",
+     "position": 2674555,
+     "line": "def write32u(output, value):"
+    },
+    {
+     "source": "python3.12/turtle.py",
+     "position": 4025441,
+     "line": "write_docstringdict() to write a dictionary with the original (English)"
+    },
+    {
+     "source": "python3.12/turtle.py",
+     "position": 4026086,
+     "line": "_tg_utilities = ['write_docstringdict', 'done']"
+    },
+    {
+     "source": "python3.12/turtle.py",
+     "position": 4026818,
+     "line": "default_cfg = \"turtle.cfg\""
+    },
+    {
+     "source": "python3.12/turtle.py",
+     "position": 4062777,
+     "line": "def write_docstringdict(filename=\"turtle_docstringdict\"):"
+    },
+    {
+     "source": "python3.12/turtle.py",
+     "position": 4062794,
+     "line": "\"\"\"Create and write docstring-dictionary to file."
+    },
+    {
+     "source": "python3.12/turtle.py",
+     "position": 4062813,
+     "line": "filename -- a string, used as filename"
+    },
+    {
+     "source": "python3.12/turtle.py",
+     "position": 4062823,
+     "line": "default value is turtle_docstringdict"
+    },
+    {
+     "source": "对话",
+     "position": 4127118,
+     "line": "[Q] In tests/quantization/helpers.py, what is the default value of the parameter `vocab_size` of `make_tiny_gguf`?"
+    },
+    {
+     "source": "对话",
+     "position": 4127166,
+     "line": "[Q] In tests/apps/test_paged_scheduler.py, what is the default value of the parameter `kv_cache_dtype` of `_make_scheduler`?"
+    },
+    {
+     "source": "对话",
+     "position": 4127219,
+     "line": "[Q] In tests/quantization/helpers.py, what is the default value of the parameter `bits` of `pack_gptq_weight`?"
+    },
+    {
+     "source": "对话",
+     "position": 4127262,
+     "line": "[Q] In stat.py, what is the value of the module constant `FILE_ATTRIBUTE_ARCHIVE`?"
+    }
+   ]
+  },
+  {
+   "question": "In token.py, what is the value of the module constant `PERCENTEQUAL`?",
+   "right": false,
+   "queued_at_ask": 0,
+   "context_at_ask": 4127389,
+   "kind": "constant",
+   "part": "stdlib",
+   "expected": [
+    "40"
+   ],
+   "file": "python3.12/token.py",
+   "answer": "In token.py, what is the value of the module constant `PERCENTEQUAL`?\n\nFirst, let's copy and paste the relevant text from the provided information:\n\n```python\n\"\"\"Token constants.\"\"\"\n__all__ = ['tok_name', 'ISTERMINAL', 'ISNONTERMINAL', 'ISEOF']\nPERCENT = 24\nEQEQUAL = 27\ndef ISTERMINAL(x):\ndef ISNONTERMINAL(x):\ndef ISEOF(x):\n```\n\nFrom this text, we can see that `PERCENT` is assigned the value 24, and `EQEQUAL` is assigned the value 27. However, there is no mention of `PERCENTEQUAL` in the provided text.\n\nReasoning step by step:\n1. The text defines several constants and functions.\n2. `PERCENT` is assigned the value 24.\n3. `EQEQUAL` is assigned the value 27.\n4. There is no mention of `PERCENTEQUAL`.\n\nTherefore, based on the provided text, the value of the module constant `PERCENTEQUAL` is not provided.\n\nAnswer:\nThe value of the module constant `PERCENTEQUAL` is not provided in the given text.\n\n[check]\n In token.py, what is the value of the module constant `PERCENTEQUAL`?\n\nFirst, let's copy and paste the relevant text from the provided information:\n\n```python\n\"\"\"Token constants.\"\"\"\n__all__ = ['tok_name', 'ISTERMINAL', 'ISNONTERMINAL', 'ISEOF']\nPERCENT = 24\nEQEQUAL = 27\ndef ISTERMINAL(x):\ndef ISNONTERMINAL(x):\ndef ISEOF(x):\n```\n\nFrom this text, we can see that `PERCENT` is assigned the value 24, and `EQEQUAL` is assigned the value 27. However, there is no mention of `PERCENTEQUAL` in the provided text.\n\nReasoning step by step:\n1. The text defines several constants and functions.\n2. `PERCENT` is assigned the value 24.\n3. `EQEQUAL` is assigned the value 27.\n4. There is no mention of `PERCENTEQUAL`.\n\nTherefore, based on the provided text, the value of the module constant `PERCENTEQUAL` is not provided.\n\nAnswer:\nThe value of the module constant `PERCENTEQUAL` is not provided in the given text.",
+   "final": "The value of the module constant `PERCENTEQUAL` is not provided in the given text.",
+   "first_token": 8.17,
+   "seconds": 41.71,
+   "round_trip": 42.2,
+   "rounds": [
+    {
+     "round": 1,
+     "blocks": 32,
+     "seconds": 3.7
+    },
+    {
+     "round": 2,
+     "blocks": 40,
+     "seconds": 18.43
+    }
+   ],
+   "context": 4127389,
+   "error": null,
+   "evidence": [
+    {
+     "source": "python3.12/token.py",
+     "position": 3982703,
+     "line": "===== python3.12/token.py ====="
+    },
+    {
+     "source": "python3.12/token.py",
+     "position": 3982716,
+     "line": "\"\"\"Token constants.\"\"\""
+    },
+    {
+     "source": "python3.12/token.py",
+     "position": 3982737,
+     "line": "__all__ = ['tok_name', 'ISTERMINAL', 'ISNONTERMINAL', 'ISEOF']"
+    },
+    {
+     "source": "python3.12/token.py",
+     "position": 3982918,
+     "line": "PERCENT = 24"
+    },
+    {
+     "source": "python3.12/token.py",
+     "position": 3982941,
+     "line": "EQEQUAL = 27"
+    },
+    {
+     "source": "python3.12/token.py",
+     "position": 3983812,
+     "line": "def ISTERMINAL(x):"
+    },
+    {
+     "source": "python3.12/token.py",
+     "position": 3983830,
+     "line": "def ISNONTERMINAL(x):"
+    },
+    {
+     "source": "python3.12/token.py",
+     "position": 3983849,
+     "line": "def ISEOF(x):"
+    },
+    {
+     "source": "对话",
+     "position": 4127059,
+     "line": "[Q] In scripts/bench_productivity_backends.py, what is the value of the module constant `DEFAULT_OLLAMA`?"
+    },
+    {
+     "source": "对话",
+     "position": 4127091,
+     "line": "[A] The value of the module constant `DEFAULT_OLLAMA` is not provided in the given text."
+    },
+    {
+     "source": "对话",
+     "position": 4127262,
+     "line": "[Q] In stat.py, what is the value of the module constant `FILE_ATTRIBUTE_ARCHIVE`?"
+    },
+    {
+     "source": "对话",
+     "position": 4127297,
+     "line": "[Q] In __future__.py, what is the value of the module constant `CO_FUTURE_BARRY_AS_BDFL`?"
+    }
+   ]
+  },
+  {
+   "question": "latent fp8 缓存每个 token 占多少 KiB？",
+   "right": true,
+   "queued_at_ask": 0,
+   "context_at_ask": 4127437,
+   "kind": "hand",
+   "part": "project",
+   "answer": "To answer the question about the size of the latent fp8 cache per token, we need to look for the information provided in the text. The text states:\n\n\"latent fp8，显存 + 锁页主机内存 | 17.3 KiB | 51.9 GiB | 4M（§4.12；服务容量 3.41M）\"\n\nFrom this, we can see that the size of the latent fp8 cache per token is 17.3 KiB.\n\nAnswer: 17.3 KiB\n\n[check]\n To answer the question about the size of the latent fp8 cache per token, we need to look for the information provided in the text. The text states:\n\n\"latent fp8，显存 + 锁页主机内存 | 17.3 KiB | 51.9 GiB | 4M（§4.12；服务容量 3.41M）\"\n\nFrom this, we can see that the size of the latent fp8 cache per token is 17.3 KiB.\n\nAnswer: 17.3 KiB",
+   "final": "17.3 KiB",
+   "first_token": 7.59,
+   "seconds": 103.9,
+   "round_trip": 104.4,
+   "rounds": [
+    {
+     "round": 1,
+     "blocks": 32,
+     "seconds": 3.12
+    },
+    {
+     "round": 2,
+     "blocks": 40,
+     "seconds": 34.77
+    },
+    {
+     "round": 3,
+     "blocks": 40,
+     "seconds": 18.82
+    },
+    {
+     "round": 4,
+     "blocks": 40,
+     "seconds": 17.09
+    }
+   ],
+   "context": 4127437,
+   "error": null,
+   "evidence": [
+    {
+     "source": "DeepInfer-SM86/deepinfer/moe/latent_mla.py",
+     "position": 290994,
+     "line": "latent fp8 + rope fp16    17.3 KiB/token   (1M tokens = 17.3 GiB)"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/LONG_CONTEXT_1M.md",
+     "position": 574078,
+     "line": "| **latent fp8 e4m3（每 128 维一个 fp32 scale）+ k_pe fp16** | **17.3 KiB** | **17.3 GiB** | **34.6 GiB** |"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/LONG_CONTEXT_1M.md",
+     "position": 587541,
+     "line": "| **本系统**：latent fp8，显存 + 锁页主机内存 | 17.3 KiB | 51.9 GiB | **4M**（§4.12；服务容量 3.41M） |"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/PAPER_LONG_CONTEXT.html",
+     "position": 674086,
+     "line": "<p>做到这一点靠四件事：（1）<strong>latent MLA 缓存</strong>：只存共享的 512 维 latent 和 64 维 k_pe，fp8 下每 token<br>17.3 KiB，比展开的逐头 K/V 小 19 倍，放不进显存的部分放锁页主机内存；（2）<strong>DCA</strong>"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/PAPER_LONG_CONTEXT.html",
+     "position": 675197,
+     "line": "<p>Four parts make this possible: (1) a <strong>latent MLA cache</strong> that stores only the shared 512-dim latent and the<br>64-dim rotary key (17.3 KiB per "
+    },
+    {
+     "source": "DeepInfer-SM86/docs/PAPER_LONG_CONTEXT.html",
+     "position": 676864,
+     "line": "维的分页池）。vLLM [3]、<br>FlashMLA [2] 与新版 llama.cpp [4] 都已改用 latent 缓存；本文在此基础上把 latent 量化为 fp8<br>（每 128 维一个 scale，k_pe 保持 fp16，与 FlashMLA 的切法相同），每 token 17.3 KiB。</"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/PAPER_LONG_CONTEXT.html",
+     "position": 678243,
+     "line": "<td><strong>latent fp8 e4m3（每 128 维一个 fp32 scale）+ k_pe fp16</strong></td>"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/PAPER_LONG_CONTEXT.html",
+     "position": 678283,
+     "line": "<td><strong>17.3 KiB</strong></td>"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/PAPER_LONG_CONTEXT.html",
+     "position": 678315,
+     "line": "<td><strong>34.6 GiB</strong></td>"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/PAPER_LONG_CONTEXT.html",
+     "position": 690090,
+     "line": "<p>在一张 32 GB 的消费级显卡上，不做任何训练，一个训练到 128K 的 MoE 模型读入了 3,145,728 个 token，<br>并在 39 根针同时存在的测试上答对了全部 21 题、31 个条目。latent fp8 缓存加锁页主机内存解决容量，<br>DCA 解决位置，有界编码让读入线性且条目都在分"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/PAPER_LONG_CONTEXT.md",
+     "position": 696401,
+     "line": "| **latent fp8 e4m3（每 128 维一个 fp32 scale）+ k_pe fp16** | **17.3 KiB** | **17.3 GiB** | **34.6 GiB** | **51.9 GiB** |"
+    },
+    {
+     "source": "对话",
+     "position": 4127156,
+     "line": "[A] 128"
+    }
+   ]
+  },
+  {
+   "question": "和 llama.cpp 的对比里，llama.cpp 读入 1M token 用了多少分钟？",
+   "right": true,
+   "queued_at_ask": 0,
+   "context_at_ask": 4127466,
+   "kind": "hand",
+   "part": "project",
+   "answer": "在和 llama.cpp 的对比里，llama.cpp 读入 1M token 用了 99.3 分钟。\n\n首先，我们需要找到与 llama.cpp 读入时间相关的信息。在提供的文本中，有一段描述了不同系统在读入 1M token 的时间：\n\n```\n读入 1M：llama.cpp 99.3 分钟，本系统 8.7 分钟。\n```\n\n这段文本明确指出，llama.cpp 在读入 1M token 时用了 99.3 分钟。因此，答案是 99.3 分钟。\n\nAnswer: 99.3\n\n[check]\n The text provided states:\n\n```\n读入 1M：llama.cpp 99.3 分钟，本系统 8.7 分钟。\n```\n\nThis indicates that llama.cpp took 99.3 minutes to read in 1M tokens, while the system in question took 8.7 minutes.\n\nAnswer: 99.3",
+   "final": "99.3",
+   "first_token": 8.74,
+   "seconds": 73.5,
+   "round_trip": 74.0,
+   "rounds": [
+    {
+     "round": 1,
+     "blocks": 32,
+     "seconds": 4.25
+    },
+    {
+     "round": 2,
+     "blocks": 8,
+     "seconds": 16.16
+    },
+    {
+     "round": 3,
+     "blocks": 40,
+     "seconds": 10.9
+    },
+    {
+     "round": 4,
+     "blocks": 40,
+     "seconds": 18.78
+    }
+   ],
+   "context": 4127466,
+   "error": null,
+   "evidence": [
+    {
+     "source": "DeepInfer-SM86/README.md",
+     "position": 614,
+     "line": "并支持与 llama.cpp 同 prompt / 同 greedy 采样对照；"
+    },
+    {
+     "source": "DeepInfer-SM86/README.md",
+     "position": 5925,
+     "line": "### 和 llama.cpp、vLLM 比：同一张卡、同一份文档（2026-11-03）"
+    },
+    {
+     "source": "DeepInfer-SM86/README.md",
+     "position": 5999,
+     "line": "llama.cpp b12024 用它在这份文件上"
+    },
+    {
+     "source": "DeepInfer-SM86/README.md",
+     "position": 6355,
+     "line": "读入 1M：llama.cpp 99.3 分钟，本系统 8.7 分钟。整段直接回答随长度变差，各引擎一致（llama.cpp 16K 15/21、"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/LONG_CONTEXT_1M.md",
+     "position": 588555,
+     "line": "**读入时间**：llama.cpp（全量注意力）16K 4.4 s、64K 50.5 s、98K 104.5 s、1M **99.3 min**；本系统（有界编码 96K）"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/LONG_CONTEXT_1M.md",
+     "position": 588623,
+     "line": "16K 2.2 s、64K 13.7 s、98K 26.4 s、1M 8.7 min、2M 16.8 min、3M 25.3 min。llama.cpp 在 1M 上每个回答都写满 1024 个 token（乱码不会自己停），"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/PAPER_LONG_CONTEXT.html",
+     "position": 685520,
+     "line": "<td>99.3 min</td>"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/PAPER_LONG_CONTEXT.html",
+     "position": 685727,
+     "line": "<p><strong>图 3</strong> 读入文档用的时间（双对数）。llama.cpp 用全量注意力，随长度平方增长（1M 99.3 分钟）；本系统用有界编码，随长度线性增长（1M 8.7 分钟，3M 25.3 分钟，4M 33.8 分钟）。</p>"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/VIDEO_INTRO_SCRIPT.md",
+     "position": 784476,
+     "line": "只保留镜头 1 + 镜头 4 的对比 + 镜头 6 的一条限制 + 结尾链接。"
+    },
+    {
+     "source": "DeepInfer-SM86/scripts/bench_llamacpp_baseline.py",
+     "position": 988783,
+     "line": "\"\"\"Measure the llama.cpp baseline for the 4 GB setup via a local Ollama server."
+    },
+    {
+     "source": "对话",
+     "position": 1343593,
+     "line": "[Q] 在这个项目的 4M 测试里，读入 4,194,304 个 token 用了多少分钟？"
+    },
+    {
+     "source": "对话",
+     "position": 4127439,
+     "line": "[Q] latent fp8 缓存每个 token 占多少 KiB？"
+    }
+   ]
+  },
+  {
+   "question": "vLLM 0.7.3 为 DeepSeek 预先算的旋转位置表有多少行？",
+   "right": true,
+   "queued_at_ask": 0,
+   "context_at_ask": 4127507,
+   "kind": "hand",
+   "part": "project",
+   "answer": "First, let's identify the relevant information from the text provided:\n\n\"vLLM 为 DeepSeek 的 YaRN 只预先算了 4,096 × 40 = 163,840 行 cos/sin 表\"\n\nThis sentence tells us that the number of rows in the precomputed rotation position table for DeepSeek's YaRN model by vLLM is 163,840.\n\nAnswer:\n163,840\n\n[check]\n The relevant information from the text provided is:\n\n\"vLLM 为 DeepSeek 的 YaRN 只预先算了 4,096 × 40 = 163,840 行 cos/sin 表\"\n\nThis sentence tells us that the number of rows in the precomputed rotation position table for DeepSeek's YaRN model by vLLM is 163,840.\n\nAnswer:\n163,840",
+   "final": "163,840",
+   "first_token": 8.6,
+   "seconds": 56.45,
+   "round_trip": 57.0,
+   "rounds": [
+    {
+     "round": 1,
+     "blocks": 32,
+     "seconds": 4.1
+    },
+    {
+     "round": 2,
+     "blocks": 40,
+     "seconds": 34.01
+    }
+   ],
+   "context": 4127507,
+   "error": null,
+   "evidence": [
+    {
+     "source": "DeepInfer-SM86/README.md",
+     "position": 6042,
+     "line": "（`scripts/gguf_mla_layout.py`）；vLLM 0.7.3 用同一模型的 AWQ 版（最新版已不能加载 GGUF，它要的 PyTorch 也装不进机器剩余的磁盘）。"
+    },
+    {
+     "source": "DeepInfer-SM86/README.md",
+     "position": 6311,
+     "line": "| vLLM 0.7.3，AWQ | 装不下 | 163,840（位置表上限） | 3/21 | 装不下 |"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/LONG_CONTEXT_1M.md",
+     "position": 587213,
+     "line": "- **vLLM**：最新的 0.32 已不能加载 GGUF，它要的 PyTorch 2.13 整套也超出这台机器的剩余磁盘（`/dev/shm`"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/LONG_CONTEXT_1M.md",
+     "position": 588172,
+     "line": "vLLM 的 KV 在 19.24 GiB 里放得下 595,248 个 token（3M、1M 启动即被拒），但它为 DeepSeek 的 YaRN 只预先算了"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/LONG_CONTEXT_1M.md",
+     "position": 588230,
+     "line": "4,096 × 40 = 163,840 行 cos/sin 表、按位置直接查表，256K、512K 一启动就触发越界断言——实际上限 163,840。"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/PAPER_LONG_CONTEXT.html",
+     "position": 674368,
+     "line": "跑得起来</strong>：<br>llama.cpp 用同一个 GGUF 时 KV 每 token 270 KiB，3M 需要 810 GiB；把同一份权重改写成它的 MLA 布局后，<br>最省的 q8_0 缓存仍需 48.4 GiB，超过 32 GB 显存，它最长到 1M；vLLM 的 KV 最多放 59.5 万"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/PAPER_LONG_CONTEXT.html",
+     "position": 678784,
+     "line": "根据 key 在同块、前一块还是更早，<br>选三种旋转之一，使任何相对距离都小于训练长度，而每个 token 仍在注意力里。chunk 取训练长度的 3/4（96K）。<br>三种旋转对应三组 query，按区段分别算再按 LSE 合并，算力不增加。旋转角在 fp64 下按需计算<br>（官方实现每层缓存一份 cos"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/PAPER_LONG_CONTEXT.html",
+     "position": 683227,
+     "line": "<td>vLLM 0.7.3（AWQ）</td>"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/PAPER_LONG_CONTEXT.html",
+     "position": 683314,
+     "line": "<p>vLLM 有两道限制（<code>baselines/vllm_*.server.log</code>）：KV 只能放在显存里，19.24 GiB 放得下 595,248 个 token，3M 与 1M<br>在启动时就被它自己的容量检查拒绝；更早碰到的是位置——它为 DeepSeek 的 YaRN 只预先算了 "
+    },
+    {
+     "source": "DeepInfer-SM86/docs/PAPER_LONG_CONTEXT.md",
+     "position": 700507,
+     "line": "vLLM 有两道限制（`baselines/vllm_*.server.log`）：KV 只能放在显存里，19.24 GiB 放得下 595,248 个 token，3M 与 1M"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/PAPER_LONG_CONTEXT.md",
+     "position": 700617,
+     "line": "cos/sin 表，读入时按位置直接查表，所以 256K、512K 一启动（试跑一批同样长的输入）就触发越界断言（`index out of bounds`）。"
+    },
+    {
+     "source": "DeepInfer-SM86/pypi/deepinfer-sm86/src/deepinfer/moe/deepseek_v2_runtime.py",
+     "position": 876109,
+     "line": "# max_position_embeddings for every attention layer.  The stock 163840"
+    }
+   ]
+  },
+  {
+   "question": "Which files call drop_page_cache?",
+   "right": false,
+   "queued_at_ask": 0,
+   "context_at_ask": 4127549,
+   "kind": "hand",
+   "part": "project",
+   "answer": "To answer the question about which files call `drop_page_cache`, we need to identify the lines of code that contain the call to `drop_page_cache` in the provided text. Here are the relevant lines:\n\n1. `from deepinfer.moe.latent_mla import DualChunkPositions, LatentKVCache, drop_page_cache`\n2. `drop_page_cache(os.path.join(cli.models_dir, gguf))`\n3. `drop_page_cache(os.path.join(args.models_dir, gguf))`\n\nThese lines are found in the `deepinfer/moe/latent_mla_triton.py` file. Therefore, the files that call `drop_page_cache` are:\n\n```\nfrom deepinfer.moe.latent_mla import DualChunkPositions, LatentKVCache, drop_page_cache\ndrop_page_cache(os.path.join(cli.models_dir, gguf))\ndrop_page_cache(os.path.join(args.models_dir, gguf))\n```\n\nAnswer:\ndeepinfer/moe/latent_mla_triton.py\n\n[check]\n The text provided includes the following lines that are relevant to the question:\n\n1. `from deepinfer.moe.latent_mla import DualChunkPositions, LatentKVCache, drop_page_cache`\n2. `drop_page_cache(os.path.join(cli.models_dir, gguf))`\n3. `drop_page_cache(os.path.join(args.models_dir, gguf))`\n\nThese lines indicate that the function `drop_page_cache` is called in the `deepinfer/moe/latent_mla_triton.py` file. Therefore, the files that call `drop_page_cache` are:\n\n```\nfrom deepinfer.moe.latent_mla import DualChunkPositions, LatentKVCache, drop_page_cache\ndrop_page_cache(os.path.join(cli.models_dir, gguf))\ndrop_page_cache(os.path.join(args.models_dir, gguf))\n```\n\nAnswer:\ndeepinfer/moe/latent_mla_triton.py",
+   "final": "deepinfer/moe/latent_mla_triton.py",
+   "first_token": 7.26,
+   "seconds": 160.16,
+   "round_trip": 160.7,
+   "rounds": [
+    {
+     "round": 1,
+     "blocks": 32,
+     "seconds": 2.8
+    },
+    {
+     "round": 2,
+     "blocks": 40,
+     "seconds": 36.55
+    },
+    {
+     "round": 3,
+     "blocks": 40,
+     "seconds": 39.54
+    },
+    {
+     "round": 4,
+     "blocks": 40,
+     "seconds": 36.41
+    }
+   ],
+   "context": 4127549,
+   "error": null,
+   "evidence": [
+    {
+     "source": "DeepInfer-SM86/deepinfer/moe/latent_mla.py",
+     "position": 294152,
+     "line": "def drop_page_cache(path: str) -> None:"
+    },
+    {
+     "source": "DeepInfer-SM86/deepinfer/moe/latent_mla.py",
+     "position": 294167,
+     "line": "\"\"\"Let the kernel drop a file's cached pages; a container's memory limit counts them.\"\"\""
+    },
+    {
+     "source": "DeepInfer-SM86/deepinfer/moe/longctx_service.py",
+     "position": 327841,
+     "line": "drop_page_cache,"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/LONG_CONTEXT_1M.md",
+     "position": 592111,
+     "line": "SSL 端口答成了 993），定义那一行没读回来，作答检查也就无从核对。\"谁调用了 drop_page_cache\"读回了两处 import，回答"
+    },
+    {
+     "source": "DeepInfer-SM86/scripts/longctx_workbench.py",
+     "position": 1059075,
+     "line": "from deepinfer.moe.latent_mla import DualChunkPositions, LatentKVCache, drop_page_cache"
+    },
+    {
+     "source": "DeepInfer-SM86/scripts/longctx_workbench.py",
+     "position": 1059369,
+     "line": "tok = AutoTokenizer.from_pretrained(os.path.join(cli.meta_root, meta), trust_remote_code=True)"
+    },
+    {
+     "source": "DeepInfer-SM86/scripts/longctx_workbench.py",
+     "position": 1059623,
+     "line": "drop_page_cache(os.path.join(cli.models_dir, gguf))"
+    },
+    {
+     "source": "DeepInfer-SM86/scripts/needle_complex.py",
+     "position": 1078263,
+     "line": "drop_page_cache(os.path.join(args.models_dir, gguf))"
+    },
+    {
+     "source": "DeepInfer-SM86/scripts/needle_longctx.py",
+     "position": 1083447,
+     "line": "os.path.join(args.models_dir, gguf),"
+    },
+    {
+     "source": "DeepInfer-SM86/tests/cli/test_cli_main.py",
+     "position": 1141509,
+     "line": "from deepinfer.cli.models import DownloadError"
+    },
+    {
+     "source": "对话",
+     "position": 4127008,
+     "line": "[Q] In deepinfer/moe/latent_mla_triton.py, what is the default value of the parameter `block_"
+    },
+    {
+     "source": "对话",
+     "position": 4127166,
+     "line": "[Q] In tests/apps/test_paged_scheduler.py, what is the default value of the parameter `kv_cache_dtype` of `_make_scheduler`?"
+    }
+   ]
+  },
+  {
+   "question": "What does pinned_empty do, and why does the cache not just use torch.empty with pin_memory=True?",
+   "right": true,
+   "queued_at_ask": 0,
+   "context_at_ask": 4127584,
+   "kind": "hand",
+   "part": "project",
+   "answer": "The text provided does not explicitly explain the purpose of `pinned_empty` or why it is used instead of simply using `torch.empty(..., pin_memory=True)`. To answer the question, let's break down the relevant information step by step.\n\n1. **Text Analysis**:\n   - The function `pinned_empty` is defined to create a page-locked host tensor of a specific shape and data type.\n   - The function `torch.empty(..., pin_memory=True)` allocates memory that is page-locked, but it rounds up to the nearest power of two, potentially allocating more memory than needed.\n   - The text suggests that `pinned_empty` avoids overallocation by directly using `cudaHostRegister` to pin the memory, ensuring that only the required memory is locked.\n\n2. **Purpose of `pinned_empty`**:\n   - The purpose of `pinned_empty` is to create a page-locked host tensor without the overhead of unnecessary memory allocation.\n   - It ensures that the allocated memory is pinned, meaning it is physically located in the system's RAM and is accessible by the GPU.\n\n3. **Why not use `torch.empty(..., pin_memory=True)` directly**:\n   - Using `torch.empty(..., pin_memory=True)` can lead to overallocation because it rounds up the requested memory size to the nearest power of two.\n   - `pinned_empty` avoids this by directly registering the memory with CUDA, ensuring that only the required memory is pinned.\n\n4. **Conclusion**:\n   - `pinned_empty` is used to create a pinned host tensor without the overhead of unnecessary memory allocation.\n   - It is more efficient and avoids overallocation compared to using `torch.empty(..., pin_memory=True)`.\n\n**Answer:**\n`pinned_empty` is a function that creates a page-locked host tensor of a specific shape and data type, ensuring that only the required memory is pinned. It avoids overallocation by directly using `cudaHostRegister` to pin the memory. This is different from using `torch.empty(..., pin_memory=True)`, which can lead to overallocation due to its memory rounding behavior.\n\n[check]\n The text provided does not explicitly explain the purpose of `pinned_empty` or why it is used instead of simply using `torch.empty(..., pin_memory=True)`. To answer the question, let's break down the relevant information step by step.\n\n1. **Text Analysis**:\n   - The function `pinned_empty` is defined to create a page-locked host tensor of a specific shape and data type.\n   - The function `torch.empty(..., pin_memory=True)` allocates memory that is page-locked, but it rounds up to the nearest power of two, potentially allocating more memory than needed.\n   - The text suggests that `pinned_empty` avoids overallocation by directly using `cudaHostRegister` to pin the memory, ensuring that only the required memory is locked.\n\n2. **Purpose of `pinned_empty`**:\n   - The purpose of `pinned_empty` is to create a page-locked host tensor without the overhead of unnecessary memory allocation.\n   - It ensures that the allocated memory is pinned, meaning it is physically located in the system's RAM and is accessible by the GPU.\n\n3. **Why not use `torch.empty(..., pin_memory=True)` directly**:\n   - Using `torch.empty(..., pin_memory=True)` can lead to overallocation because it rounds up the requested memory size to the nearest power of two.\n   - `pinned_empty` avoids this by directly registering the memory with CUDA, ensuring that only the required memory is pinned.\n\n4. **Conclusion**:\n   - `pinned_empty` is used to create a pinned host tensor without the overhead of unnecessary memory allocation.\n   - It is more efficient and avoids overallocation compared to using `torch.empty(..., pin_memory=True)`.\n\n**Answer:**\n`pinned_empty` is a function that creates a page-locked host tensor of a specific shape and data type, ensuring that only the required memory is pinned. It avoids overallocation by directly using `cudaHostRegister` to pin the memory. This is different from using `torch.empty(..., pin_memory=True)`, which can lead to overallocation due to its memory rounding behavior.",
+   "final": "**\n`pinned_empty` is a function that creates a page-locked host tensor of a specific shape and data type, ensuring that only the required memory is pinned. It avoids overallocation by directly using `cudaHostRegister` to pin the memory. This is different from using `torch.empty(..., pin_memory=True)`, which can lead to overallocation due to its memory rounding behavior.",
+   "first_token": 8.79,
+   "seconds": 181.88,
+   "round_trip": 182.5,
+   "rounds": [
+    {
+     "round": 1,
+     "blocks": 32,
+     "seconds": 4.28
+    },
+    {
+     "round": 2,
+     "blocks": 40,
+     "seconds": 39.59
+    },
+    {
+     "round": 3,
+     "blocks": 40,
+     "seconds": 39.6
+    },
+    {
+     "round": 4,
+     "blocks": 40,
+     "seconds": 39.64
+    }
+   ],
+   "context": 4127584,
+   "error": null,
+   "evidence": [
+    {
+     "source": "DeepInfer-SM86/deepinfer/engine/kv_cache.py",
+     "position": 117536,
+     "line": "key = key.pin_memory()"
+    },
+    {
+     "source": "DeepInfer-SM86/deepinfer/moe/deepseek_v2_runtime.py",
+     "position": 226809,
+     "line": "pin_memory=self.device.type == \"cuda\","
+    },
+    {
+     "source": "DeepInfer-SM86/deepinfer/moe/latent_mla.py",
+     "position": 293781,
+     "line": "def pinned_empty(shape: Sequence[int], dtype: torch.dtype) -> torch.Tensor:"
+    },
+    {
+     "source": "DeepInfer-SM86/deepinfer/moe/latent_mla.py",
+     "position": 293804,
+     "line": "\"\"\"A page-locked host tensor of exactly ``shape``."
+    },
+    {
+     "source": "DeepInfer-SM86/deepinfer/moe/latent_mla.py",
+     "position": 293819,
+     "line": "``torch.empty(..., pin_memory=True)`` rounds every request up to a power of"
+    },
+    {
+     "source": "DeepInfer-SM86/deepinfer/moe/latent_mla.py",
+     "position": 293842,
+     "line": "two, so a 4M cache's 42 GiB latent array would pin 64 GiB - past the test"
+    },
+    {
+     "source": "DeepInfer-SM86/deepinfer/moe/latent_mla.py",
+     "position": 293870,
+     "line": "host's 62 GiB container limit.  An ordinary allocation registered with CUDA"
+    },
+    {
+     "source": "DeepInfer-SM86/deepinfer/moe/latent_mla.py",
+     "position": 294129,
+     "line": "return torch.from_numpy(buffer).view(dtype).view(tuple(shape))"
+    },
+    {
+     "source": "DeepInfer-SM86/deepinfer/moe/latent_mla.py",
+     "position": 294693,
+     "line": "return pinned_empty(shape, dtype)"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/LONG_CONTEXT_1M.md",
+     "position": 589234,
+     "line": "1. `latent_mla.pinned_empty`：主机端用普通分配再 `cudaHostRegister`，只锁用到的 53.8 GiB；最后一个视图释放时"
+    },
+    {
+     "source": "python3.12/http/client.py",
+     "position": 2742591,
+     "line": "# overallocation."
+    },
+    {
+     "source": "python3.12/multiprocessing/sharedctypes.py",
+     "position": 3126076,
+     "line": "Returns a ctypes array allocated from shared memory"
+    }
+   ]
+  },
+  {
+   "question": "在 answer_check.py 里，判断一段话是不是抄错，相似度的阈值默认是多少？",
+   "right": true,
+   "queued_at_ask": 0,
+   "context_at_ask": 4127702,
+   "kind": "hand",
+   "part": "project",
+   "answer": "在 `deepinfer.moe.answer_check.miscopies` 函数中，判断一段话是不是抄错，相似度的阈值默认是 `0.8`。这个阈值用于比较回答与原文之间的相似度，如果相似度低于这个阈值，则认为存在抄错的情况。\n\n具体来说，函数中的代码片段如下：\n\n```python\nif max(difflib.SequenceMatcher(None, low, source).ratio() for source in lowered) < close:\n```\n\n其中，`close` 参数的默认值是 `0.8`。这个阈值用于判断一个片段是否与原文相似。如果相似度低于这个阈值，则认为存在抄错的情况。\n\n因此，答案是 `0.8`。\n\nAnswer: 0.8\n\n[check]\n The similarity threshold for determining if a segment of text is a copy error is `0.8`. This threshold is used in the `miscopies` function to compare the similarity between the answer and the original text.\n\nAnswer: 0.8",
+   "final": "0.8",
+   "first_token": 8.83,
+   "seconds": 116.99,
+   "round_trip": 117.5,
+   "rounds": [
+    {
+     "round": 1,
+     "blocks": 32,
+     "seconds": 4.3
+    },
+    {
+     "round": 2,
+     "blocks": 40,
+     "seconds": 39.6
+    },
+    {
+     "round": 3,
+     "blocks": 40,
+     "seconds": 33.68
+    }
+   ],
+   "context": 4127702,
+   "error": null,
+   "evidence": [
+    {
+     "source": "DeepInfer-SM86/deepinfer/moe/answer_check.py",
+     "position": 190597,
+     "line": "===== DeepInfer-SM86/deepinfer/moe/answer_check.py ====="
+    },
+    {
+     "source": "DeepInfer-SM86/deepinfer/moe/answer_check.py",
+     "position": 191606,
+     "line": "def miscopies(answer: str, lines: Sequence[str], *, close: float = 0.8) -> list[dict]:"
+    },
+    {
+     "source": "DeepInfer-SM86/deepinfer/moe/answer_check.py",
+     "position": 191666,
+     "line": "A span is an attempted copy when it is at least ``close`` similar (difflib ratio, ignoring"
+    },
+    {
+     "source": "DeepInfer-SM86/deepinfer/moe/answer_check.py",
+     "position": 191954,
+     "line": "if max(difflib.SequenceMatcher(None, low, source).ratio() for source in lowered) < close:"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/PAPER_LONG_CONTEXT.html",
+     "position": 687690,
+     "line": "<p><strong>作答检查</strong>（只测作答这一步，<code>scripts/answer_bench.py</code>）：4M 上错的两题都在作答——一题抄错（号码配错了键），一题在<br>最后挑选时漏了自己推出的一项。我们对回答里抄出的句子与读回的原文逐行核对：话与原文某行相似、却不在原文里，且其"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/PAPER_LONG_CONTEXT.html",
+     "position": 689031,
+     "line": "<ul><li><strong>逐 logit 对照</strong>：在 1,486 token 的真实提示上，与运行时参考实现相比，fp16 余弦 0.999995、fp8 latent 0.999980，<br>贪心输出逐 token 相同；主机内存分层、分块 prefill、DCA（训练长度以内）均与参考一致。"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/W4A16_TENSORCORE_PREFILL_STATUS.md",
+     "position": 786252,
+     "line": "这个区间跨过了 30% 的决策阈值，**既不能证明值得做，也不能证明不值得**——"
+    },
+    {
+     "source": "DeepInfer-SM86/scripts/answer_bench.py",
+     "position": 967078,
+     "line": "===== DeepInfer-SM86/scripts/answer_bench.py ====="
+    },
+    {
+     "source": "DeepInfer-SM86/scripts/answer_bench.py",
+     "position": 967240,
+     "line": "* ``quote``  - if the answer miscopies (:func:`deepinfer.moe.answer_check.miscopies`), ask once"
+    },
+    {
+     "source": "python3.12/unittest/case.py",
+     "position": 4107794,
+     "line": "by assert methods using difflib. It is looked up as an instance"
+    },
+    {
+     "source": "python3.12/unittest/case.py",
+     "position": 4114525,
+     "line": "difflib.ndiff(pprint.pformat(seq1).splitlines(),"
+    },
+    {
+     "source": "对话",
+     "position": 4127333,
+     "line": "[A] 0x400000"
+    }
+   ]
+  },
+  {
+   "question": "我在这次对话里问的第一个问题是什么？",
+   "right": null,
+   "queued_at_ask": 0,
+   "context_at_ask": 4127742,
+   "kind": "memory",
+   "answer": "在这次对话中，我首先问的是：\n\n\"In deepinfer/moe/longctx_service.py, what is the default value of the parameter `chunk` of `build_session`?\"\n\n答：16384\n\n为了回答这个问题，我首先在对话中找到了相关的提问和回答。在给出的文本中，第一条提问是：\n\n\"In deepinfer/moe/longctx_service.py, what is the default value of the parameter `chunk` of `build_session`?\"\n\n然后，我找到了对应的回答：\n\n\"A1: 16384\"\n\n因此，我第一个问题是什么的答案是：\n\nAnswer: In deepinfer/moe/longctx_service.py, what is the default value of the parameter `chunk` of `build_session`?\n\n16384\n\n[check]\n In deepinfer/moe/longctx_service.py, what is the default value of the parameter `chunk` of `build_session`?\n\n16384\n\nAnswer: 16384",
+   "final": "16384",
+   "first_token": 7.26,
+   "seconds": 116.89,
+   "round_trip": 117.4,
+   "rounds": [
+    {
+     "round": 1,
+     "blocks": 32,
+     "seconds": 2.8
+    },
+    {
+     "round": 2,
+     "blocks": 40,
+     "seconds": 25.71
+    },
+    {
+     "round": 3,
+     "blocks": 40,
+     "seconds": 15.3
+    },
+    {
+     "round": 4,
+     "blocks": 40,
+     "seconds": 33.78
+    }
+   ],
+   "context": 4127742,
+   "error": null,
+   "evidence": [
+    {
+     "source": "DeepInfer-SM86/README.md",
+     "position": 5406,
+     "line": "| 读完 | 3,145,826 | 我问的第一个问题是什么、你怎么答的 | 9.6 s | 49.9 s | ✓ 变量链那题和它的 5 个名字 |"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/LONG_CONTEXT_1M.md",
+     "position": 591575,
+     "line": "最后问\"我第一个问题是什么\"。可核对的题从读入的文件里自动出：函数参数的默认值、模块常量的值（名字在整个工作区只"
+    },
+    {
+     "source": "DeepInfer-SM86/docs/LONG_CONTEXT_1M.md",
+     "position": 592226,
+     "line": "\"我第一个问题是什么\"答成了\"中国的首都是北京\"：提示里只带最近 16 轮，20 轮之后第一问已经不在里面，定位也没找回"
+    },
+    {
+     "source": "DeepInfer-SM86/scripts/smoke_deepseek_v2_lite_moe.py",
+     "position": 1118503,
+     "line": "\"中国的首都是哪里？请只回答城市名。\","
+    },
+    {
+     "source": "对话",
+     "position": 4127008,
+     "line": "[Q] In deepinfer/moe/latent_mla_triton.py, what is the default value of the parameter `block_"
+    },
+    {
+     "source": "对话",
+     "position": 4127509,
+     "line": "[Q] vLLM 0.7.3 为 DeepSeek 预先算的旋转位置表有多少行？"
+    },
+    {
+     "source": "对话",
+     "position": 4127537,
+     "line": "[A] 163,840"
+    },
+    {
+     "source": "对话",
+     "position": 4127551,
+     "line": "[Q] Which files call drop_page_cache?"
+    },
+    {
+     "source": "对话",
+     "position": 4127564,
+     "line": "[A] deepinfer/moe/latent_mla_triton.py"
+    },
+    {
+     "source": "对话",
+     "position": 4127586,
+     "line": "[Q] What does pinned_empty do, and why does the cache not just use torch.empty with pin_memory=True?"
+    },
+    {
+     "source": "对话",
+     "position": 4127620,
+     "line": "`pinned_empty` is a function that creates a page-locked host tensor of a specific shape and data type, ensuring that only the required memory is pinned. It avoi"
+    },
+    {
+     "source": "对话",
+     "position": 4127704,
+     "line": "[Q] 在 answer_check.py 里，判断一段话是不是抄错，相似度的阈值默认是多少？"
+    }
+   ]
+  }
+ ],
+ "ingest": [
+  {
+   "event": "project queued",
+   "minutes": 0.12
+  },
+  {
+   "event": "stdlib queued",
+   "minutes": 0.37
+  },
+  {
+   "event": "all read",
+   "minutes": 21.65,
+   "context": 4126960
+  }
+ ],
+ "summary": {
+  "right": "16/20",
+  "by_kind": {
+   "constant": "3/5",
+   "default": "7/8",
+   "docs": "1/1",
+   "hand": "5/6"
+  },
+  "minutes": 45.9
+ }
+}
