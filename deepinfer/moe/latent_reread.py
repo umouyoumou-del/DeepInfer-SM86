@@ -41,7 +41,13 @@ from collections.abc import Sequence
 import torch
 
 from deepinfer.moe import latent_locate
-from deepinfer.moe.answer_check import miscopies, retry_note, self_check_prompt
+from deepinfer.moe.answer_check import (
+    asked_value,
+    miscopies,
+    retry_note,
+    self_check_prompt,
+    with_value_pick,
+)
 from deepinfer.moe.latent_mla import (
     DualChunkPositions,
     LatentKVCache,
@@ -638,6 +644,7 @@ def feedback_locate_and_reread(
     preamble: str = "",
     check_copies: bool = False,
     self_check: bool = False,
+    value_pick: bool = False,
 ) -> dict:
     """Locate, re-read and answer; then locate again with the question *and the answer*.
 
@@ -676,7 +683,11 @@ def feedback_locate_and_reread(
     ``self_check`` has the model check the final answer against its own steps in
     a second turn, and that turn's ``Answer:`` becomes the final one.  Both are
     reported with ``on_event`` (``check``, then an ``answer`` that replaces the
-    round's).
+    round's).  ``value_pick``: for a question naming one value, each round's final
+    answer is read off its own steps (:func:`~deepinfer.moe.answer_check.value_pick`)
+    - which the next locate and the stop test then use - and such a question gets no
+    self-check, whose own re-derivation went wrong more often than it helped there.
+    The returned ``answer_text`` is the final answer as amended.
     """
 
     def encode(text: str) -> list[int]:
@@ -767,6 +778,11 @@ def feedback_locate_and_reread(
             if len(miscopies(again_text, kept)) < len(found):
                 produced, answer, asked = again, again_text, retry
                 record["answer"] = answer
+        if value_pick:
+            amended = with_value_pick(question, answer)
+            if amended != answer:
+                record["value_pick"] = final_answer(amended)
+                answer = amended
         record["seconds"] = {"locate": round(located - began, 2), "reread": round(time.perf_counter() - located, 2)}
         trace.append(record)
         final = answer_key(answer)
@@ -795,7 +811,9 @@ def feedback_locate_and_reread(
         final_query = lead + named + tail if named else []
         # optionally only the named things' rows score (did not rank the next link better at 3M)
         final_rows = list(range(len(lead), len(lead) + len(named))) if final_entity_rows else None
-    if self_check and produced:
+    answer_text = answer if trace else ""
+    picked_by_value = value_pick and asked_value(question) is not None
+    if self_check and produced and not picked_by_value:
         if on_event is not None:
             on_event({"event": "check", "round": len(trace), "kind": "self"})
         follow = self_check_prompt(tokenizer, produced, stop_ids[0] if stop_ids else None)
@@ -805,12 +823,14 @@ def feedback_locate_and_reread(
         if "answer:" in text.lower() and final_answer(text).strip():
             stops = {int(token) for token in stop_ids}
             produced = [token for token in produced if token not in stops] + encode("\n\n[check]\n") + checked
+            answer_text = tokenizer.decode(produced, skip_special_tokens=True).strip()
             if on_event is not None:
                 on_event({
-                    "event": "answer", "round": len(trace), "text": tokenizer.decode(produced, skip_special_tokens=True).strip(),
+                    "event": "answer", "round": len(trace), "text": answer_text,
                     "lines": trace[-1]["lines"], "line_positions": trace[-1]["line_positions"], "stop": True,
                 })
     return {
+        "answer_text": answer_text,
         "answer_ids": produced,
         "spans": spans,
         "blocks": chosen,

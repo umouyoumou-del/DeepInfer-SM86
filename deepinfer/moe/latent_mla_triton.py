@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import torch
 
+from deepinfer.moe.triton_fp8 import native_fp8_available
+
 try:  # Triton is optional; callers fall back to the PyTorch reference
     import triton
     import triton.language as tl
@@ -29,6 +31,21 @@ def available() -> bool:
 
 
 if triton is not None:
+
+    @triton.jit
+    def _fp8e4m3_bits_to_fp32(bits):
+        """Decode one E4M3 byte without requiring an FP8-capable GPU."""
+
+        u = bits.to(tl.uint8)
+        sign = tl.where((u & 0x80) != 0, -1.0, 1.0)
+        exp = ((u >> 3) & 0x0F).to(tl.float32)
+        mant = (u & 0x07).to(tl.float32)
+        normal = (1.0 + mant * 0.125) * tl.exp2(exp - 7.0)
+        subnormal = (mant * 0.125) * (1.0 / 64.0)
+        value = tl.where(exp == 0.0, subnormal, normal)
+        # E4M3FN's 0x7f/0xff are NaN; quantised finite KV never uses them.
+        value = tl.where((exp == 15.0) & (mant == 7.0), 448.0, value)
+        return tl.where(sign < 0.0, -value, value)
 
     @triton.jit
     def _decode_kernel(
@@ -49,6 +66,7 @@ if triton is not None:
         DR: tl.constexpr,
         BLOCK_N: tl.constexpr,
         IS_FP8: tl.constexpr,
+        SOFTWARE_FP8: tl.constexpr,
     ):
         split = tl.program_id(0)
         start = tl.load(SPLIT_START + split)
@@ -65,11 +83,13 @@ if triton is not None:
         for n0 in range(start, end, BLOCK_N):
             offs_n = n0 + tl.arange(0, BLOCK_N)
             valid = offs_n < end
-            k = tl.load(
-                LAT + offs_n[:, None].to(tl.int64) * D + offs_d[None, :],
-                mask=valid[:, None],
-                other=0.0,
-            )
+            k_ptr = LAT + offs_n[:, None].to(tl.int64) * D + offs_d[None, :]
+            if IS_FP8 and SOFTWARE_FP8:
+                k = _fp8e4m3_bits_to_fp32(
+                    tl.load(k_ptr, mask=valid[:, None], other=0)
+                ).to(tl.float16)
+            else:
+                k = tl.load(k_ptr, mask=valid[:, None], other=0.0)
             if IS_FP8:
                 scale = tl.load(
                     SC + offs_n[:, None].to(tl.int64) * (D // 128) + offs_d[None, :] // 128,
@@ -112,6 +132,7 @@ if triton is not None:
         H: tl.constexpr,
         DR: tl.constexpr,
         BLOCK_N: tl.constexpr,
+        SOFTWARE_FP8: tl.constexpr,
     ):
         """fp8 latent, 512 = 4 groups of 128 with one scale each.
 
@@ -144,10 +165,16 @@ if triton is not None:
             valid = offs_n < end
             rows = offs_n.to(tl.int64)
             k_row = LAT + rows[:, None] * 512 + offs_c[None, :]
-            k0 = tl.load(k_row, mask=valid[:, None], other=0.0).to(tl.float16)
-            k1 = tl.load(k_row + 128, mask=valid[:, None], other=0.0).to(tl.float16)
-            k2 = tl.load(k_row + 256, mask=valid[:, None], other=0.0).to(tl.float16)
-            k3 = tl.load(k_row + 384, mask=valid[:, None], other=0.0).to(tl.float16)
+            if SOFTWARE_FP8:
+                k0 = _fp8e4m3_bits_to_fp32(tl.load(k_row, mask=valid[:, None], other=0)).to(tl.float16)
+                k1 = _fp8e4m3_bits_to_fp32(tl.load(k_row + 128, mask=valid[:, None], other=0)).to(tl.float16)
+                k2 = _fp8e4m3_bits_to_fp32(tl.load(k_row + 256, mask=valid[:, None], other=0)).to(tl.float16)
+                k3 = _fp8e4m3_bits_to_fp32(tl.load(k_row + 384, mask=valid[:, None], other=0)).to(tl.float16)
+            else:
+                k0 = tl.load(k_row, mask=valid[:, None], other=0.0).to(tl.float16)
+                k1 = tl.load(k_row + 128, mask=valid[:, None], other=0.0).to(tl.float16)
+                k2 = tl.load(k_row + 256, mask=valid[:, None], other=0.0).to(tl.float16)
+                k3 = tl.load(k_row + 384, mask=valid[:, None], other=0.0).to(tl.float16)
             s0 = tl.load(SC + rows * 4, mask=valid, other=0.0)
             s1 = tl.load(SC + rows * 4 + 1, mask=valid, other=0.0)
             s2 = tl.load(SC + rows * 4 + 2, mask=valid, other=0.0)
@@ -270,17 +297,20 @@ def decode_partial(
     m = torch.empty((count, heads), dtype=torch.float32, device=device)
     l = torch.empty((count, heads), dtype=torch.float32, device=device)
     is_fp8 = latent.dtype == torch.float8_e4m3fn
+    software_fp8 = bool(is_fp8 and not native_fp8_available(latent.device))
+    latent_arg = latent.view(torch.uint8) if software_fp8 else latent
     if is_fp8 and width == 512 and scale is not None and grouped_fp8:
         _decode_kernel_fp8[(count,)](
-            q_abs.contiguous(), q_pe.contiguous(), latent, scale, pe,
+            q_abs.contiguous(), q_pe.contiguous(), latent_arg, scale, pe,
             meta[0], meta[1], meta[2], acc, m, l, float(sm_scale),
-            H=heads, DR=rope, BLOCK_N=block_n, num_warps=num_warps, num_stages=num_stages,
+            H=heads, DR=rope, BLOCK_N=block_n, SOFTWARE_FP8=software_fp8,
+            num_warps=num_warps, num_stages=num_stages,
         )
         return merge_splits(acc, m, l)
     _decode_kernel[(count,)](
         q_abs.contiguous(),
         q_pe.contiguous(),
-        latent,
+        latent_arg if is_fp8 else latent,
         scale if is_fp8 else latent,
         pe,
         meta[0],
@@ -295,6 +325,7 @@ def decode_partial(
         DR=rope,
         BLOCK_N=block_n,
         IS_FP8=is_fp8,
+        SOFTWARE_FP8=software_fp8,
         num_warps=num_warps,
         num_stages=num_stages,
     )

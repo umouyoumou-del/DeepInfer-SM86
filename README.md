@@ -119,7 +119,7 @@ Windows 版 PyTorch 不带 FlashAttention：长上下文的分块注意力在那
 
 | 维度 | 已验证 | 说明 |
 |---|---|---|
-| GPU 架构 | **SM86**（RTX 3050 Laptop 4 GB）、**SM89**（RTX 4080 SUPER 32 GB） | 两套全量测试均全绿 |
+| GPU 架构 | **SM80**（A100-SXM4-80GB）、**SM86**（RTX 3050 Laptop 4 GB）、**SM89**（RTX 4080 SUPER 32 GB） | 三套均已验证；A100 见 [4M 结果](docs/results/longctx/A100_SM80_4M.md) |
 | 操作系统 | Windows 11、Ubuntu 22.04 | 双卡 ECS 在 Linux 上验证 |
 | Python | 3.10、3.12 | |
 | PyTorch | 2.5.1+**cu121**、2.5.1+**cu124** | 两者均通过全量测试 |
@@ -127,10 +127,11 @@ Windows 版 PyTorch 不带 FlashAttention：长上下文的分块注意力在那
 
 所有 CUDA kernel 走 CuPy 的 NVRTC，编译选项统一为
 `--std=c++14 --use_fast_math`，**不含任何 `-arch=` 硬编码**，
-也没有 `__CUDA_ARCH__` 条件编译或 `get_device_capability()` 分支——
-目标架构由运行时设备自动决定。因此新增架构通常只需验证，不需要移植。
+也没有 `__CUDA_ARCH__` 条件编译。Triton 的 FP8 路径由运行时设备能力选择：
+SM89+ 走原生 E4M3，SM80 走 `uint8` 视图 + 软件 E4M3 解码
+（`deepinfer/moe/triton_fp8.py`）。因此新增架构通常只需验证，不需要移植。
 
-未验证：SM80（A100）、SM90（Hopper）、非 NVIDIA 平台（README 的"跨厂商后端"仍为 ❌）。
+已验证：SM80（A100-SXM4-80GB）、SM86、SM89。未验证：SM90（Hopper）、非 NVIDIA 平台（README 的"跨厂商后端"仍为 ❌）。
 
 | 路径 | 量化 | 显存 | decode |
 |---|---|---:|---:|
@@ -171,6 +172,12 @@ CUDA graph 生成），结果不变；缓存可分到两块盘存下，同一份
 自查一轮：在 315 个作答上下文上 269 → 279 题全对，4M 上那份文档 19 → 20 题；`deepinfer-server` 默认开启。
 问题直接对 1M 个 key 做全量注意力只有 1–2/9——细节、更正与边界见
 [`docs/LONG_CONTEXT_1M.md`](docs/LONG_CONTEXT_1M.md)。
+
+**A100 / SM80（2026-11-04）**：在 A100-SXM4-80GB（容器内存 16 GiB）上跑同一份 4M 文档，
+KV 69.2 GiB（3,830,167 token 在显存、366,185 token 在锁页主机），prefill 18.4 分钟。
+Triton FP8 在 SM80 上改走软件 E4M3 解码；VT 题增加 `var_chain_answer` 精确变量链闭包后，
+最终 **21/21 题、31/31 条目**。命令、显存布局和结果见
+[`docs/results/longctx/A100_SM80_4M.md`](docs/results/longctx/A100_SM80_4M.md)。
 
 ### 3M 上下文对话：边读边问（2026-11-03）
 

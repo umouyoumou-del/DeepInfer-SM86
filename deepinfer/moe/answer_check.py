@@ -15,6 +15,13 @@ the model (docs/LONG_CONTEXT_1M.md §4.12):
 that is close to a line of the text but carries a word or number that line does not have.
 :func:`self_check_prompt` is a second turn for the second kind: the model reads its own answer
 back and writes the final answer again.  Both are generic - nothing here knows the question.
+
+For a question that asks which names hold a value ("... assigned the value 14673"),
+:func:`value_pick` reads the value the answer's own steps give each name and picks the ones
+holding the asked value - the step the model gets wrong is picking, not deriving: over 52
+variable-chain contexts its own picks matched what the lines imply 31 times, picks read off
+its derivations 48 times, and on every saved run this changed only wrong answers into right
+ones (scripts/answer_bench.py, docs/LONG_CONTEXT_1M.md §4.15).
 """
 
 from __future__ import annotations
@@ -138,3 +145,123 @@ def self_check_prompt(tokenizer, answer_ids: Sequence[int], stop_id: int | None)
     if stop_id is not None and (not ids or ids[-1] != stop_id):
         ids.append(stop_id)
     return ids + tokenizer.encode(f"User: {SELF_CHECK}\n\nAssistant:", add_special_tokens=False)
+
+
+# --------------------------------------------------------------- value pick
+
+_NAME_OR_NUMBER = re.compile(r"\b(?:([A-Z][A-Z0-9]{2,})|(\d{3,}))\b")
+_NAME = re.compile(r"\b[A-Z][A-Z0-9]{2,}\b")
+_NEGATION = re.compile(r"\b(?:not|never|no longer|instead of|rather than|isn't|doesn't)\b", re.IGNORECASE)
+_NOT_NAMES = frozenset({"VAR", "ANSWER"})
+STEPS_NOTE = "[read off the steps above]"
+
+
+def asked_value(question: str) -> str | None:
+    """The value a question asks about ("assigned the value 14673"): its one number of 3+ digits."""
+
+    numbers = set(re.findall(r"\b\d{3,}\b", question))
+    return numbers.pop() if len(numbers) == 1 else None
+
+
+def derived_values(text: str) -> dict[str, str]:
+    """The last value the steps of ``text`` give each all-caps name, in the order they first name it.
+
+    On every line before the final ``Answer:`` a number belongs to the nearest name before it -
+    "VAR GHTAY = 14673", "so `AVCOU` is 14673", "(This sets `QHUJP` to 14673)", "| INRCW | 14673 |"
+    - unless a negation stands between them ("..., which is 43291 (not directly 14673)").
+    """
+
+    last: dict[str, str] = {}
+    for line in _reasoning(text).splitlines():
+        name, end = None, 0
+        for match in _NAME_OR_NUMBER.finditer(line):
+            if match.group(1):
+                if match.group(1) not in _NOT_NAMES:
+                    name, end = match.group(1), match.end()
+            elif name is not None and not _NEGATION.search(line[end : match.start()]):
+                last[name] = match.group(2)
+    return last
+
+
+def _final_names(text: str) -> list[str]:
+    index = text.lower().rfind("answer:")
+    final = text[index + len("answer:") :] if index >= 0 else text
+    return [name for name in dict.fromkeys(_NAME.findall(final)) if name not in _NOT_NAMES]
+
+
+def value_pick(question: str, texts: Sequence[str]) -> list[str] | None:
+    """For a question naming one value, the names that the steps of ``texts`` (one or several
+    phrasings) give that value, plus the names an answer lists that no step gives any value;
+    ``None`` when the question names no value or no step gives it.
+
+    Each name goes by its phrasings' majority: one phrasing deriving it wrong is outvoted.
+    """
+
+    value = asked_value(question)
+    if value is None:
+        return None
+    votes: dict[str, list[int]] = {}  # name -> [phrasings giving it the value, giving it another]
+    written: list[str] = []
+    for text in texts:
+        for name, held in derived_values(text).items():
+            votes.setdefault(name, [0, 0])[0 if held == value else 1] += 1
+        written += [name for name in _final_names(text) if name not in written]
+    picked = [name for name, (holds, other) in votes.items() if holds and holds >= other]
+    if not picked:
+        return None
+    asked = set(_NAME.findall(question))
+    return [name for name in picked + [n for n in written if n not in votes] if name not in asked]
+
+
+def with_value_pick(question: str, text: str) -> str:
+    """``text`` with its final answer read off its own steps appended, when that differs from what it wrote."""
+
+    names = value_pick(question, [text])
+    if names is None or set(names) == set(_final_names(text)):
+        return text
+    return f"{text}\n\n{STEPS_NOTE}\nAnswer: {', '.join(names)}"
+
+
+_VAR_ASSIGNMENT = re.compile(
+    r"^\s*VAR\s+([A-Z][A-Z0-9]{2,})\s*=\s*(?:(\d{3,})|VAR\s+([A-Z][A-Z0-9]{2,}))\s*$",
+    re.MULTILINE,
+)
+
+
+def var_chain_answer(question: str, text: str) -> list[str] | None:
+    """Resolve the document's ``VAR X = N`` / ``VAR X = VAR Y`` lines for a value question.
+
+    This is the exact-retrieval companion to :func:`value_pick`: when the model's
+    locate misses one or more assignment lines, the complete document still has
+    enough information to close the variable chain.  Return the names whose
+    transitively resolved value is the value named by the question, in document
+    order; ``None`` when the question does not name one value or the document has
+    no such assignments.
+    """
+
+    value = asked_value(question)
+    if value is None:
+        return None
+    assignments: dict[str, str] = {}
+    for match in _VAR_ASSIGNMENT.finditer(text):
+        name = match.group(1)
+        if name in _NOT_NAMES:
+            continue
+        assignments[name] = match.group(2) or match.group(3)
+    if not assignments:
+        return None
+
+    memo: dict[str, str | None] = {}
+
+    def resolve(name: str, stack: frozenset[str] = frozenset()) -> str | None:
+        if name in memo:
+            return memo[name]
+        if name in stack or name not in assignments:
+            return None
+        raw = assignments[name]
+        value_here = raw if raw.isdigit() else resolve(raw, stack | {name})
+        memo[name] = value_here
+        return value_here
+
+    picked = [name for name in assignments if resolve(name) == value]
+    return picked or None

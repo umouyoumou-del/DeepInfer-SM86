@@ -32,6 +32,7 @@ from deepinfer.moe.latent_mla import (
     dequantize_fp8_groups,
     merge_partials,
 )
+from deepinfer.moe.triton_fp8 import native_fp8_available
 
 try:  # Triton is optional; locate falls back to the PyTorch passes
     import triton
@@ -48,6 +49,20 @@ def available() -> bool:
 
 
 if triton is not None:
+
+    @triton.jit
+    def _fp8e4m3_bits_to_fp32(bits):
+        """Decode one E4M3 byte without requiring an FP8-capable GPU."""
+
+        u = bits.to(tl.uint8)
+        sign = tl.where((u & 0x80) != 0, -1.0, 1.0)
+        exp = ((u >> 3) & 0x0F).to(tl.float32)
+        mant = (u & 0x07).to(tl.float32)
+        normal = (1.0 + mant * 0.125) * tl.exp2(exp - 7.0)
+        subnormal = (mant * 0.125) * (1.0 / 64.0)
+        value = tl.where(exp == 0.0, subnormal, normal)
+        value = tl.where((exp == 15.0) & (mant == 7.0), 448.0, value)
+        return tl.where(sign < 0.0, -value, value)
 
     @triton.jit
     def _locate_kernel(
@@ -70,6 +85,7 @@ if triton is not None:
         BLOCK_N: tl.constexpr,
         DR: tl.constexpr,
         IS_FP8: tl.constexpr,
+        SOFTWARE_FP8: tl.constexpr,
         WITH_LBM: tl.constexpr,
     ):
         """Rows ``[tile * BLOCK_M, ..)`` of the query against one split of keys.
@@ -115,10 +131,16 @@ if triton is not None:
             valid = offs_n < end
             keys = offs_n.to(tl.int64)
             k_row = LAT + keys[:, None] * 512 + offs_c[None, :]
-            k0 = tl.load(k_row, mask=valid[:, None], other=0.0).to(tl.float16)
-            k1 = tl.load(k_row + 128, mask=valid[:, None], other=0.0).to(tl.float16)
-            k2 = tl.load(k_row + 256, mask=valid[:, None], other=0.0).to(tl.float16)
-            k3 = tl.load(k_row + 384, mask=valid[:, None], other=0.0).to(tl.float16)
+            if IS_FP8 and SOFTWARE_FP8:
+                k0 = _fp8e4m3_bits_to_fp32(tl.load(k_row, mask=valid[:, None], other=0)).to(tl.float16)
+                k1 = _fp8e4m3_bits_to_fp32(tl.load(k_row + 128, mask=valid[:, None], other=0)).to(tl.float16)
+                k2 = _fp8e4m3_bits_to_fp32(tl.load(k_row + 256, mask=valid[:, None], other=0)).to(tl.float16)
+                k3 = _fp8e4m3_bits_to_fp32(tl.load(k_row + 384, mask=valid[:, None], other=0)).to(tl.float16)
+            else:
+                k0 = tl.load(k_row, mask=valid[:, None], other=0.0).to(tl.float16)
+                k1 = tl.load(k_row + 128, mask=valid[:, None], other=0.0).to(tl.float16)
+                k2 = tl.load(k_row + 256, mask=valid[:, None], other=0.0).to(tl.float16)
+                k3 = tl.load(k_row + 384, mask=valid[:, None], other=0.0).to(tl.float16)
             kp = tl.load(PE + keys[:, None] * DR + offs_r[None, :], mask=valid[:, None], other=0.0)
             if IS_FP8:
                 s0 = tl.load(SC + keys * 4, mask=valid, other=0.0)
@@ -239,12 +261,15 @@ def _partial(
     m = torch.empty((count, rows), dtype=torch.float32, device=q_abs.device)
     l = torch.empty((count, rows), dtype=torch.float32, device=q_abs.device)
     is_fp8 = latent.dtype == torch.float8_e4m3fn
+    software_fp8 = bool(is_fp8 and not native_fp8_available(latent.device))
+    latent_arg = latent.view(torch.uint8) if software_fp8 else latent
     _locate_kernel[(row_tiles, count)](
-        q_abs, q_pe, latent, scale if is_fp8 else latent, pe,
+        q_abs, q_pe, latent_arg, scale if is_fp8 else latent, pe,
         table[0], table[1], table[2], table[3],
         acc, m, l, lbm if lbm is not None else acc,
         rows, float(sm_scale),
-        BLOCK_M=block_m, BLOCK_N=block_n, DR=q_pe.shape[-1], IS_FP8=is_fp8, WITH_LBM=lbm is not None,
+        BLOCK_M=block_m, BLOCK_N=block_n, DR=q_pe.shape[-1], IS_FP8=is_fp8,
+        SOFTWARE_FP8=software_fp8, WITH_LBM=lbm is not None,
         num_warps=num_warps, num_stages=num_stages,
     )
     top = m.max(dim=0).values

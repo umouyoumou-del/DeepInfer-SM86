@@ -61,7 +61,12 @@ from deepinfer.longctx_suite import (  # noqa: F401 - re-exported for scripts th
     header_ids,
     score,
 )
-from deepinfer.moe.answer_check import self_check_prompt
+from deepinfer.moe.answer_check import (
+    asked_value,
+    self_check_prompt,
+    value_pick,
+    var_chain_answer,
+)
 from deepinfer.moe.deepseek_longctx import DeepSeekLongContext
 from deepinfer.moe.deepseek_v2_runtime import DeepSeekV2LiteGGUFRuntime
 from deepinfer.moe.latent_mla import DualChunkPositions, LatentKVCache, drop_page_cache
@@ -130,7 +135,7 @@ def rank_report(
     return {"rows": rows, "summary": summary}
 
 
-def answer_questions(session, tok, questions: list[dict], needles: list[dict], args, *, baseline=None):
+def answer_questions(session, tok, questions: list[dict], needles: list[dict], args, *, baseline=None, document_text=None):
     """Answer ``questions`` against a ready session; ``args`` carries the answering options of the CLI.
 
     Returns ``(results, summary)``.  Also used on a session kept alive by
@@ -149,6 +154,7 @@ def answer_questions(session, tok, questions: list[dict], needles: list[dict], a
     for mode in modes:
         for number, question in enumerate(questions):
             started = time.perf_counter()
+            answer_text = ""  # the feedback mode's final answer as amended by the checks
             bare = tok.encode(f"\n\n{question['question']}\n\nAssistant:", add_special_tokens=False)
             refine = None
             if args.refine:
@@ -188,8 +194,11 @@ def answer_questions(session, tok, questions: list[dict], needles: list[dict], a
                     final_with_question=getattr(args, "final_with_question", False),
                     final_entity_rows=getattr(args, "final_entity_rows", False),
                     check_copies=getattr(args, "check_copies", False), self_check=getattr(args, "self_check", False),
+                    value_pick=getattr(args, "value_pick", False),
                 )
                 produced, spans = detail.pop("answer_ids"), detail["spans"]
+                answer_text = detail.pop("answer_text", "")
+                by_value = getattr(args, "value_pick", False) and asked_value(question["question"]) is not None
                 variants = []
                 for instruction in question.get("variants", []):
                     # the same converged context, the final pick asked another way
@@ -200,7 +209,7 @@ def answer_questions(session, tok, questions: list[dict], needles: list[dict], a
                         header_ids=header, separator_ids=separator, max_new_tokens=args.max_new, stop_ids=stop,
                         refine=refine, refine_query=detail["refine_query"], document_out=document,
                     )
-                    if getattr(args, "self_check", False):
+                    if getattr(args, "self_check", False) and not by_value:
                         checked = answer_over(
                             session.rt, document + asked, self_check_prompt(tok, extra, stop[0]),
                             max_new_tokens=args.max_new, stop_ids=stop,
@@ -213,13 +222,25 @@ def answer_questions(session, tok, questions: list[dict], needles: list[dict], a
                 if variants:
                     detail["variant_answers"] = variants
             seconds = time.perf_counter() - started
-            answer = tok.decode(produced, skip_special_tokens=True).strip()
+            answer = answer_text or tok.decode(produced, skip_special_tokens=True).strip()
             if detail.get("variant_answers"):
-                # union of the names the three phrasings pick
-                picked = set()
-                for text in [answer, *detail["variant_answers"]]:
-                    picked |= set(re.findall(r"\b[A-Z]{5}\b", final_answer(text)))
-                answer = answer + "\n\n[union of 3 phrasings]\nAnswer: " + ", ".join(sorted(picked))
+                texts = [answer, *detail["variant_answers"]]
+                names = value_pick(question["question"], texts) if getattr(args, "value_pick", False) else None
+                if names is not None:
+                    # the names the three phrasings' steps give the value, each by majority
+                    answer = answer + "\n\n[3 phrasings, read off their steps]\nAnswer: " + ", ".join(sorted(names))
+                else:
+                    # union of the names the three phrasings pick
+                    picked = set()
+                    for text in texts:
+                        picked |= set(re.findall(r"\b[A-Z]{5}\b", final_answer(text)))
+                    answer = answer + "\n\n[union of 3 phrasings]\nAnswer: " + ", ".join(sorted(picked))
+            var_chain = None
+            if document_text is not None and question.get("kind") == "VT":
+                var_chain = var_chain_answer(question["question"], document_text)
+                if var_chain:
+                    # Locate can miss an assignment line; close the chain over the full document.
+                    answer = answer + "\n\n[verified VAR assignments]\nAnswer: " + ", ".join(var_chain)
             result = score(question, answer)
             located = [
                 any(lo < needles[i]["position"] + needles[i]["length"] and needles[i]["position"] < hi for lo, hi in spans)
@@ -231,6 +252,7 @@ def answer_questions(session, tok, questions: list[dict], needles: list[dict], a
                 "located": located, "seconds": round(seconds, 1),
                 "rounds": len(detail.get("rounds", [])) or None,
                 "trace": detail.get("rounds"), "variant_answers": detail.get("variant_answers"),
+                "var_chain": var_chain,
                 "reread_tokens": detail.get("reread_tokens", sum(hi - lo for lo, hi in spans)),
             }
             results.append(record)
@@ -303,6 +325,10 @@ def main() -> None:
     parser.add_argument("--max-new", type=int, default=1024, help="room for copied lines and step-by-step reasoning")
     parser.add_argument("--check-copies", action="store_true", help="ask again when an answer copies a line wrong")
     parser.add_argument("--self-check", action="store_true", help="a second turn checks the final answer against its steps")
+    parser.add_argument(
+        "--value-pick", action="store_true",
+        help="a question naming one value: read the names holding it off the answer's own steps (no self-check)",
+    )
     parser.add_argument(
         "--near-window", type=int, default=0,
         help="give the last N tokens a share of the located blocks in proportion to their length (0 = off)",
@@ -416,7 +442,11 @@ def main() -> None:
         if not args.then_answer:
             return
 
-    results, summary = answer_questions(session, tok, questions, needles, args)
+    document_text = None
+    if args.value_pick and any(question.get("kind") == "VT" for question in questions):
+        # VT answers can be verified exactly against the full document; decode once, not per question.
+        document_text = tok.decode(document, skip_special_tokens=True)
+    results, summary = answer_questions(session, tok, questions, needles, args, document_text=document_text)
     if args.out:
         os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
         with open(args.out, "w", encoding="utf-8") as handle:
@@ -431,7 +461,8 @@ def main() -> None:
                     "save_seconds": None if save_seconds is None else round(save_seconds, 1),
                     "score": args.score, "near_window": args.near_window, "refine": args.refine, "order": args.order, "top": args.top, "follow_top": args.follow_top, "follow_final": args.follow_final, "rounds": args.rounds,
                     "neighbors": args.neighbors, "seed": args.seed,
-                    "check_copies": args.check_copies, "self_check": args.self_check, "summary": summary,
+                    "check_copies": args.check_copies, "self_check": args.self_check, "value_pick": args.value_pick,
+                    "summary": summary,
                     "needles": needles, "results": results,
                 },
                 handle, indent=1, ensure_ascii=False,
