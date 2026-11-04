@@ -1,0 +1,350 @@
+{
+ "summary": {
+  "full": 21,
+  "questions": 21,
+  "items": 31,
+  "expected": 31,
+  "wall_seconds": 1.841,
+  "workers": 8,
+  "p50_seconds": 0.591,
+  "p95_seconds": 0.966,
+  "max_seconds": 1.023
+ },
+ "results": [
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for crimson falcon?",
+   "seconds": 1.023,
+   "final": "8589669",
+   "retrieval_ms": 4.69,
+   "first_token": null,
+   "full": true,
+   "hits": [
+    "8589669"
+   ],
+   "expected": [
+    "8589669"
+   ]
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for crimson otter?",
+   "seconds": 0.916,
+   "final": "8812311",
+   "retrieval_ms": 4.75,
+   "first_token": null,
+   "full": true,
+   "hits": [
+    "8812311"
+   ],
+   "expected": [
+    "8812311"
+   ]
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for silver falcon?",
+   "seconds": 0.966,
+   "final": "8580488",
+   "retrieval_ms": 4.76,
+   "first_token": null,
+   "full": true,
+   "hits": [
+    "8580488"
+   ],
+   "expected": [
+    "8580488"
+   ]
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for silver otter?",
+   "seconds": 0.704,
+   "final": "9520162",
+   "retrieval_ms": 4.86,
+   "first_token": null,
+   "full": true,
+   "hits": [
+    "9520162"
+   ],
+   "expected": [
+    "9520162"
+   ]
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for amber lynx?",
+   "seconds": 0.859,
+   "final": "4186027",
+   "retrieval_ms": 4.82,
+   "first_token": null,
+   "full": true,
+   "hits": [
+    "4186027"
+   ],
+   "expected": [
+    "4186027"
+   ]
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for amber heron?",
+   "seconds": 0.755,
+   "final": "4098086",
+   "retrieval_ms": 4.87,
+   "first_token": null,
+   "full": true,
+   "hits": [
+    "4098086"
+   ],
+   "expected": [
+    "4098086"
+   ]
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for cobalt lynx?",
+   "seconds": 0.591,
+   "final": "9588401",
+   "retrieval_ms": 8.52,
+   "first_token": null,
+   "full": true,
+   "hits": [
+    "9588401"
+   ],
+   "expected": [
+    "9588401"
+   ]
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for cobalt heron?",
+   "seconds": 0.805,
+   "final": "8981982",
+   "retrieval_ms": 4.72,
+   "first_token": null,
+   "full": true,
+   "hits": [
+    "8981982"
+   ],
+   "expected": [
+    "8981982"
+   ]
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for ivory mantis?",
+   "seconds": 0.054,
+   "final": "4123476",
+   "retrieval_ms": 4.83,
+   "first_token": null,
+   "full": true,
+   "hits": [
+    "4123476"
+   ],
+   "expected": [
+    "4123476"
+   ]
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for ivory panther?",
+   "seconds": 0.417,
+   "final": "2579129",
+   "retrieval_ms": 4.83,
+   "first_token": null,
+   "full": true,
+   "hits": [
+    "2579129"
+   ],
+   "expected": [
+    "2579129"
+   ]
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for jade mantis?",
+   "seconds": 0.415,
+   "final": "8492589",
+   "retrieval_ms": 4.82,
+   "first_token": null,
+   "full": true,
+   "hits": [
+    "8492589"
+   ],
+   "expected": [
+    "8492589"
+   ]
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for jade panther?",
+   "seconds": 0.411,
+   "final": "6090228",
+   "retrieval_ms": 4.74,
+   "first_token": null,
+   "full": true,
+   "hits": [
+    "6090228"
+   ],
+   "expected": [
+    "6090228"
+   ]
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for scarlet ibis?",
+   "seconds": 0.407,
+   "final": "3378927",
+   "retrieval_ms": 4.7,
+   "first_token": null,
+   "full": true,
+   "hits": [
+    "3378927"
+   ],
+   "expected": [
+    "3378927"
+   ]
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for scarlet badger?",
+   "seconds": 0.404,
+   "final": "2521199",
+   "retrieval_ms": 4.36,
+   "first_token": null,
+   "full": true,
+   "hits": [
+    "2521199"
+   ],
+   "expected": [
+    "2521199"
+   ]
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for onyx ibis?",
+   "seconds": 0.4,
+   "final": "1702635",
+   "retrieval_ms": 4.42,
+   "first_token": null,
+   "full": true,
+   "hits": [
+    "1702635"
+   ],
+   "expected": [
+    "1702635"
+   ]
+  },
+  {
+   "kind": "MK",
+   "question": "What is the special magic number for onyx badger?",
+   "seconds": 0.396,
+   "final": "7646461",
+   "retrieval_ms": 4.42,
+   "first_token": null,
+   "full": true,
+   "hits": [
+    "7646461"
+   ],
+   "expected": [
+    "7646461"
+   ]
+  },
+  {
+   "kind": "MV",
+   "question": "What are all the special magic numbers for golden viper?",
+   "seconds": 0.386,
+   "final": "8599992, 9864766, 1251670, 3642312",
+   "retrieval_ms": 2.68,
+   "first_token": null,
+   "full": true,
+   "hits": [
+    "8599992",
+    "3642312",
+    "1251670",
+    "9864766"
+   ],
+   "expected": [
+    "8599992",
+    "3642312",
+    "1251670",
+    "9864766"
+   ]
+  },
+  {
+   "kind": "MQ",
+   "question": "What are the special magic numbers for crimson falcon, amber heron, jade mantis and onyx badger?",
+   "seconds": 0.382,
+   "final": "8589669, 4098086, 8492589, 7646461",
+   "retrieval_ms": 2.92,
+   "first_token": null,
+   "full": true,
+   "hits": [
+    "8589669",
+    "4098086",
+    "8492589",
+    "7646461"
+   ],
+   "expected": [
+    "8589669",
+    "4098086",
+    "8492589",
+    "7646461"
+   ]
+  },
+  {
+   "kind": "VT",
+   "question": "Find all variables that are assigned the value 14673, directly or through a chain of assignments (VAR B = VAR A gives B the value of A).",
+   "seconds": 0.624,
+   "final": "GHTAY, OKOSG, QHUJP, AVCOU, INRCW",
+   "retrieval_ms": 14.71,
+   "first_token": null,
+   "full": true,
+   "hits": [
+    "GHTAY",
+    "OKOSG",
+    "QHUJP",
+    "AVCOU",
+    "INRCW"
+   ],
+   "expected": [
+    "GHTAY",
+    "OKOSG",
+    "QHUJP",
+    "AVCOU",
+    "INRCW"
+   ]
+  },
+  {
+   "kind": "2H",
+   "question": "What is the employee badge number of the person who holds the vault key of the Orrin observatory?",
+   "seconds": 0.62,
+   "final": "1877827",
+   "retrieval_ms": 5.69,
+   "first_token": null,
+   "full": true,
+   "hits": [
+    "1877827"
+   ],
+   "expected": [
+    "1877827"
+   ]
+  },
+  {
+   "kind": "2H",
+   "question": "Which combination opens the personal safe of the architect who designed the Teal Harbor lighthouse?",
+   "seconds": 0.614,
+   "final": "7667674",
+   "retrieval_ms": 1.73,
+   "first_token": null,
+   "full": true,
+   "hits": [
+    "7667674"
+   ],
+   "expected": [
+    "7667674"
+   ]
+  }
+ ]
+}

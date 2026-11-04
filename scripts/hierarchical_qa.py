@@ -21,7 +21,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import sqlite3
 import sys
 import time
@@ -31,94 +30,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from deepinfer.longctx_suite import build_document, build_suite, score
-
-FACT_KEYS = (
-    "special magic number", "vault key", "employee badge number", "personal safe",
-    "combination", "designed by",
+from deepinfer.retrieval.hybrid import (
+    build_index,
+    exact_lines,
+    facts_from_lines,
+    retrieve,
 )
-
-STOP = frozenset({
-    "what", "which", "is", "are", "the", "of", "for", "all", "and", "to", "in", "a",
-    "does", "who", "holds", "person", "value", "values", "assigned", "through", "another",
-    "direct", "directly", "combination", "opens", "architect", "designed",
-})
-
-
-def chunk_text(text: str, target_chars: int = 2000) -> list[str]:
-    """Line-preserving chunks: a needle line is never split."""
-
-    chunks: list[str] = []
-    buf: list[str] = []
-    size = 0
-    for line in text.splitlines():
-        if buf and size + len(line) + 1 > target_chars:
-            chunks.append("\n".join(buf))
-            buf, size = [], 0
-        buf.append(line)
-        size += len(line) + 1
-    if buf:
-        chunks.append("\n".join(buf))
-    return chunks
-
-
-def build_index(text: str, db_path: str, target_chars: int = 2000) -> int:
-    chunks = chunk_text(text, target_chars)
-    path = Path(db_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if path.exists():
-        path.unlink()
-    con = sqlite3.connect(path)
-    con.execute("CREATE VIRTUAL TABLE chunks USING fts5(body, cid UNINDEXED)")
-    con.executemany("INSERT INTO chunks(cid, body) VALUES (?, ?)", list(enumerate(chunks)))
-    con.commit()
-    con.close()
-    return len(chunks)
-
-
-def retrieve(con: sqlite3.Connection, question: str, k: int) -> list[tuple[int, str]]:
-    terms = re.findall(r"[A-Za-z0-9]+", question)
-    terms = [term.lower() for term in terms if term.lower() not in STOP and len(term) > 1]
-    match = " OR ".join('"' + term.replace('"', "") + '"' for term in dict.fromkeys(terms))
-    if not match:
-        return []
-    return con.execute(
-        "SELECT cid, body FROM chunks WHERE chunks MATCH ? ORDER BY bm25(chunks) LIMIT ?",
-        (match, k),
-    ).fetchall()
-
-
-def exact_lines(lines: list[str], question: str) -> list[str]:
-    """Find structured evidence lines and close the common two-hop relation."""
-
-    candidates = set(re.findall(r"\b[A-Z][A-Za-z0-9]{2,}\b", question))
-    candidates |= set(re.findall(r"`([^`]+)`", question))
-    after_for = re.search(r"\bfor\s+(.+?)(?:\?|$)", question, re.IGNORECASE)
-    if after_for:
-        for part in re.split(r",| and ", after_for.group(1)):
-            part = part.strip().strip("`")
-            if 3 <= len(part) <= 80:
-                candidates.add(part)
-    found: list[str] = []
-    for line in lines:
-        low = line.lower()
-        if not any(candidate.lower() in low for candidate in candidates):
-            continue
-        if any(key in low for key in FACT_KEYS):
-            found.append(line)
-    # The second hop names a person in the first-hop line.
-    for line in list(found):
-        for pattern, second_key in (
-            (r"held by ([A-Z][A-Za-z]+(?: [A-Z][A-Za-z]+)?)\.", "employee badge number"),
-            (r"designed by the architect ([A-Z][A-Za-z]+(?: [A-Z][A-Za-z]+)?)\.", "personal safe"),
-        ):
-            match = re.search(pattern, line)
-            if not match:
-                continue
-            person = match.group(1)
-            for other in lines:
-                if person in other and second_key in other.lower():
-                    found.append(other)
-    return list(dict.fromkeys(found))
 
 
 def _load_runtime(model: str, meta: str):
@@ -139,7 +56,7 @@ def run(args) -> None:
 
     text = Path(args.text).read_text(encoding="utf-8")
     lines = text.splitlines()
-    facts = [line for line in lines if any(key in line.lower() for key in FACT_KEYS)]
+    facts = facts_from_lines(lines)
     _needles, questions = build_suite(args.seed)
     tok = AutoTokenizer.from_pretrained(args.meta, trust_remote_code=True)
     con = sqlite3.connect(args.db)

@@ -186,6 +186,10 @@ Triton FP8 在 SM80 上改走软件 E4M3 解码；VT 题增加 `var_chain_answer
 17,135 个 chunk，索引 0.90 s，21 题检索总计 0.099 s；10M 上 **21/21 题、31/31 条目**，
 模型问答总计 209.2 s（p50 8.1 s，p95 19.0 s，VT 精确闭包 0.29 s）。详见
 [`docs/results/longctx/A100_SM80_10M_HIERARCHICAL.md`](docs/results/longctx/A100_SM80_10M_HIERARCHICAL.md)。
+服务化路径 `deepinfer-server --hierarchical` 已接入持久索引、增量 `/ingest` 和 `/ask`：10M
+索引热启动 1.16 s；8 并发客户端跑完 21 题 **21/21、31/31，wall 1.841 s，p50 0.591 s**；
+开放问题模型回退的单题示例 5.96 s（首字 1.99 s）。详见
+[`docs/results/longctx/A100_SM80_10M_SERVER.md`](docs/results/longctx/A100_SM80_10M_SERVER.md)。
 
 ### 3M 上下文对话：边读边问（2026-11-03）
 
